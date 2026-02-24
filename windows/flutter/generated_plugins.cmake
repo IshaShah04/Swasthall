@@ -1,0 +1,43 @@
+#
+# Generated file, do not edit.
+#
+
+list(APPEND FLUTTER_PLUGIN_LIST
+  app_links
+  audioplayers_windows
+  connectivity_plus
+  file_selector_windows
+  flutter_inappwebview_windows
+  flutter_secure_storage_windows
+  flutter_tts
+  flutter_volume_controller
+  gal
+  geolocator_windows
+  permission_handler_windows
+  printing
+  screen_brightness_windows
+  share_plus
+  speech_to_text_windows
+  syncfusion_pdfviewer_windows
+  url_launcher_windows
+  zego_express_engine
+  zego_zim
+)
+
+list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  flutter_local_notifications_windows
+)
+
+set(PLUGIN_BUNDLED_LIBRARIES)
+
+foreach(plugin ${FLUTTER_PLUGIN_LIST})
+  add_subdirectory(flutter/ephemeral/.plugin_symlinks/${plugin}/windows plugins/${plugin})
+  target_link_libraries(${BINARY_NAME} PRIVATE ${plugin}_plugin)
+  list(APPEND PLUGIN_BUNDLED_LIBRARIES $<TARGET_FILE:${plugin}_plugin>)
+  list(APPEND PLUGIN_BUNDLED_LIBRARIES ${${plugin}_bundled_libraries})
+endforeach(plugin)
+
+foreach(ffi_plugin ${FLUTTER_FFI_PLUGIN_LIST})
+  add_subdirectory(flutter/ephemeral/.plugin_symlinks/${ffi_plugin}/windows plugins/${ffi_plugin})
+  list(APPEND PLUGIN_BUNDLED_LIBRARIES ${${ffi_plugin}_bundled_libraries})
+endforeach(ffi_plugin)
