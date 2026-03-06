@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'consultation_booking.dart';
-import 'patient_settings.dart'; // Ensure this exists for account switching
+import 'patient_settings.dart'; 
 import 'services/voice_service.dart';
 
 class ConsultationDescription extends StatefulWidget {
@@ -26,7 +26,16 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
     _voiceService.initTts();
   }
 
+  @override
+  void dispose() {
+    // CRITICAL FIX: Stops the voice immediately when leaving the screen
+    _voiceService.stop();
+    super.dispose();
+  }
+
   void _speakDoctorDetails(String name, String license, String bio) {
+    // Stop any current speech before starting new speech to prevent overlapping
+    _voiceService.stop(); 
     String text = "Doctor $name. License Number $license. $bio";
     _voiceService.speakWithSavedLanguage(text);
   }
@@ -34,6 +43,9 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
   /// Handles the shared device logic before navigating to booking
   Future<void> _handleBookingNavigation(
       String type, double price, String nurseName) async {
+    // Stop speaking when user starts the booking process
+    _voiceService.stop();
+
     final user = supabase.auth.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -43,14 +55,12 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
     }
 
     try {
-      // 1. Fetch current user's profile info
       final currentUserProfile = await supabase
           .from('profiles')
           .select('full_name, id')
           .eq('id', user.id)
           .single();
 
-      // 2. Detect shared device (more than one profile exists)
       final response = await supabase.from('profiles').select('id');
       final bool isSharedDevice = response.length > 1;
 
@@ -108,7 +118,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                 ),
                 TextButton.icon(
                   onPressed: () {
-                    Navigator.pop(context, false); // Close dialog
+                    Navigator.pop(context, false);
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const PatientSettings()),
@@ -145,7 +155,6 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
         if (confirm != true) return;
       }
 
-      // If single account OR confirmed, navigate to booking
       if (!mounted) return;
       Navigator.push(
         context,
@@ -175,23 +184,19 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
         .single();
 
     String nurseName = "None Assigned";
+    
     try {
-      final pairing = await supabase
-          .from('staff_pairings')
-          .select('nurse_id')
+      final assignment = await supabase
+          .from('staff_assignments_view')
+          .select('nurse_name')
           .eq('doctor_id', doctorId)
           .maybeSingle();
 
-      if (pairing != null && pairing['nurse_id'] != null) {
-        final nurseProfile = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', pairing['nurse_id'])
-            .maybeSingle();
-        nurseName = nurseProfile?['full_name'] ?? "TBD";
+      if (assignment != null && assignment['nurse_name'] != null) {
+        nurseName = assignment['nurse_name'];
       }
     } catch (e) {
-      debugPrint("Nurse Fetch Error: $e");
+      debugPrint("Nurse View Fetch Error: $e");
     }
 
     return {
@@ -231,8 +236,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
           }
 
           final liveData = snapshot.data ?? {};
-          final name =
-              liveData['full_name'] ?? staticDoc['full_name'] ?? "Doctor";
+          final name = liveData['full_name'] ?? staticDoc['full_name'] ?? "Doctor";
           final license = liveData['license_number'] ?? "N/A";
           final bio = liveData['bio'] ?? "Professional clinical excellence.";
           final nurse = liveData['nurse_name'] ?? "None Assigned";
@@ -244,15 +248,17 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                 pinned: true,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    _voiceService.stop(); // Stop voice when back button pressed
+                    Navigator.pop(context);
+                  },
                 ),
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
                       Image.network(
-                        staticDoc['avatar_url'] ??
-                            'https://via.placeholder.com/400',
+                        staticDoc['avatar_url'] ?? 'https://via.placeholder.com/400',
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) => Container(
                             color: Colors.grey.shade200,

@@ -23,8 +23,7 @@ class QueueTab extends StatefulWidget {
   State<QueueTab> createState() => _QueueTabState();
 }
 
-class _QueueTabState extends State<QueueTab>
-    with AutomaticKeepAliveClientMixin {
+class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin {
   final supabase = SupabaseHandler().client;
   final Color brandIndigo = const Color(0xFF6366F1);
   final Color nurseTeal = const Color(0xFF0D9488);
@@ -33,8 +32,18 @@ class _QueueTabState extends State<QueueTab>
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
+  /// ✅ professional zego uid cache (Option A)
+  String? _myZegoUid;
+  bool _loadingZegoUid = false;
+
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMyZegoUid(); // ✅ load once
+  }
 
   @override
   void dispose() {
@@ -45,8 +54,44 @@ class _QueueTabState extends State<QueueTab>
   bool _isNurse() => widget.userRole.toLowerCase() == "nurse";
   bool _isTechnician() => widget.userRole.toLowerCase() == "technician";
 
-  Future<void> _updateStatus(String id, String status,
-      {bool nurseSeen = false}) async {
+  Future<void> _loadMyZegoUid() async {
+    if (_loadingZegoUid) return;
+    _loadingZegoUid = true;
+
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      _loadingZegoUid = false;
+      return;
+    }
+
+    // 1) metadata
+    final metaUid = user.userMetadata?['zego_uid']?.toString().trim();
+    if (metaUid != null && metaUid.isNotEmpty) {
+      if (mounted) setState(() => _myZegoUid = metaUid);
+      _loadingZegoUid = false;
+      return;
+    }
+
+    // 2) profiles table (✅ allowed for self; staff is reading their own profile here)
+    try {
+      final data = await supabase
+          .from('profiles')
+          .select('zego_uid')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      final z = (data?['zego_uid'] ?? '').toString().trim();
+      setState(() => _myZegoUid = z.isNotEmpty ? z : user.id); // fallback
+    } catch (_) {
+      if (mounted) setState(() => _myZegoUid = user.id); // fallback
+    } finally {
+      _loadingZegoUid = false;
+    }
+  }
+
+  Future<void> _updateStatus(String id, String status, {bool nurseSeen = false}) async {
     try {
       Map<String, dynamic> updateData = {'status': status.toLowerCase()};
       if (nurseSeen) updateData['nurse_seen'] = true;
@@ -67,9 +112,11 @@ class _QueueTabState extends State<QueueTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final String? currentUserId = supabase.auth.currentUser?.id;
 
-    // Determine the correct stream based on role and filter
+    // ✅ use professional zego uid if available (Option A)
+    final String? currentUserId =
+        (_myZegoUid ?? supabase.auth.currentUser?.id)?.toString().trim();
+
     Stream<List<Map<String, dynamic>>> getStream() {
       if (widget.filterId != null) {
         if (_isTechnician()) {
@@ -79,7 +126,6 @@ class _QueueTabState extends State<QueueTab>
               .eq('lab_category', widget.filterId!)
               .order('id', ascending: true);
         } else {
-          // Both Doctors and Nurses (via unified pairing) filter by the doctor's ID
           return supabase
               .from('bookings')
               .stream(primaryKey: ['id'])
@@ -87,15 +133,12 @@ class _QueueTabState extends State<QueueTab>
               .order('id', ascending: true);
         }
       }
-      return supabase
-          .from('bookings')
-          .stream(primaryKey: ['id']).order('id', ascending: true);
+      return supabase.from('bookings').stream(primaryKey: ['id']).order('id', ascending: true);
     }
 
     return Column(
       children: [
         _buildSearchBar(),
-        // DEBUG STATUS BAR REMOVED
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             key: ValueKey(widget.filterId),
@@ -114,16 +157,14 @@ class _QueueTabState extends State<QueueTab>
               if (data.isEmpty) {
                 if (_isNurse() || _isTechnician()) {
                   if (widget.filterId == null) {
-                    return _buildEmptyState(
-                        message: "Waiting for Assignment...");
+                    return _buildEmptyState(message: "Waiting for Assignment...");
                   }
                 }
                 return _buildEmptyState();
               }
 
               final activeBookings = data.where((e) {
-                final String status =
-                    e['status']?.toString().toLowerCase() ?? '';
+                final String status = e['status']?.toString().toLowerCase() ?? '';
                 bool matchesStatus;
 
                 if (_isTechnician()) {
@@ -146,36 +187,27 @@ class _QueueTabState extends State<QueueTab>
                   ].contains(status);
                 }
 
-                final String patientName =
-                    (e['patient_name'] ?? e['full_name'] ?? "")
-                        .toString()
-                        .toLowerCase();
-                return matchesStatus &&
-                    patientName.contains(_searchQuery.toLowerCase());
+                final String patientName = (e['patient_name'] ?? e['full_name'] ?? "")
+                    .toString()
+                    .toLowerCase();
+
+                return matchesStatus && patientName.contains(_searchQuery.toLowerCase());
               }).toList();
 
               if (activeBookings.isEmpty) return _buildEmptyState();
 
               return ListView.builder(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 itemCount: activeBookings.length,
                 itemBuilder: (context, index) {
                   final appt = activeBookings[index];
-                  final String status =
-                      appt['status']?.toString().toLowerCase() ?? '';
+                  final String status = appt['status']?.toString().toLowerCase() ?? '';
                   final bool nurseSeen = appt['nurse_seen'] ?? false;
                   final bool isLive = _isTechnician()
                       ? status == 'processing'
-                      : [
-                          'consulting',
-                          'in_progress',
-                          'nurse_calling',
-                          'calling'
-                        ].contains(status);
+                      : ['consulting', 'in_progress', 'nurse_calling', 'calling'].contains(status);
 
-                  return _buildQueueCard(appt, index, isLive, nurseSeen, status,
-                      currentUserId ?? '');
+                  return _buildQueueCard(appt, index, isLive, nurseSeen, status, currentUserId ?? '');
                 },
               );
             },
@@ -185,60 +217,114 @@ class _QueueTabState extends State<QueueTab>
     );
   }
 
-  Future<void> _startCall(
-      Map<String, dynamic> appt, String userId, bool asNurse) async {
-    final String rawBookingId = appt['id'].toString();
-    final String patientId = (appt['user_id'] ?? appt['patient_id']).toString();
-    final String patientName =
-        appt['patient_name'] ?? appt['full_name'] ?? "Patient";
+  Future<void> _startCall(Map<String, dynamic> appt, String userId, bool asNurse) async {
+  final String rawBookingId = appt['id'].toString();
 
-    final String ringingStatus = asNurse ? 'nurse_calling' : 'calling';
-    await _updateStatus(rawBookingId, ringingStatus, nurseSeen: asNurse);
+  // ✅ support both schemas
+  final String patientAuthUid =
+      (appt['user_id'] ?? appt['patient_id'] ?? '').toString().trim();
 
-    if (!mounted) return;
-
-    final String normalizedRoomId = "room_${rawBookingId.replaceAll('-', '')}";
-
-    ZegoUIKitPrebuiltCallInvitationService().send(
-      invitees: [ZegoCallUser(patientId, patientName)],
-      isVideoCall: true,
-      customData: rawBookingId,
-      resourceID: "zego_health_app",
-    ).then((result) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Calling $patientName..."),
-            duration: const Duration(seconds: 2),
-            backgroundColor: brandIndigo,
-          ),
-        );
-      }
-    });
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => VideoCallPage(
-          callID: normalizedRoomId,
-          bookingId: rawBookingId,
-          userID: userId,
-          userName: widget.userRole,
-          patientID: patientId,
-          patientName: patientName,
-          appointmentData: appt,
-          professionalRole: widget.userRole,
-        ),
-      ),
-    );
+  if (patientAuthUid.isEmpty) {
+    _showErrorSnackBar("Booking missing user_id/patient_id. Can't place call.");
+    return;
   }
 
-  Widget _buildQueueCard(Map<String, dynamic> appt, int index, bool isLive,
-      bool nurseSeen, String status, String userId) {
-    final String patientId =
-        (appt['user_id'] ?? appt['patient_id'] ?? '').toString();
-    final String patientName =
-        appt['patient_name'] ?? appt['full_name'] ?? "Unknown Patient";
+  final String patientName =
+      (appt['patient_name'] ?? appt['full_name'] ?? "Patient").toString();
+
+  // ✅ ensure professional zego uid is loaded
+  if (_myZegoUid == null || _myZegoUid!.trim().isEmpty) {
+    await _loadMyZegoUid();
+    if (!mounted) return;
+  }
+  final String professionalZegoUid = (_myZegoUid ?? userId).toString().trim();
+
+  // ✅ PRIMARY: read from bookings (RLS-safe)
+  String patientZegoUid =
+      (appt['patient_zego_uid'] ?? '').toString().trim();
+
+  // ✅ FALLBACK: try profiles (may be blocked by RLS for staff)
+  if (patientZegoUid.isEmpty) {
+    try {
+      final profile = await supabase
+          .from('profiles')
+          .select('zego_uid')
+          .eq('id', patientAuthUid)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      patientZegoUid = (profile?['zego_uid'] ?? '').toString().trim();
+    } catch (_) {
+      patientZegoUid = '';
+    }
+  }
+
+  if (patientZegoUid.isEmpty) {
+    _showErrorSnackBar(
+      "Patient zego_uid not readable. Fix: store patient_zego_uid in bookings when booking is created.",
+    );
+    return;
+  }
+
+  final String ringingStatus = asNurse ? 'nurse_calling' : 'calling';
+  await _updateStatus(rawBookingId, ringingStatus, nurseSeen: asNurse);
+  if (!mounted) return;
+
+  final String normalizedRoomId = SupabaseHandler.getNormalizedRoomId(rawBookingId);
+
+  try {
+    await ZegoUIKitPrebuiltCallInvitationService().send(
+      invitees: [ZegoCallUser(patientZegoUid, patientName)],
+      isVideoCall: true,
+      callID: normalizedRoomId,
+      customData: rawBookingId,
+      resourceID: "swasthall_push",
+    );
+  } catch (e) {
+    _showErrorSnackBar("Invite failed: $e");
+    return;
+  }
+
+  if (!mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text("Calling $patientName..."),
+      duration: const Duration(seconds: 2),
+      backgroundColor: brandIndigo,
+    ),
+  );
+
+  if (!mounted) return;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => VideoCallPage(
+        callID: normalizedRoomId,
+        bookingId: rawBookingId,
+        userID: professionalZegoUid,
+        userName: widget.userRole,
+        patientID: patientAuthUid,
+        patientName: patientName,
+        appointmentData: appt,
+        professionalRole: widget.userRole,
+      ),
+    ),
+  );
+}
+
+  Widget _buildQueueCard(
+    Map<String, dynamic> appt,
+    int index,
+    bool isLive,
+    bool nurseSeen,
+    String status,
+    String userId,
+  ) {
+    final String patientId = (appt['user_id'] ?? appt['patient_id'] ?? '').toString();
+    final String patientName = appt['patient_name'] ?? appt['full_name'] ?? "Unknown Patient";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -267,8 +353,7 @@ class _QueueTabState extends State<QueueTab>
             const SizedBox(width: 14),
             Expanded(
               child: InkWell(
-                onTap: () =>
-                    viewPatientHistory(context, patientId, patientName),
+                onTap: () => viewPatientHistory(context, patientId, patientName),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -276,33 +361,33 @@ class _QueueTabState extends State<QueueTab>
                     Row(
                       children: [
                         Expanded(
-                          child: Text(patientName,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: Color(0xFF1E293B)),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            patientName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Color(0xFF1E293B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         if (nurseSeen && !_isTechnician())
-                          const Icon(Icons.check_circle_rounded,
-                              color: Colors.green, size: 16),
+                          const Icon(Icons.check_circle_rounded, color: Colors.green, size: 16),
                       ],
                     ),
                     const SizedBox(height: 4),
                     _infoTile(
-                        _isTechnician()
-                            ? Icons.biotech_rounded
-                            : Icons.access_time_filled_rounded,
-                        _isTechnician()
-                            ? (appt['lab_category'] ?? "General Lab")
-                            : (appt['appointment_time'] ?? "Waitlist")),
+                      _isTechnician() ? Icons.biotech_rounded : Icons.access_time_filled_rounded,
+                      _isTechnician()
+                          ? (appt['lab_category'] ?? "General Lab")
+                          : (appt['appointment_time'] ?? "Waitlist"),
+                    ),
                   ],
                 ),
               ),
             ),
-            const VerticalDivider(
-                width: 24, thickness: 1, indent: 8, endIndent: 8),
+            const VerticalDivider(width: 24, thickness: 1, indent: 8, endIndent: 8),
             _buildRoleActions(appt, status, nurseSeen, userId),
           ],
         ),
@@ -310,8 +395,7 @@ class _QueueTabState extends State<QueueTab>
     );
   }
 
-  Widget _buildRoleActions(
-      Map<String, dynamic> appt, String status, bool nurseSeen, String userId) {
+  Widget _buildRoleActions(Map<String, dynamic> appt, String status, bool nurseSeen, String userId) {
     if (_isTechnician()) {
       String btnText = "Collect Sample";
       Color btnColor = brandIndigo;
@@ -328,21 +412,17 @@ class _QueueTabState extends State<QueueTab>
         style: ElevatedButton.styleFrom(
           backgroundColor: btnColor,
           foregroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           padding: const EdgeInsets.symmetric(horizontal: 12),
         ),
         onPressed: () {
-          if (status == 'confirmed' ||
-              status == 'pending_lab' ||
-              status == 'scheduled') {
+          if (status == 'confirmed' || status == 'pending_lab' || status == 'scheduled') {
             _updateStatus(appt['id'].toString(), 'collecting_sample');
           } else if (status == 'collecting_sample') {
             _updateStatus(appt['id'].toString(), 'processing');
           }
         },
-        child: Text(btnText,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+        child: Text(btnText, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
       );
     }
 
@@ -352,20 +432,20 @@ class _QueueTabState extends State<QueueTab>
         children: [
           if (nurseSeen) _buildDoneBadge(),
           Material(
-            color: nurseSeen
-                ? Colors.grey.shade100
-                : nurseTeal.withValues(alpha: 0.1),
+            color: nurseSeen ? Colors.grey.shade100 : nurseTeal.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
             child: InkWell(
               onTap: () => _startCall(appt, userId, true),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Text(nurseSeen ? "Recall" : "Triage",
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: nurseSeen ? Colors.grey.shade600 : nurseTeal)),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(
+                  nurseSeen ? "Recall" : "Triage",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: nurseSeen ? Colors.grey.shade600 : nurseTeal,
+                  ),
+                ),
               ),
             ),
           ),
@@ -373,29 +453,27 @@ class _QueueTabState extends State<QueueTab>
       );
     }
 
-    // DOCTOR LOGIC
     bool isNurseBusy = status == 'nurse_calling';
     bool isActive = ['in_progress', 'consulting', 'calling'].contains(status);
 
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        backgroundColor: isNurseBusy
-            ? Colors.grey
-            : (isActive ? Colors.orange : brandIndigo),
+        backgroundColor: isNurseBusy ? Colors.grey : (isActive ? Colors.orange : brandIndigo),
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         padding: const EdgeInsets.symmetric(horizontal: 12),
       ),
       onPressed: () {
         if (isNurseBusy) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text("Nurse is currently triaging this patient.")));
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Nurse is currently triaging this patient.")),
+          );
           return;
         }
         _startCall(appt, userId, false);
       },
-      child: Text(isActive ? "Resume" : "Connect",
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+      child: Text(isActive ? "Resume" : "Connect", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -430,25 +508,28 @@ class _QueueTabState extends State<QueueTab>
       width: 50,
       height: 50,
       decoration: BoxDecoration(
-          color: isLive
-              ? (_isTechnician() ? labAmber : brandIndigo)
-              : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(12)),
+        color: isLive ? (_isTechnician() ? labAmber : brandIndigo) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(_isTechnician() ? "SLOT" : "NO.",
-              style: TextStyle(
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                  color: isLive ? Colors.white70 : Colors.grey.shade500)),
-          Text(order,
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: isLive
-                      ? Colors.white
-                      : (_isTechnician() ? labAmber : brandIndigo))),
+          Text(
+            _isTechnician() ? "SLOT" : "NO.",
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+              color: isLive ? Colors.white70 : Colors.grey.shade500,
+            ),
+          ),
+          Text(
+            order,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: isLive ? Colors.white : (_isTechnician() ? labAmber : brandIndigo),
+            ),
+          ),
         ],
       ),
     );
@@ -461,23 +542,23 @@ class _QueueTabState extends State<QueueTab>
         Icon(icon, size: 13, color: brandIndigo.withValues(alpha: 0.5)),
         const SizedBox(width: 4),
         Flexible(
-            child: Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500),
-                overflow: TextOverflow.ellipsis)),
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildDoneBadge() => const Padding(
-      padding: EdgeInsets.only(bottom: 4),
-      child: Text("TRIAGED",
-          style: TextStyle(
-              color: Color(0xFF166534),
-              fontSize: 8,
-              fontWeight: FontWeight.w900)));
+        padding: EdgeInsets.only(bottom: 4),
+        child: Text(
+          "TRIAGED",
+          style: TextStyle(color: Color(0xFF166534), fontSize: 8, fontWeight: FontWeight.w900),
+        ),
+      );
 
   Widget _buildEmptyState({String? message}) {
     return Center(
@@ -485,21 +566,15 @@ class _QueueTabState extends State<QueueTab>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-              _isTechnician()
-                  ? Icons.biotech_outlined
-                  : Icons.auto_awesome_motion_rounded,
-              size: 60,
-              color: Colors.grey.shade200),
+            _isTechnician() ? Icons.biotech_outlined : Icons.auto_awesome_motion_rounded,
+            size: 60,
+            color: Colors.grey.shade200,
+          ),
           const SizedBox(height: 16),
           Text(
-              message ??
-                  (_searchQuery.isEmpty
-                      ? "No Active Queue"
-                      : "No matches for '$_searchQuery'"),
-              style: TextStyle(
-                  color: Colors.grey.shade400,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16)),
+            message ?? (_searchQuery.isEmpty ? "No Active Queue" : "No matches for '$_searchQuery'"),
+            style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.bold, fontSize: 16),
+          ),
         ],
       ),
     );

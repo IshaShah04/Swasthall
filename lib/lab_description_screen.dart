@@ -93,9 +93,11 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
   Future<List<Map<String, dynamic>>> _fetchLabTests() async {
     final response = await Supabase.instance.client
         .from('lab_tests')
-        .select()
+        .select(
+            'id, name, price, do_instructions, dont_instructions, do_instructions_ne, dont_instructions_ne, do_instructions_hi, dont_instructions_hi')
         .eq('provider_id',
-            widget.labData['id'] ?? widget.labData['provider_id']);
+            widget.labData['id'] ?? widget.labData['provider_id'])
+        .range(0, 15);
 
     final data = List<Map<String, dynamic>>.from(response);
     setState(() {

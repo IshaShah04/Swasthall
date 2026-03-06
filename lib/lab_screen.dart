@@ -5,7 +5,7 @@ import 'order_success_screen.dart';
 import 'lab_description_screen.dart';
 import 'global_search_bar.dart';
 import 'universal_search_delegate.dart';
-import 'services/voice_service.dart'; // 1. Import VoiceService
+import 'services/voice_service.dart';
 
 class LabTestScreen extends StatefulWidget {
   final String? searchQuery;
@@ -21,7 +21,6 @@ class _LabTestScreenState extends State<LabTestScreen> {
   final Color bgLight = const Color(0xFFF8FAFC);
   final supabase = Supabase.instance.client;
 
-  // 2. Initialize VoiceService
   final VoiceService _voiceService = VoiceService();
 
   late final TextEditingController _searchController;
@@ -29,22 +28,39 @@ class _LabTestScreenState extends State<LabTestScreen> {
   List<Map<String, dynamic>> _allLabs = [];
   final List<String> _labSearchHistory = ["Pathology", "Blood Test", "X-Ray"];
 
+  // Track speaking state to update UI icons
+  String? _currentlySpeakingId;
+
   @override
   void initState() {
     super.initState();
     _currentSearchQuery = widget.searchQuery ?? "";
     _searchController = TextEditingController(text: _currentSearchQuery);
-    _voiceService.initTts(); // 3. Initialize TTS
+    _initVoice();
+  }
+
+  void _initVoice() async {
+    await _voiceService.initTts();
   }
 
   @override
   void dispose() {
+    _voiceService.stop(); // Always stop voice when leaving screen
     _searchController.dispose();
     super.dispose();
   }
 
   // --- VOICE LOGIC ---
-  void _speakBooking(Map<String, dynamic> booking) {
+
+  void _speakBooking(Map<String, dynamic> booking) async {
+    final String id = booking['id'].toString();
+
+    if (_currentlySpeakingId == id) {
+      await _voiceService.stop();
+      setState(() => _currentlySpeakingId = null);
+      return;
+    }
+
     final lang = _voiceService.currentLanguage;
     String text = "";
     if (lang == VoiceService.nepali) {
@@ -57,12 +73,26 @@ class _LabTestScreenState extends State<LabTestScreen> {
       text =
           "Your booking for ${booking['test_names']} is scheduled for ${booking['appointment_date']}.";
     }
-    _voiceService.speakWithSavedLanguage(text);
+
+    setState(() => _currentlySpeakingId = id);
+    await _voiceService.speakWithSavedLanguage(text);
+    if (mounted) setState(() => _currentlySpeakingId = null);
   }
 
-  void _speakLabInfo(Map<String, dynamic> lab) {
+  void _speakLabInfo(Map<String, dynamic> lab) async {
+    final String id = lab['id'].toString();
+
+    if (_currentlySpeakingId == id) {
+      await _voiceService.stop();
+      setState(() => _currentlySpeakingId = null);
+      return;
+    }
+
     final name = lab['full_name'] ?? "Medical Center";
-    final address = lab['address'] ?? "Available Location";
+
+    // ✅ UPDATED: prefer `location` from profile, fallback to `address`
+    final address = lab['location'] ?? lab['address'] ?? "Available Location";
+
     final testsCount = (lab['lab_tests'] as List?)?.length ?? 0;
 
     final lang = _voiceService.currentLanguage;
@@ -76,7 +106,10 @@ class _LabTestScreenState extends State<LabTestScreen> {
       text =
           "$name is located at $address. They offer $testsCount different tests.";
     }
-    _voiceService.speakWithSavedLanguage(text);
+
+    setState(() => _currentlySpeakingId = id);
+    await _voiceService.speakWithSavedLanguage(text);
+    if (mounted) setState(() => _currentlySpeakingId = null);
   }
 
   // --- UI SECTIONS ---
@@ -86,6 +119,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
       padding: const EdgeInsets.all(16.0),
       child: GestureDetector(
         onTap: () async {
+          _voiceService.stop();
           final result = await showSearch(
             context: context,
             delegate: UniversalSearchDelegate(
@@ -133,7 +167,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
           children: [
             _buildSectionHeader("My Active Bookings"),
             SizedBox(
-              height: 110, // Increased height slightly for better spacing
+              height: 110,
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 scrollDirection: Axis.horizontal,
@@ -151,8 +185,10 @@ class _LabTestScreenState extends State<LabTestScreen> {
   }
 
   Widget _buildBookingMiniCard(Map<String, dynamic> booking) {
+    bool isSpeaking = _currentlySpeakingId == booking['id'].toString();
+
     return Container(
-      width: 280, // Slightly wider for voice button
+      width: 280,
       margin: const EdgeInsets.only(right: 12, bottom: 8, top: 5),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -163,11 +199,13 @@ class _LabTestScreenState extends State<LabTestScreen> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => _speakBooking(booking), // Voice trigger
+            onTap: () => _speakBooking(booking),
             child: CircleAvatar(
-              backgroundColor: primaryIndigo.withValues(alpha: 0.1),
-              child:
-                  Icon(Icons.volume_up_rounded, color: primaryIndigo, size: 20),
+              backgroundColor: isSpeaking
+                  ? Colors.redAccent.withValues(alpha: 0.1)
+                  : primaryIndigo.withValues(alpha: 0.1),
+              child: Icon(isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
+                  color: isSpeaking ? Colors.redAccent : primaryIndigo, size: 20),
             ),
           ),
           const SizedBox(width: 12),
@@ -195,14 +233,16 @@ class _LabTestScreenState extends State<LabTestScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(booking['test_names'] ?? "Lab Booking",
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13)),
                   Text(
-                      "${booking['appointment_date']} | ${booking['appointment_time']}",
-                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    booking['test_names'] ?? "Lab Booking",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  Text(
+                    "${booking['appointment_date']} | ${booking['appointment_time']}",
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
                 ],
               ),
             ),
@@ -288,8 +328,11 @@ class _LabTestScreenState extends State<LabTestScreen> {
 
         if (filteredLabs.isEmpty) {
           return const Center(
-              child: Padding(
-                  padding: EdgeInsets.all(40), child: Text("No labs found.")));
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: Text("No labs found."),
+            ),
+          );
         }
 
         return ListView.builder(
@@ -308,6 +351,12 @@ class _LabTestScreenState extends State<LabTestScreen> {
     final String? profileImg =
         provider['avatar_url'] ?? provider['facility_image_url'];
     final List tests = provider['lab_tests'] ?? [];
+    final String labId = provider['id'].toString();
+    bool isSpeaking = _currentlySpeakingId == labId;
+
+    // ✅ UPDATED: prefer `location` from profile, fallback to `address`
+    final displayLocation =
+        provider['location'] ?? provider['address'] ?? "Available Location";
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -316,9 +365,10 @@ class _LabTestScreenState extends State<LabTestScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 15,
-              offset: const Offset(0, 8))
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          )
         ],
       ),
       child: Column(
@@ -342,7 +392,6 @@ class _LabTestScreenState extends State<LabTestScreen> {
                         size: 40, color: primaryIndigo.withValues(alpha: 0.3))
                     : null,
               ),
-              // VOICE ICON ON CARD
               Positioned(
                 top: 10,
                 right: 10,
@@ -350,7 +399,10 @@ class _LabTestScreenState extends State<LabTestScreen> {
                   onTap: () => _speakLabInfo(provider),
                   child: CircleAvatar(
                     backgroundColor: Colors.white.withValues(alpha: 0.8),
-                    child: Icon(Icons.volume_up_rounded, color: primaryIndigo),
+                    child: Icon(
+                      isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
+                      color: isSpeaking ? Colors.redAccent : primaryIndigo,
+                    ),
                   ),
                 ),
               ),
@@ -359,8 +411,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
           ListTile(
             contentPadding: const EdgeInsets.all(16),
             title: Text(provider['full_name'] ?? "Medical Center",
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -370,8 +421,12 @@ class _LabTestScreenState extends State<LabTestScreen> {
                     Icon(Icons.location_on, size: 14, color: primaryIndigo),
                     const SizedBox(width: 4),
                     Expanded(
-                        child: Text(provider['address'] ?? "Available Location",
-                            maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      child: Text(
+                        displayLocation,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -383,11 +438,14 @@ class _LabTestScreenState extends State<LabTestScreen> {
               ],
             ),
             trailing: ElevatedButton(
-              onPressed: () => Navigator.push(
+              onPressed: () {
+                _voiceService.stop();
+                Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) =>
-                          LabDescriptionScreen(labData: provider))),
+                      builder: (context) => LabDescriptionScreen(labData: provider)),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryIndigo,
                 shape: RoundedRectangleBorder(

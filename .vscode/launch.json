@@ -6,7 +6,8 @@
       "request": "launch",
       "type": "dart",
       "toolArgs": [
-        "--dart-define-from-file=env.json"
+        "--dart-define-from-file",
+        "env.json"
       ]
     },
     {
@@ -15,7 +16,8 @@
       "type": "dart",
       "flutterMode": "profile",
       "toolArgs": [
-        "--dart-define-from-file=env.json"
+        "--dart-define-from-file",
+        "env.json"
       ]
     },
     {
@@ -24,7 +26,8 @@
       "type": "dart",
       "flutterMode": "release",
       "toolArgs": [
-        "--dart-define-from-file=env.json"
+        "--dart-define-from-file",
+        "env.json"
       ]
     }
   ]

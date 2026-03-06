@@ -35,4 +35,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "health_department"
+rootProject.name = "swasthall"

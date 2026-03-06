@@ -24,6 +24,7 @@ class _MedicalResult {
   final String name;
   final String specialty;
   final String hospitalName;
+  final String? hospitalId;
   final String nurseAssigned;
   final double firstPrice;
   final double followUpPrice;
@@ -36,6 +37,7 @@ class _MedicalResult {
     required this.name,
     required this.specialty,
     required this.hospitalName,
+    this.hospitalId,
     required this.nurseAssigned,
     required this.firstPrice,
     required this.followUpPrice,
@@ -62,10 +64,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
     super.initState();
     _voiceService.initTts();
     _searchController.addListener(_onSearchChanged);
-
-    if (widget.preSelectedHospital != null || activeRoleFilter != null) {
-      _performSearch("");
-    }
+    _performSearch("");
   }
 
   @override
@@ -75,30 +74,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
   }
 
   void _onSearchChanged() {
-    final query = _searchController.text.trim();
-    if (query.isEmpty &&
-        activeRoleFilter == null &&
-        widget.preSelectedHospital == null) {
-      setState(() => _results = []);
-    } else {
-      _performSearch(query);
-    }
-  }
-
-  void _speakResults() {
-    String text = "";
-    final lang = _voiceService.currentLanguage;
-
-    if (_results.isEmpty) {
-      text = lang == VoiceService.nepali
-          ? "कुनै नतिजा फेला परेन।"
-          : "No results found.";
-    } else {
-      text = lang == VoiceService.nepali
-          ? "${_results.length} जना स्वास्थ्यकर्मीहरू फेला पर्यो।"
-          : "Found ${_results.length} results.";
-    }
-    _voiceService.speakWithSavedLanguage(text);
+    _performSearch(_searchController.text.trim());
   }
 
   Future<void> _performSearch(String query) async {
@@ -106,14 +82,9 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
     setState(() => _isSearching = true);
 
     try {
-      // Use dynamic to allow chaining across Postgrest builder types
-      dynamic queryBuilder =
-          supabase.from('staff').select('*, hospitals(name)');
-
-      if (widget.preSelectedHospital != null) {
-        queryBuilder =
-            queryBuilder.eq('hospital_id', widget.preSelectedHospital!['id']);
-      }
+      dynamic queryBuilder = supabase.from('staff').select(
+            'id, name, role, speciality, first_consultation_fee, followup_consultation_fee, avatar_url, rating, assigned_nurse, hospital_id, hospitals(name)',
+          );
 
       if (activeRoleFilter != null) {
         queryBuilder = queryBuilder.ilike('role', '%${activeRoleFilter!}%');
@@ -121,62 +92,84 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
 
       if (query.isNotEmpty) {
         queryBuilder =
-            queryBuilder.or('name.ilike.%$query%,specialty.ilike.%$query%');
+            queryBuilder.or('name.ilike.%$query%,speciality.ilike.%$query%');
       }
 
       queryBuilder = queryBuilder
           .gte('first_consultation_fee', _priceRange.start)
           .lte('first_consultation_fee', _priceRange.end);
 
-      if (_sortBy == 'price_asc') {
-        queryBuilder =
-            queryBuilder.order('first_consultation_fee', ascending: true);
-      } else if (_sortBy == 'price_desc') {
-        queryBuilder =
-            queryBuilder.order('first_consultation_fee', ascending: false);
-      } else {
-        queryBuilder = queryBuilder.order('rating', ascending: false);
-      }
-
-      final List<dynamic> data = await queryBuilder.limit(20);
+      final List<dynamic> data = await queryBuilder;
 
       if (mounted) {
+        List<_MedicalResult> mappedResults = data.map((s) {
+          final h = s['hospitals'];
+          return _MedicalResult(
+            id: s['id'].toString(),
+            name: s['name'] ?? 'Doctor',
+            specialty: s['speciality'] ??
+                s['role']?.toString().toUpperCase() ??
+                "GENERAL",
+            hospitalName:
+                (h is Map) ? (h['name'] ?? "Hospital") : "Partner Hospital",
+            hospitalId: s['hospital_id']?.toString(),
+            nurseAssigned: s['assigned_nurse'] ?? "Available",
+            firstPrice: (s['first_consultation_fee'] ?? 0).toDouble(),
+            followUpPrice: (s['followup_consultation_fee'] ?? 0).toDouble(),
+            imageUrl: s['avatar_url'] ??
+                "https://api.dicebear.com/7.x/avataaars/svg?seed=${s['name']}",
+            rating: (s['rating'] ?? 4.5).toDouble(),
+            type: 'staff',
+          );
+        }).toList();
+
+        mappedResults.sort((a, b) {
+          if (widget.preSelectedHospital != null) {
+            bool aIsLocal =
+                a.hospitalId == widget.preSelectedHospital!['id'].toString();
+            bool bIsLocal =
+                b.hospitalId == widget.preSelectedHospital!['id'].toString();
+            if (aIsLocal && !bIsLocal) return -1;
+            if (!aIsLocal && bIsLocal) return 1;
+          }
+
+          if (_sortBy == 'price_asc') {
+            return a.firstPrice.compareTo(b.firstPrice);
+          }
+          if (_sortBy == 'price_desc') {
+            return b.firstPrice.compareTo(a.firstPrice);
+          }
+          return b.rating.compareTo(a.rating);
+        });
+
         setState(() {
-          _results = data.map((s) {
-            final h = s['hospitals'];
-            return _MedicalResult(
-              id: s['id'].toString(),
-              name: s['name'] ?? 'Doctor',
-              specialty: s['specialty'] ??
-                  s['role']?.toString().toUpperCase() ??
-                  "GENERAL",
-              hospitalName:
-                  (h is Map) ? (h['name'] ?? "Hospital") : "Partner Hospital",
-              nurseAssigned: s['assigned_nurse'] ?? "Available",
-              firstPrice: (s['first_consultation_fee'] ?? 0).toDouble(),
-              followUpPrice: (s['followup_consultation_fee'] ?? 0).toDouble(),
-              imageUrl: s['avatar_url'] ??
-                  "https://api.dicebear.com/7.x/avataaars/svg?seed=${s['name']}",
-              rating: (s['rating'] ?? 4.5).toDouble(),
-              type: 'staff',
-            );
-          }).toList();
+          _results = mappedResults;
           _isSearching = false;
         });
       }
     } catch (e) {
-      debugPrint("Supabase Search Error: $e");
+      debugPrint("Search Error: $e");
       if (mounted) setState(() => _isSearching = false);
     }
   }
 
+  void _speakResults() {
+    final lang = _voiceService.currentLanguage;
+    String text = _results.isEmpty
+        ? (lang == VoiceService.nepali
+            ? "कुनै नतिजा फेला परेन।"
+            : "No results found.")
+        : (lang == VoiceService.nepali
+            ? "${_results.length} जना स्वास्थ्यकर्मीहरू फेला पर्यो।"
+            : "Found ${_results.length} results.");
+    _voiceService.speakWithSavedLanguage(text);
+  }
+
   @override
   Widget build(BuildContext context) {
-    String hint = "Search doctors...";
-    if (widget.preSelectedHospital != null) {
-      hint = "In ${widget.preSelectedHospital!['name']}...";
-    }
-    if (activeRoleFilter != null) hint = "Search ${activeRoleFilter}s...";
+    String hint = widget.preSelectedHospital != null
+        ? "Priority: ${widget.preSelectedHospital!['name']}..."
+        : "Search all specialists...";
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
@@ -190,19 +183,20 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
         ),
         title: TextField(
           controller: _searchController,
-          autofocus: activeRoleFilter == null,
-          style: const TextStyle(fontSize: 16),
+          autofocus: true,
+          style: const TextStyle(fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: Colors.grey),
+            hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
             border: InputBorder.none,
           ),
         ),
         actions: [
           IconButton(
-              icon: const Icon(Icons.filter_list_rounded,
-                  color: Color(0xFF6366F1)),
-              onPressed: _showFilterSheet),
+            icon:
+                const Icon(Icons.filter_list_rounded, color: Color(0xFF6366F1)),
+            onPressed: _showFilterSheet,
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -216,7 +210,10 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
 
   Widget _buildResultsGrid() {
     if (_isSearching) return const Center(child: CircularProgressIndicator());
-    if (_results.isEmpty) return const Center(child: Text("No matches found."));
+    if (_results.isEmpty) {
+      return const Center(
+          child: Text("No matches found. Try broadening your filters."));
+    }
 
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 50, 16, 100),
@@ -227,11 +224,16 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
         childAspectRatio: 0.65,
       ),
       itemCount: _results.length,
-      itemBuilder: (context, index) => _build3DCard(_results[index]),
+      itemBuilder: (context, index) {
+        final doc = _results[index];
+        bool isPriority = widget.preSelectedHospital != null &&
+            doc.hospitalId == widget.preSelectedHospital!['id'].toString();
+        return _build3DCard(doc, isPriority);
+      },
     );
   }
 
-  Widget _build3DCard(_MedicalResult doc) {
+  Widget _build3DCard(_MedicalResult doc, bool isPriority) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -261,8 +263,15 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(25),
+              // FIX: Replaced .withOpacity with .withValues
+              border: isPriority
+                  ? Border.all(
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+                      width: 1)
+                  : null,
               boxShadow: [
                 BoxShadow(
+                  // FIX: Replaced .withOpacity with .withValues
                   color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
@@ -272,6 +281,16 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (isPriority)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 4),
+                    child: Text("LOCAL PRIORITY",
+                        style: TextStyle(
+                            color: Color(0xFF6366F1),
+                            fontSize: 7,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5)),
+                  ),
                 Text(doc.name,
                     style: const TextStyle(
                         fontWeight: FontWeight.w900, fontSize: 13),
@@ -305,9 +324,10 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
                 tag: 'doctor_image_${doc.id}',
                 child: CircleAvatar(
                   radius: 40,
-                  backgroundColor: Colors.white,
+                  backgroundColor:
+                      isPriority ? const Color(0xFF6366F1) : Colors.white,
                   child: CircleAvatar(
-                    radius: 38,
+                    radius: 37,
                     backgroundImage: NetworkImage(doc.imageUrl),
                   ),
                 ),
@@ -346,78 +366,83 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
       ],
     );
   }
+  
+void _showFilterSheet() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+    builder: (context) => StatefulBuilder(
+      builder: (context, setModalState) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Price Range (Rs)",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            RangeSlider(
+              values: _priceRange,
+              min: 0,
+              max: 10000,
+              divisions: 20,
+              activeColor: const Color(0xFF6366F1),
+              labels: RangeLabels(_priceRange.start.round().toString(),
+                  _priceRange.end.round().toString()),
+              onChanged: (v) => setModalState(() => _priceRange = v),
+            ),
+            const SizedBox(height: 20),
+            const Text("Sort By",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
 
-  void _showFilterSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Price Range (Rs)",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              RangeSlider(
-                values: _priceRange,
-                min: 0,
-                max: 10000,
-                divisions: 20,
-                activeColor: const Color(0xFF6366F1),
-                labels: RangeLabels(_priceRange.start.round().toString(),
-                    _priceRange.end.round().toString()),
-                onChanged: (v) => setModalState(() => _priceRange = v),
+            // FIX: Note the parameter name is 'groupValue' inside RadioGroup, not 'value'
+            RadioGroup<String>(
+              groupValue: _sortBy, 
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setModalState(() => _sortBy = newValue);
+                  setState(() => _sortBy = newValue);
+                }
+              },
+              child: Column(
+                children: [
+                  _sortOption("Highest Rating", 'rating'),
+                  _sortOption("Price: Low to High", 'price_asc'),
+                  _sortOption("Price: High to Low", 'price_desc'),
+                ],
               ),
-              const SizedBox(height: 20),
-              const Text("Sort By",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
 
-              // Removed the problematic RadioGroup and went back to direct calls
-              _sortOption(setModalState, "Highest Rating", 'rating'),
-              _sortOption(setModalState, "Price: Low to High", 'price_asc'),
-              _sortOption(setModalState, "Price: High to Low", 'price_desc'),
-
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _performSearch(_searchController.text);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15)),
-                ),
-                child:
-                    const Text("Apply", style: TextStyle(color: Colors.white)),
-              )
-            ],
-          ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _performSearch(_searchController.text);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15)),
+              ),
+              child: const Text("Apply", style: TextStyle(color: Colors.white)),
+            )
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _sortOption(StateSetter setModalState, String title, String val) {
-    return RadioListTile<String>(
-      title: Text(title, style: const TextStyle(fontSize: 14)),
-      value: val,
-      // ignore: deprecated_member_use
-      groupValue: _sortBy,
-      contentPadding: EdgeInsets.zero,
-      activeColor: const Color(0xFF6366F1),
-      // ignore: deprecated_member_use
-      onChanged: (String? newValue) {
-        if (newValue != null) {
-          setModalState(() => _sortBy = newValue);
-          setState(() => _sortBy = newValue);
-        }
-      },
-    );
-  }
+Widget _sortOption(String title, String val) {
+  return RadioListTile<String>(
+    title: Text(title, style: const TextStyle(fontSize: 14)),
+    value: val,
+    contentPadding: EdgeInsets.zero,
+    activeColor: const Color(0xFF6366F1),
+    // groupValue and onChanged are handled by RadioGroup parent
+  );
+}
+
 }

@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 
-// Ensure these imports match your actual file structure
 import 'call_landing_page.dart';
 import 'supabase_handler.dart';
 import 'services/voice_service.dart';
+
+// ✅ listen to global notifier declared in main.dart
+import 'main.dart';
 
 class BookingSuccessScreen extends StatefulWidget {
   final Map<String, dynamic> doctorData;
@@ -35,7 +38,6 @@ class BookingSuccessScreen extends StatefulWidget {
 class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   final supabase = Supabase.instance.client;
 
-  StreamSubscription? _callSubscription;
   StreamSubscription? _queueSubscription;
 
   bool _isIncomingCall = false;
@@ -47,6 +49,15 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
+  /// callID received from invite (room id)
+  String? _incomingRoomId;
+
+  /// ✅ cache patient zego uid here
+  String? _myZegoUid;
+
+  /// ✅ listener handle for incomingInvite notifier
+  late final VoidCallback _inviteListener;
+
   @override
   void initState() {
     super.initState();
@@ -54,29 +65,133 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     // SAFETY GATE: Prevent old appointments (older than 24h) from showing calls
     final now = DateTime.now();
     final difference = now.difference(widget.appointmentDate).inHours;
-    
+
     if (difference > 24) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _showSnackBar("This appointment record has expired.");
         Navigator.of(context).popUntil((route) => route.isFirst);
       });
-      return; 
+      return;
     }
 
     _initNotifications();
     _initVoiceAndAnnounce();
-    _setupCallListener();
+
+    // ✅ load zego uid once (so we can use it when accepting/tapping notification)
+    _loadMyZegoUid();
+
+    // ✅ Listen to Zego invite events coming from AuthGate init(invitationEvents)
+    _bindIncomingInviteNotifier();
+
+    // Queue is still Supabase-driven (unchanged)
     _setupQueueListener();
   }
 
+  Future<void> _loadMyZegoUid() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    // If already set in user metadata (optional), use it
+    final metaUid = user.userMetadata?['zego_uid']?.toString().trim();
+    if (metaUid != null && metaUid.isNotEmpty) {
+      _myZegoUid = metaUid;
+      return;
+    }
+
+    try {
+      final data = await supabase
+          .from('profiles')
+          .select('zego_uid')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final z = data?['zego_uid']?.toString().trim();
+      if (z != null && z.isNotEmpty) {
+        _myZegoUid = z;
+      } else {
+        // fallback (should not happen if you applied SQL trigger)
+        _myZegoUid = user.id; // last resort
+      }
+    } catch (_) {
+      _myZegoUid = user.id; // last resort
+    }
+  }
+
+  void _bindIncomingInviteNotifier() {
+    _inviteListener = () async {
+      final data = incomingInvite.value;
+      if (data == null) return;
+      if (!mounted) return;
+
+      // Only show on the correct BookingSuccessScreen
+      if (data.bookingId.trim() != widget.bookingId.trim()) return;
+
+      setState(() {
+        _incomingRoomId = data.callID.trim();
+        _isIncomingCall = true;
+        _callerRoleLabel =
+            data.callerName.toUpperCase().contains("NURSE") ? "NURSE" : "DOCTOR";
+      });
+
+      await _showCallNotification(_callerRoleLabel, widget.bookingId);
+    };
+
+    incomingInvite.addListener(_inviteListener);
+  }
+
+  Future<void> _handleNotificationTap(String bookingId) async {
+  final user = supabase.auth.currentUser;
+  if (user == null) return;
+
+  // ensure we have zego uid
+  if (_myZegoUid == null || _myZegoUid!.isEmpty) {
+    await _loadMyZegoUid();
+    if (!mounted) return;
+  }
+
+  // ✅ join the SAME room as inviter if we already received an invite
+  final String roomId =
+      (_incomingRoomId != null && _incomingRoomId!.trim().isNotEmpty)
+          ? _incomingRoomId!.trim()
+          : SupabaseHandler.getNormalizedRoomId(bookingId);
+
+  if (!mounted) return;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PatientVideoCallPage(
+        callID: roomId,
+        userID: (_myZegoUid ?? user.id).trim(),
+        userName: user.userMetadata?['full_name'] ?? "Patient",
+        professionalName: widget.doctorData['full_name'] ?? "Specialist",
+      ),
+    ),
+  );
+}
+
   Future<void> _initNotifications() async {
-    // Local notifications are only supported on Mobile
     if (kIsWeb) return;
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings();
-    const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+
+    // ✅ FIX: new versions require named parameter `settings:`
+    await _notificationsPlugin.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        final payload = response.payload;
+        if (payload != null && payload.isNotEmpty) {
+          _handleNotificationTap(payload);
+        }
+      },
+    );
 
     if (defaultTargetPlatform == TargetPlatform.android) {
       const AndroidNotificationChannel callChannel = AndroidNotificationChannel(
@@ -95,13 +210,13 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
         playSound: true,
       );
 
-      final androidPlugin = _notificationsPlugin.resolvePlatformSpecificImplementation<
+      final androidPlugin = _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
+
       await androidPlugin?.createNotificationChannel(callChannel);
       await androidPlugin?.createNotificationChannel(queueChannel);
     }
-
-    await _notificationsPlugin.initialize(initSettings);
   }
 
   Future<void> _initVoiceAndAnnounce() async {
@@ -110,15 +225,18 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   }
 
   void _speakBookingDetails() {
-    String dateStr = DateFormat('EEEE, MMMM d').format(widget.appointmentDate);
-    String announcement =
+    final String dateStr =
+        DateFormat('EEEE, MMMM d').format(widget.appointmentDate);
+
+    final String announcement =
         "Appointment booked with ${widget.doctorData['full_name'] ?? 'your doctor'} for $dateStr. "
         "Your queue number is ${widget.queueNumber}. "
         "We will notify you when your turn is approaching.";
+
     _voiceService.speakWithSavedLanguage(announcement);
   }
 
-  // REAL-TIME QUEUE LISTENER
+  // REAL-TIME QUEUE LISTENER (UNCHANGED)
   void _setupQueueListener() {
     final staffId = widget.doctorData['id'];
     if (staffId == null) return;
@@ -128,17 +246,17 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
         .stream(primaryKey: ['staff_id'])
         .eq('staff_id', staffId)
         .listen((data) {
-          if (data.isNotEmpty && mounted) {
-            final int servingNow = data.first['currently_serving'] ?? 0;
-            setState(() => _currentlyServing = servingNow);
-            _processQueueLogic(servingNow);
-          }
-        });
+      if (data.isNotEmpty && mounted) {
+        final int servingNow = data.first['currently_serving'] ?? 0;
+        setState(() => _currentlyServing = servingNow);
+        _processQueueLogic(servingNow);
+      }
+    });
   }
 
   void _processQueueLogic(int servingNow) {
-    int myNo = widget.queueNumber;
-    int gap = myNo - servingNow;
+    final int myNo = widget.queueNumber;
+    final int gap = myNo - servingNow;
 
     if (gap <= 5 && gap > 0 && _lastNotifiedNumber != servingNow) {
       _lastNotifiedNumber = servingNow;
@@ -150,9 +268,9 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   }
 
   Future<void> _triggerQueueNotification(int servingNow, int gap) async {
-    int myNo = widget.queueNumber;
-    String title = gap == 0 ? "It's Your Turn!" : "Queue Update";
-    String message = gap == 0
+    final int myNo = widget.queueNumber;
+    final String title = gap == 0 ? "It's Your Turn!" : "Queue Update";
+    final String message = gap == 0
         ? "Doctor is ready for Number $myNo. Please proceed."
         : "Number $servingNow is being served. Only $gap people left before you.";
 
@@ -163,104 +281,173 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
         importance: Importance.high,
         priority: Priority.high,
       );
-      const notificationDetails = NotificationDetails(
-          android: androidDetails, iOS: DarwinNotificationDetails());
 
-      await _notificationsPlugin.show(1, title, message, notificationDetails);
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(),
+      );
+
+      await _safeNotifShow(
+        id: 1,
+        title: title,
+        body: message,
+        details: details,
+      );
     }
-    
+
     _voiceService.speakWithSavedLanguage(message);
   }
 
-  void _setupCallListener() {
-    _callSubscription = supabase
-        .from('bookings')
-        .stream(primaryKey: ['id'])
-        .eq('id', widget.bookingId)
-        .listen((List<Map<String, dynamic>> data) {
-      if (data.isNotEmpty && mounted) {
-        final latestBooking = data.first;
-        final String status = latestBooking['status']?.toString().toLowerCase() ?? '';
-        
-        if (status == 'cancelled') {
-          _showSnackBar("Appointment expired or cancelled.");
-          Navigator.of(context).popUntil((route) => route.isFirst);
-          return;
-        }
+  /// ✅ SAFE wrappers for flutter_local_notifications across versions
+  Future<void> _safeNotifShow({
+    required int id,
+    required String title,
+    required String body,
+    required NotificationDetails details,
+    String? payload,
+  }) async {
+    if (kIsWeb) return;
 
-        bool isCalling = (status == 'consulting' || 
-                          status == 'nurse_calling' || 
-                          status == 'calling');
+    try {
+      // ignore: avoid_dynamic_calls
+      await (_notificationsPlugin as dynamic).show(
+        id,
+        title,
+        body,
+        details,
+        payload: payload,
+      );
+      return;
+    } catch (_) {}
 
-        if (isCalling && !_isIncomingCall) {
-          String role = (status == 'nurse_calling') ? "NURSE" : "DOCTOR";
-          _showCallNotification(role);
-          setState(() {
-            _isIncomingCall = true;
-            _callerRoleLabel = role;
-          });
-        } 
-        else if (_isIncomingCall && !isCalling) {
-          if (!kIsWeb) _notificationsPlugin.cancel(0);
-          setState(() => _isIncomingCall = false);
-          _showSnackBar("Call timed out or was ended.");
-        }
-      }
-    });
+    try {
+      // ignore: avoid_dynamic_calls
+      await (_notificationsPlugin as dynamic).show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: details,
+        payload: payload,
+      );
+      return;
+    } catch (_) {}
   }
 
-  Future<void> _showCallNotification(String role) async {
-    if (!kIsWeb) {
-      const androidDetails = AndroidNotificationDetails(
-        'medical_call_channel',
-        'Urgent Consultations',
-        importance: Importance.max,
-        priority: Priority.high,
-        fullScreenIntent: true,
-      );
-      await _notificationsPlugin.show(
-          0,
-          'Incoming Call',
-          'Your $role is ready.',
-          const NotificationDetails(
-              android: androidDetails, iOS: DarwinNotificationDetails()));
-    }
+  Future<void> _safeNotifCancel(int id) async {
+    if (kIsWeb) return;
+
+    try {
+      // ignore: avoid_dynamic_calls
+      await (_notificationsPlugin as dynamic).cancel(id);
+      return;
+    } catch (_) {}
+
+    try {
+      // ignore: avoid_dynamic_calls
+      await (_notificationsPlugin as dynamic).cancel(id: id);
+      return;
+    } catch (_) {}
+  }
+
+  Future<void> _safeNotifCancelAll() async {
+    if (kIsWeb) return;
+    try {
+      await _notificationsPlugin.cancelAll();
+    } catch (_) {}
+  }
+
+  Future<void> _showCallNotification(String role, String bookingId) async {
+    if (kIsWeb) return;
+
+    const androidDetails = AndroidNotificationDetails(
+      'medical_call_channel',
+      'Urgent Consultations',
+      importance: Importance.max,
+      priority: Priority.high,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.call,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(),
+    );
+
+    await _safeNotifShow(
+      id: 0,
+      title: 'Incoming Call',
+      body: 'Your $role is ready.',
+      details: details,
+      payload: bookingId,
+    );
+
     _voiceService.speakWithSavedLanguage("Incoming call from your $role.");
   }
 
-  void _handleAcceptCall() {
-    if (!kIsWeb) _notificationsPlugin.cancelAll();
-    setState(() => _isIncomingCall = false);
-    final String normalizedRoomId = SupabaseHandler.getNormalizedRoomId(widget.bookingId);
+  Future<void> _handleAcceptCall() async {
+  await _safeNotifCancelAll();
+  if (!mounted) return;
 
-    Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PatientVideoCallPage(
-            callID: normalizedRoomId,
-            userID: supabase.auth.currentUser!.id,
-            userName: supabase.auth.currentUser?.userMetadata?['full_name'] ?? "Patient",
-            professionalName: widget.doctorData['full_name'] ?? "Specialist",
-          ),
-        ));
+  setState(() => _isIncomingCall = false);
+
+  final user = supabase.auth.currentUser;
+  if (user == null) return;
+
+  if (_myZegoUid == null || _myZegoUid!.isEmpty) {
+    await _loadMyZegoUid();
+    if (!mounted) return;
   }
 
+  // ✅ ALWAYS join SAME room as professional used in invite
+  final String roomId =
+      (_incomingRoomId != null && _incomingRoomId!.trim().isNotEmpty)
+          ? _incomingRoomId!.trim()
+          : SupabaseHandler.getNormalizedRoomId(widget.bookingId);
+
+  if (!mounted) return;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PatientVideoCallPage(
+        callID: roomId,
+        userID: (_myZegoUid ?? user.id).trim(),
+        userName: user.userMetadata?['full_name'] ?? "Patient",
+        professionalName: widget.doctorData['full_name'] ?? "Specialist",
+      ),
+    ),
+  );
+}
+
   Future<void> _handleDeclineCall() async {
-    if (!kIsWeb) await _notificationsPlugin.cancel(0);
+    await _safeNotifCancel(0);
     setState(() => _isIncomingCall = false);
-    
-    await supabase.from('bookings').update({'status': 'confirmed'}).eq('id', widget.bookingId);
-    
+
+    try {
+      // ignore: avoid_dynamic_calls
+      await (ZegoUIKitPrebuiltCallInvitationService() as dynamic).reject();
+    } catch (_) {
+      try {
+        // ignore: avoid_dynamic_calls
+        await (ZegoUIKitPrebuiltCallInvitationService() as dynamic).decline();
+      } catch (_) {}
+    }
+
+    _incomingRoomId = null;
+    incomingInvite.value = null;
+
     if (!mounted) return;
     _showSnackBar("Call declined.");
   }
 
   @override
   void dispose() {
-    _callSubscription?.cancel();
+    incomingInvite.removeListener(_inviteListener);
     _queueSubscription?.cancel();
     super.dispose();
   }
+
+  // ---------------- UI (UNCHANGED) ----------------
 
   @override
   Widget build(BuildContext context) {
@@ -274,7 +461,8 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 10),
-                const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 60),
+                const Icon(Icons.check_circle_rounded,
+                    color: Color(0xFF10B981), size: 60),
                 const SizedBox(height: 10),
                 _buildTitleRow(),
                 const SizedBox(height: 20),
@@ -297,10 +485,14 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Text("Booked Successfully!",
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
+            style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1E293B))),
         IconButton(
-            onPressed: _speakBookingDetails,
-            icon: const Icon(Icons.volume_up_rounded, color: Color(0xFF6366F1))),
+          onPressed: _speakBookingDetails,
+          icon: const Icon(Icons.volume_up_rounded, color: Color(0xFF6366F1)),
+        ),
       ],
     );
   }
@@ -322,24 +514,33 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       child: Column(
         children: [
           const Text("LIVE QUEUE STATUS",
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                  letterSpacing: 1.2)),
           const SizedBox(height: 15),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _queueInfo("Your No.", widget.queueNumber.toString(), const Color(0xFF6366F1)),
-              const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 16),
+              _queueInfo("Your No.", widget.queueNumber.toString(),
+                  const Color(0xFF6366F1)),
+              const Icon(Icons.arrow_forward_ios_rounded,
+                  color: Colors.grey, size: 16),
               _queueInfo("Serving", _currentlyServing.toString(), Colors.orange),
             ],
           ),
           if (remaining > 0) ...[
             const Divider(height: 30),
             Text("$remaining people ahead of you",
-                style: TextStyle(color: isUrgent ? Colors.red : Colors.grey[700], fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    color: isUrgent ? Colors.red : Colors.grey[700],
+                    fontWeight: FontWeight.w600)),
           ] else if (remaining == 0) ...[
             const Divider(height: 30),
             const Text("You are next! Please be ready.",
-                style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                style: TextStyle(
+                    color: Colors.green, fontWeight: FontWeight.bold)),
           ]
         ],
       ),
@@ -350,7 +551,9 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     return Column(
       children: [
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        Text(value, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: color)),
+        Text(value,
+            style: TextStyle(
+                fontSize: 32, fontWeight: FontWeight.bold, color: color)),
       ],
     );
   }
@@ -358,7 +561,8 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   Widget _buildAppointmentCard() {
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(30)),
       child: Column(
         children: [
           _buildDoctorHeader(),
@@ -366,13 +570,15 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                _infoRow(Icons.calendar_today_rounded, "Date", DateFormat('EEEE, MMM d').format(widget.appointmentDate)),
+                _infoRow(Icons.calendar_today_rounded, "Date",
+                    DateFormat('EEEE, MMM d').format(widget.appointmentDate)),
                 const Divider(height: 25),
                 _infoRow(Icons.access_time_rounded, "Time", widget.appointmentTime),
                 const Divider(height: 25),
                 _infoRow(Icons.location_on_rounded, "Type", widget.appointmentType),
                 const Divider(height: 25),
-                _infoRow(Icons.numbers_rounded, "ID", widget.bookingId.split('-').first.toUpperCase()),
+                _infoRow(Icons.numbers_rounded, "ID",
+                    widget.bookingId.split('-').first.toUpperCase()),
               ],
             ),
           ),
@@ -394,15 +600,22 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
               radius: 30,
               backgroundColor: const Color(0xFF6366F1),
               child: Text(widget.doctorData['full_name']?[0] ?? "D",
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold))),
           const SizedBox(width: 15),
           Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(widget.doctorData['full_name'] ?? "Doctor",
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(widget.doctorData['speciality'] ?? 'Specialist',
-                style: const TextStyle(color: Color(0xFF6366F1), fontSize: 13)),
-          ])),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.doctorData['full_name'] ?? "Doctor",
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(widget.doctorData['speciality'] ?? 'Specialist',
+                    style: const TextStyle(
+                        color: Color(0xFF6366F1), fontSize: 13)),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -420,7 +633,8 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
 
   Widget _buildActionButtons() {
     return Column(children: [
-      _largeBtn("Wait for Consultation", Icons.hourglass_top, const Color(0xFF6366F1), Colors.white,
+      _largeBtn("Wait for Consultation", Icons.hourglass_top,
+          const Color(0xFF6366F1), Colors.white,
           () => _showSnackBar("Monitoring your turn...")),
       const SizedBox(height: 12),
       _largeBtn("Return Home", Icons.home_filled, Colors.white, Colors.black87,
@@ -428,17 +642,21 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     ]);
   }
 
-  Widget _largeBtn(String label, IconData icon, Color bg, Color txt, VoidCallback tap) {
+  Widget _largeBtn(
+      String label, IconData icon, Color bg, Color txt, VoidCallback tap) {
     return ElevatedButton.icon(
       onPressed: tap,
       icon: Icon(icon, color: txt, size: 20),
-      label: Text(label, style: TextStyle(color: txt, fontWeight: FontWeight.bold)),
+      label: Text(label,
+          style: TextStyle(color: txt, fontWeight: FontWeight.bold)),
       style: ElevatedButton.styleFrom(
         backgroundColor: bg,
         minimumSize: const Size(double.infinity, 55),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(15),
-          side: bg == Colors.white ? BorderSide(color: Colors.grey.shade300) : BorderSide.none,
+          side: bg == Colors.white
+              ? BorderSide(color: Colors.grey.shade300)
+              : BorderSide.none,
         ),
       ),
     );
@@ -446,51 +664,70 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-              onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-              icon: const Icon(Icons.close, color: Colors.grey))
-        ]);
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      automaticallyImplyLeading: false,
+      actions: [
+        IconButton(
+          onPressed: () =>
+              Navigator.of(context).popUntil((route) => route.isFirst),
+          icon: const Icon(Icons.close, color: Colors.grey),
+        )
+      ],
+    );
   }
 
   Widget _buildIncomingCallUI() {
     return Material(
-        color: const Color(0xFF0F172A),
-        child: SafeArea(
-            child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-          Column(children: [
-            const Text("INCOMING CALL", style: TextStyle(color: Colors.white60, letterSpacing: 2)),
-            const SizedBox(height: 30),
-            const CircleAvatar(
-                radius: 45,
-                backgroundColor: Color(0xFF6366F1),
-                child: Icon(Icons.person, size: 40, color: Colors.white)),
-            const SizedBox(height: 20),
-            Text(widget.doctorData['full_name'] ?? "Doctor",
-                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-            Text("$_callerRoleLabel IS READY",
-                style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold)),
-          ]),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-            _callBtn(Icons.close, "Decline", Colors.red, _handleDeclineCall),
-            _callBtn(Icons.videocam, "Accept", Colors.green, _handleAcceptCall),
-          ])
-        ])));
+      color: const Color(0xFF0F172A),
+      child: SafeArea(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Column(children: [
+              const Text("INCOMING CALL",
+                  style: TextStyle(color: Colors.white60, letterSpacing: 2)),
+              const SizedBox(height: 30),
+              const CircleAvatar(
+                  radius: 45,
+                  backgroundColor: Color(0xFF6366F1),
+                  child: Icon(Icons.person, size: 40, color: Colors.white)),
+              const SizedBox(height: 20),
+              Text(widget.doctorData['full_name'] ?? "Doctor",
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold)),
+              Text("$_callerRoleLabel IS READY",
+                  style: const TextStyle(
+                      color: Color(0xFF6366F1), fontWeight: FontWeight.bold)),
+            ]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              _callBtn(Icons.close, "Decline", Colors.red, _handleDeclineCall),
+              _callBtn(Icons.videocam, "Accept", Colors.green, () {
+                _handleAcceptCall();
+              }),
+            ])
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _callBtn(IconData icon, String label, Color col, VoidCallback tap) {
     return Column(children: [
       GestureDetector(
-          onTap: tap,
-          child: CircleAvatar(radius: 35, backgroundColor: col, child: Icon(icon, color: Colors.white))),
+        onTap: tap,
+        child: CircleAvatar(
+            radius: 35,
+            backgroundColor: col,
+            child: Icon(icon, color: Colors.white)),
+      ),
       const SizedBox(height: 8),
       Text(label, style: const TextStyle(color: Colors.white))
     ]);
   }
 
-  void _showSnackBar(String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), behavior: SnackBarBehavior.floating));
+  void _showSnackBar(String m) => ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m), behavior: SnackBarBehavior.floating));
 }

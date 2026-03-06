@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'consultation_description.dart';
 import 'consultation_search.dart';
-import 'booking_success_screen.dart'; 
-import 'services/voice_service.dart'; // Import your singleton service
+import 'booking_success_screen.dart';
+import 'services/voice_service.dart';
 
 class ConsultationScreen extends StatefulWidget {
   final String patientId;
@@ -15,7 +15,7 @@ class ConsultationScreen extends StatefulWidget {
 
 class _ConsultationScreenState extends State<ConsultationScreen> {
   final supabase = Supabase.instance.client;
-  final VoiceService _voiceService = VoiceService(); // Access existing service
+  final VoiceService _voiceService = VoiceService();
 
   Map<String, dynamic>? selectedHospital;
   final Color primaryColor = const Color(0xFF6366F1);
@@ -24,8 +24,27 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   @override
   void initState() {
     super.initState();
-    // No need to re-init TTS if already done at Home, but safe for iOS
-    _voiceService.initTts();
+    _initializeVoiceAndSync();
+  }
+
+  Future<void> _initializeVoiceAndSync() async {
+    try {
+      await _voiceService.initTts();
+      await _voiceService.loadSavedLanguage();
+
+      if (!mounted) return;
+
+      setState(() {});
+    
+    } catch (e) {
+      debugPrint("Voice Init Error: $e");
+    }
+  }
+
+  @override
+  void dispose() {
+    _voiceService.stop();
+    super.dispose();
   }
 
   /// Plays screen-specific instructions in the pre-selected language
@@ -34,23 +53,24 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     final lang = _voiceService.currentLanguage;
 
     if (lang == VoiceService.nepali) {
-      text = selectedHospital == null 
-        ? "कृपया पहिले अस्पताल छान्नुहोस्। त्यसपछि तपाईं डाक्टर वा फार्मासिस्टसँग परामर्श गर्न सक्नुहुन्छ।"
-        : "तपाईंले ${selectedHospital!['name']} रोज्नुभएको छ। अब विशेषज्ञ डाक्टर वा फार्मासिस्ट छान्न सक्नुहुन्छ।";
+      text = selectedHospital == null
+          ? "कृपया पहिले अस्पताल छान्नुहोस्। त्यसपछि तपाईं डाक्टर वा फार्मासिस्टसँग परामर्श गर्न सक्नुहुन्छ।"
+          : "तपाईंले ${selectedHospital!['name']} रोज्नुभएको छ। अब विशेषज्ञ डाक्टर वा फार्मासिस्ट छान्न सक्नुहुन्छ।";
     } else if (lang == VoiceService.hindi) {
       text = selectedHospital == null
-        ? "कृपया पहले अस्पताल चुनें। उसके बाद आप डॉक्टर या फार्मासिस्ट से सलाह ले सकते हैं।"
-        : "आपने ${selectedHospital!['name']} चुना है। अब आप विशेषज्ञ डॉक्टर या फार्मासिस्ट चुन सकते हैं।";
+          ? "कृपया पहले अस्पताल चुनें। उसके बाद आप डॉक्टर या फार्मासिस्ट से सलाह ले सकते हैं।"
+          : "आपने ${selectedHospital!['name']} चुना है। अब आप विशेषज्ञ डॉक्टर या फार्मासिस्ट चुन सकते हैं।";
     } else {
       text = selectedHospital == null
-        ? "Please choose a hospital first. Then you can consult with doctors or pharmacists."
-        : "You have selected ${selectedHospital!['name']}. You can now choose a specialist or pharmacist.";
+          ? "Please choose a hospital first. Then you can consult with doctors or pharmacists."
+          : "You have selected ${selectedHospital!['name']}. You can now choose a specialist or pharmacist.";
     }
 
     await _voiceService.speakWithSavedLanguage(text);
   }
 
   void _navigateToSearch({String? initialRole}) {
+    _voiceService.stop();
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -79,13 +99,26 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     }
   }
 
+  void _showSnackBar(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: primaryColor,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
-      // Floating Speaker Button for Voice Help
       floatingActionButton: FloatingActionButton(
-        onPressed: _playInstructions,
+        onPressed: () {
+          _voiceService.stop();
+          _playInstructions();
+        },
         backgroundColor: primaryColor,
         child: const Icon(Icons.volume_up, color: Colors.white),
       ),
@@ -106,8 +139,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                     GestureDetector(
                       onTap: () => _navigateToSearch(),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(15),
@@ -121,8 +153,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                                 selectedHospital != null
                                     ? "Search in ${selectedHospital!['name']}..."
                                     : "Search doctors or hospitals...",
-                                style: const TextStyle(
-                                    color: Color(0xFF64748B), fontSize: 14),
+                                style: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -139,14 +170,10 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             delegate: SliverChildListDelegate([
               const SizedBox(height: 10),
               _buildYourBookingsSection(),
-
-              // SECTION 1: HOSPITALS
               _buildSectionWrapper(
                 title: "1. Choose Hospital",
                 child: _buildHospitalGrid(),
               ),
-
-              // SECTION 2 & 3: STAFF
               if (selectedHospital != null) ...[
                 _buildSectionWrapper(
                   title: "2. Specialists",
@@ -159,10 +186,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                   child: _buildStaffGrid(role: 'pharmacist'),
                 ),
               ] else
-                _buildEmptyState(
-                    "Please select a hospital to view available staff"),
-
-              // SECTION 4: EMERGENCY
+                _buildEmptyState("Please select a hospital to view available staff"),
               _buildSectionWrapper(
                 title: "4. Instant Help",
                 titleColor: emergencyRed,
@@ -177,95 +201,88 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   }
 
   Widget _buildYourBookingsSection() {
-  return StreamBuilder<List<Map<String, dynamic>>>(
-    stream: supabase
-        .from('bookings')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', supabase.auth.currentUser?.id ?? '') // Changed patient_id to user_id to match Payment Screen logic
-        .order('appointment_date', ascending: true),
-    builder: (context, snapshot) {
-      if (!snapshot.hasData || snapshot.data!.isEmpty) {
-        return const SizedBox.shrink();
-      }
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: supabase
+          .from('bookings')
+          .stream(primaryKey: ['id'])
+          .eq('user_id', supabase.auth.currentUser?.id ?? '')
+          .order('appointment_date', ascending: true),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
 
-      final activeBookings = snapshot.data!
-          .where((b) => b['status'] != 'completed' && b['status'] != 'cancelled')
-          .toList();
+        final activeBookings = snapshot.data!
+            .where((b) => b['status'] != 'completed' && b['status'] != 'cancelled')
+            .toList();
 
-      if (activeBookings.isEmpty) return const SizedBox.shrink();
+        if (activeBookings.isEmpty) return const SizedBox.shrink();
+        final booking = activeBookings.first;
 
-      final booking = activeBookings.first;
-      
-      return _buildSectionWrapper(
-        title: "Active Appointment",
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => BookingSuccessScreen(
-                    bookingId: booking['id'].toString(),
-                    appointmentDate: DateTime.parse(booking['appointment_date']),
-                    appointmentTime: booking['appointment_time'] ?? "",
-                    appointmentType: booking['type'] ?? "Video Call", // 'type' is used in Payment Screen
-                    queueNumber: booking['queue_number'] ?? 0, // SYNC FIX: Pass the real queue number
-                    doctorData: {
-                      'id': booking['provider_id'],
-                      'full_name': booking['doctor_name'] ?? "Medical Specialist", // Matching key 'full_name'
-                      'speciality': booking['doctor_speciality'] ?? "",
-                      'avatar_url': booking['doctor_avatar'], // Ensure this is stored in your booking table
-                    },
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryColor, primaryColor.withValues(alpha: 0.8)],
-                ),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                children: [
-                  const CircleAvatar(
-                    backgroundColor: Colors.white24,
-                    child: Icon(Icons.calendar_today, color: Colors.white),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          booking['doctor_name'] ?? "Consultation",
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16),
-                        ),
-                        Text(
-                          "${booking['appointment_date']} • ${booking['appointment_time']}",
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontSize: 13),
-                        ),
-                      ],
+        return _buildSectionWrapper(
+          title: "Active Appointment",
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: InkWell(
+              onTap: () {
+                _voiceService.stop();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BookingSuccessScreen(
+                      bookingId: booking['id'].toString(),
+                      appointmentDate: DateTime.parse(booking['appointment_date']),
+                      appointmentTime: booking['appointment_time'] ?? "",
+                      appointmentType: booking['type'] ?? "Video Call",
+                      queueNumber: booking['queue_number'] ?? 0,
+                      doctorData: {
+                        'id': booking['provider_id'],
+                        'full_name': booking['doctor_name'] ?? "Medical Specialist",
+                        'speciality': booking['doctor_speciality'] ?? "",
+                        'avatar_url': booking['doctor_avatar'],
+                      },
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
-                ],
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [primaryColor, primaryColor.withValues(alpha: 0.8)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      backgroundColor: Colors.white24,
+                      child: Icon(Icons.calendar_today, color: Colors.white),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            booking['doctor_name'] ?? "Consultation",
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          Text(
+                            "${booking['appointment_date']} • ${booking['appointment_time']}",
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
-}
+        );
+      },
+    );
+  }
 
   Widget _buildSectionWrapper({
     required String title,
@@ -330,6 +347,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                 width: (MediaQuery.of(context).size.width - 47) / 2,
                 child: GestureDetector(
                   onTap: () {
+                    _voiceService.stop();
                     setState(() => selectedHospital = h);
                     _voiceService.speakWithSavedLanguage("Hospital ${h['name']} selected.");
                   },
@@ -383,6 +401,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                       firstFee: s['first_consultation_fee'],
                       followUpFee: s['followup_consultation_fee'],
                       onTap: () {
+                        _voiceService.stop();
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -455,13 +474,24 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             ),
           ),
           Positioned(
-            top: -38, left: 0, right: 0,
+            top: -35,
+            left: 0,
+            right: 0,
             child: Center(
               child: CircleAvatar(
                 radius: 36,
-                backgroundColor: const Color(0xFFF1F5F9),
-                backgroundImage: imageUrl != null && imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
-                child: imageUrl == null ? Text(title[0]) : null,
+                backgroundColor: const Color(0xFFE2E8F0),
+                child: ClipOval(
+                  child: imageUrl != null && imageUrl.isNotEmpty
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          width: 72,
+                          height: 72,
+                          errorBuilder: (context, error, stackTrace) => Text(title[0], style: const TextStyle(fontSize: 20)),
+                        )
+                      : Text(title[0], style: const TextStyle(fontSize: 20)),
+                ),
               ),
             ),
           ),
@@ -506,9 +536,5 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   Widget _buildEmptyState(String msg) {
     return Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 40), child: Text(msg, style: const TextStyle(color: Colors.grey))));
-  }
-
-  void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: primaryColor, behavior: SnackBarBehavior.floating));
   }
 }

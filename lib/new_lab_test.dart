@@ -114,7 +114,7 @@ class _NewLabScreenState extends State<NewLabScreen> {
         'dont_instructions_ne': dontTrans['ne'],
         'do_instructions_hi': doTrans['hi'],
         'dont_instructions_hi': dontTrans['hi'],
-        'images': finalImageUrls,
+        'image_url': finalImageUrls,
         'updated_at': DateTime.now().toIso8601String(),
       };
 

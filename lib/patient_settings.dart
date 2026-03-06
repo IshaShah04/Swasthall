@@ -33,7 +33,11 @@ class _PatientSettingsState extends State<PatientSettings> {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      final data = await _supabase.from('profiles').select().eq('id', user.id).single();
+      final data = await _supabase
+          .from('profiles')
+          .select('full_name, phone_number, avatar_url')
+          .eq('id', user.id)
+          .single();
 
       if (mounted) {
         setState(() {

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.health_department"
+    namespace = "com.raunak.swasthall"
     compileSdk = 36 
 
     ndkVersion = "28.2.13676358"
@@ -16,7 +16,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.health_department"
+        applicationId = "com.raunak.swasthall"
         minSdk = 24
         targetSdk = 36 
         versionCode = 1
@@ -69,8 +69,10 @@ flutter {
 }
 
 dependencies {
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.multidex:multidex:2.0.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
     implementation("com.google.firebase:firebase-messaging")
+    implementation ("im.zego:zpns-fcm:2.7.0")
 }

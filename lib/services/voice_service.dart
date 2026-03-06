@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class VoiceService {
   static final VoiceService _instance = VoiceService._internal();
@@ -7,14 +8,23 @@ class VoiceService {
   VoiceService._internal();
 
   final FlutterTts _tts = FlutterTts();
+  static const String _langKey = "preferred_language_code";
 
+  // Configuration Constants
   static const String nepali = "ne-NP";
   static const String hindi = "hi-IN";
   static const String english = "en-US";
 
   String currentLanguage = english;
+  bool _isInitialized = false;
 
+  /// Initializes TTS settings
   Future<void> initTts() async {
+    if (_isInitialized) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    currentLanguage = prefs.getString(_langKey) ?? english;
+
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
       await _tts.setSharedInstance(true);
       await _tts.setIosAudioCategory(
@@ -25,67 +35,66 @@ class VoiceService {
         ],
       );
     }
-    
-    // --- SPEED TUNING ---
-    // Increased to 0.6 for instant, snappy delivery.
-    await _tts.setSpeechRate(0.6); 
-    await _tts.setPitch(1.2); 
+
+    await _tts.setSpeechRate(0.5);
     await _tts.setVolume(1.0);
-    await _tts.setLanguage(currentLanguage);
-
-    // --- WEB-SPECIFIC VOICE SELECTION ---
-    if (kIsWeb) {
-      try {
-        List<dynamic>? voices = await _tts.getVoices;
-        if (voices != null) {
-          // Priority: 1. Natural voices, 2. Google Female voices, 3. Microsoft Aria (Soft)
-          final bestVoice = voices.firstWhere(
-            (v) {
-              final name = v["name"].toString().toLowerCase();
-              return name.contains("natural") || 
-                     (name.contains("google") && name.contains("female")) ||
-                     name.contains("aria") ||
-                     name.contains("soft");
-            },
-            orElse: () => voices.first,
-          );
-
-          await _tts.setVoice({
-            "name": bestVoice["name"], 
-            "locale": bestVoice["locale"]
-          });
-        }
-        // Silent warm-up to prevent first-time lag
-        await _tts.speak(""); 
-      } catch (e) {
-        debugPrint("Web Voice Selection Error: $e");
-      }
-    }
+    await _updateLanguageSettings(currentLanguage);
+    
+    _isInitialized = true;
   }
 
+  /// RESTORED: Naming for compatibility with your existing screens
   Future<void> speakWithSavedLanguage(String text) async {
     if (text.isEmpty) return;
     try {
-      // Direct call - no extra setting overhead
+      await _tts.stop(); 
+      await _updateLanguageSettings(currentLanguage);
       await _tts.speak(text);
     } catch (e) {
-      debugPrint("TTS Speak Error: $e");
+      debugPrint("TTS Error: $e");
     }
   }
 
+  /// RESTORED: Placeholder to stop errors in main.dart
+  /// We don't need the "Kill Logic" anymore, so this just logs.
+  void enableGreetingOnce() {
+    debugPrint("Greeting enabled (Master Guard removed for better reliability).");
+  }
+
+  /// Internal helper to sync pitch and language
+  Future<void> _updateLanguageSettings(String code) async {
+    await _tts.setLanguage(code);
+    await _tts.setPitch(code == english ? 1.1 : 1.0);
+  }
+
+  /// Updates language and persists it
   Future<void> setLanguage(String code) async {
     currentLanguage = code;
-    await _tts.setLanguage(code);
-    
-    // South Asian languages often sound better with a slightly lower pitch
-    if (code == nepali || code == hindi) {
-      await _tts.setPitch(1.1);
-    } else {
-      await _tts.setPitch(1.2);
-    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_langKey, code);
+    await _updateLanguageSettings(code);
   }
 
+  /// Loads language from disk
+  Future<void> loadSavedLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Supporting both keys just in case
+    currentLanguage = prefs.getString(_langKey) ?? prefs.getString('selected_language') ?? english;
+    await _updateLanguageSettings(currentLanguage);
+  }
+
+  /// Immediately silences the app (Call in dispose)
   Future<void> stop() async {
     await _tts.stop();
+  }
+
+  void setHandlers({
+    required Function onStart, 
+    required Function onComplete, 
+    required Function onError
+  }) {
+    _tts.setStartHandler(() => onStart());
+    _tts.setCompletionHandler(() => onComplete());
+    _tts.setErrorHandler((msg) => onError(msg));
   }
 }

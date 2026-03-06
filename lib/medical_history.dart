@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Needed to check language
+import 'package:shared_preferences/shared_preferences.dart';
 import 'medical_care.dart';
 import 'medical_vault.dart';
 import 'services/voice_service.dart';
 
 class MedicalHistoryScreen extends StatefulWidget {
+  // Fixed: patientId is passed in constructor, but usually accessed via widget.patientId
   const MedicalHistoryScreen({super.key, required String patientId});
 
   @override
@@ -55,8 +56,10 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
           _isLoading = false;
         });
 
+        // Initialize voice engine so the button is ready, 
+        // but DO NOT call the greeting message here.
         if (_isPatient) {
-          _initVoiceAndGreet();
+          await _voiceService.initTts();
         }
       }
     } catch (e) {
@@ -64,27 +67,18 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
     }
   }
 
-  Future<void> _initVoiceAndGreet() async {
-    await _voiceService.initTts();
-    _announceDashboard();
-  }
-
-  // UPDATED: Automatically switches text based on saved language
+  // This function is now ONLY called when the user manually taps the volume icon
   void _announceDashboard() async {
     final prefs = await SharedPreferences.getInstance();
-    // Assuming your VoiceService or App saves language code as 'language_code'
     String langCode = prefs.getString('language_code') ?? 'en'; 
 
     String message;
 
     if (langCode.startsWith('hi')) {
-      // Hindi Translation
       message = "नमस्ते $_patientName, आपके स्वास्थ्य डैशबोर्ड में आपका स्वागत है। आप अपनी सक्रिय चिकित्सा देख सकते हैं या अपने स्वास्थ्य रिकॉर्ड तक पहुँच सकते हैं।";
     } else if (langCode.startsWith('ne')) {
-      // Nepali Translation
       message = "नमस्ते $_patientName, तपाईंको स्वास्थ्य ड्यासबोर्डमा स्वागत छ। तपाईं आफ्नो सक्रिय उपचार हेर्न सक्नुहुन्छ वा आफ्नो स्वास्थ्य रेकर्डहरू हेर्न सक्नुहुन्छ।";
     } else {
-      // Default English
       message = "Welcome to your health dashboard, $_patientName. "
           "You can view your active medical care or access your health vault records.";
     }
@@ -95,6 +89,8 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    // Stop any ongoing speech if the user leaves the screen
+    _voiceService.stop(); 
     super.dispose();
   }
 
@@ -116,7 +112,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        automaticallyImplyLeading: false, 
+        automaticallyImplyLeading: true, // Set to true if you want a back button
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -128,6 +124,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
           ],
         ),
         actions: [
+          // MANUAL VOICE BUTTON: The alarm/message logic is now strictly tied to this click
           IconButton(
             onPressed: _announceDashboard,
             icon: Icon(Icons.volume_up_rounded, color: primaryColor),

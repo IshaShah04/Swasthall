@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-import 'booking_success_screen.dart'; 
+import 'booking_success_screen.dart';
 // Ensure this path matches your project structure for the widget service
-import 'package:health_department/services/queue_widget_service.dart'; 
+import 'package:swasthall/services/queue_widget_service.dart';
 
 enum PaymentStatus { initial, processing, success, failure }
 
@@ -192,59 +192,80 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
   }
 
   Future<Map<String, dynamic>?> _saveAppointmentToDatabase() async {
-    try {
-      final user = supabase.auth.currentUser;
-      final formattedDate = DateFormat('yyyy-MM-dd').format(widget.selectedDate);
+  try {
+    final user = supabase.auth.currentUser;
+    if (user == null) throw Exception("User not logged in.");
 
-      // 1. Fetch current bookings (using maybeSingle to avoid PGRST116 error)
-      final slotCheck = await supabase
-          .from('availability_slots')
-          .select('current_bookings')
-          .eq('id', widget.slotId)
-          .maybeSingle();
-      
-      int nextQueueNumber = (slotCheck?['current_bookings'] ?? 0) + 1;
+    final formattedDate = DateFormat('yyyy-MM-dd').format(widget.selectedDate);
 
-      // 2. Insert the booking (Flexible Price used here)
-      final response = await supabase
-          .from('bookings')
-          .insert({
-            'user_id': user?.id,
-            'provider_id': widget.doctorData['id'],
-            'hospital_id': widget.doctorData['hospital_id'],
-            'doctor_email': widget.doctorData['email'],
-            'patient_name': user?.userMetadata?['full_name'] ?? 'Patient',
-            'appointment_date': formattedDate,
-            'appointment_time': widget.selectedTime,
-            'status': 'confirmed',
-            'payment_method': _selectedMethod,
-            'amount': widget.price, 
-            'type': widget.appointmentType.toLowerCase(),
-            'slots_type': widget.slotType,
-            'queue_number': nextQueueNumber,
-          })
-          .select('id, queue_number')
-          .single();
-
-      // 3. Update the slot count
+    // ✅ Get patient's ZEGO UID (patient can read own profile even with RLS)
+    String myZegoUid = (user.userMetadata?['zego_uid']?.toString().trim() ?? '');
+    if (myZegoUid.isEmpty) {
       try {
-        await supabase.rpc('increment_slot_booking', params: {
-          'slot_uuid': widget.slotId,
-        });
-      } catch (e) {
-        // Manual fallback update
-        await supabase
-            .from('availability_slots')
-            .update({'current_bookings': nextQueueNumber})
-            .eq('id', widget.slotId);
-      }
+        final prof = await supabase
+            .from('profiles')
+            .select('zego_uid')
+            .eq('id', user.id)
+            .maybeSingle();
 
-      return response;
-    } catch (e) {
-      debugPrint("Database Error: $e");
-      rethrow;
+        myZegoUid = (prof?['zego_uid'] ?? '').toString().trim();
+      } catch (_) {}
     }
+    if (myZegoUid.isEmpty) {
+      // last resort fallback
+      myZegoUid = user.id;
+    }
+
+    // 1. Fetch current bookings (using maybeSingle to avoid PGRST116 error)
+    final slotCheck = await supabase
+        .from('availability_slots')
+        .select('current_bookings')
+        .eq('id', widget.slotId)
+        .maybeSingle();
+
+    int nextQueueNumber = (slotCheck?['current_bookings'] ?? 0) + 1;
+
+    // 2. Insert the booking (✅ now also stores patient_zego_uid)
+    final response = await supabase
+        .from('bookings')
+        .insert({
+          'user_id': user.id,                 // keep your existing field
+          'patient_id': user.id,              // ✅ also set if your schema uses patient_id
+          'patient_zego_uid': myZegoUid,      // ✅ IMPORTANT FIX
+          'provider_id': widget.doctorData['id'],
+          'hospital_id': widget.doctorData['hospital_id'],
+          'doctor_email': widget.doctorData['email'],
+          'patient_name': user.userMetadata?['full_name'] ?? 'Patient',
+          'appointment_date': formattedDate,
+          'appointment_time': widget.selectedTime,
+          'status': 'confirmed',
+          'payment_method': _selectedMethod,
+          'amount': widget.price,
+          'type': widget.appointmentType.toLowerCase(),
+          'slots_type': widget.slotType,
+          'queue_number': nextQueueNumber,
+        })
+        .select('id, queue_number')
+        .single();
+
+    // 3. Update the slot count
+    try {
+      await supabase.rpc('increment_slot_booking', params: {
+        'slot_uuid': widget.slotId,
+      });
+    } catch (e) {
+      await supabase
+          .from('availability_slots')
+          .update({'current_bookings': nextQueueNumber})
+          .eq('id', widget.slotId);
+    }
+
+    return response;
+  } catch (e) {
+    debugPrint("Database Error: $e");
+    rethrow;
   }
+}
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -331,8 +352,8 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8)
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8)
                 ),
                 child: Row(
                   children: [

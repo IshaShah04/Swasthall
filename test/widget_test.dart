@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:health_department/main.dart';
+import 'package:swasthall/main.dart';
 
 void main() {
   testWidgets('App starts and shows Login Page', (WidgetTester tester) async {

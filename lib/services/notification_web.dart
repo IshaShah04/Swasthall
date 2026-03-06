@@ -1,14 +1,13 @@
-// notification_web.dart
-import 'dart:js_interop';
-import 'package:web/web.dart' as web;
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+import 'dart:html' as html;
 
 void triggerWebNotification(String title, String body) {
-  if (web.Notification.permission == 'granted') {
-    web.Notification(title, web.NotificationOptions(body: body));
-  } else if (web.Notification.permission != 'denied') {
-    web.Notification.requestPermission().toDart.then((permission) {
-      if (permission.toDart.toString() == 'granted') {
-        web.Notification(title, web.NotificationOptions(body: body));
+  if (html.Notification.permission == 'granted') {
+    html.Notification(title, body: body);
+  } else if (html.Notification.permission != 'denied') {
+    html.Notification.requestPermission().then((permission) {
+      if (permission == 'granted') {
+        html.Notification(title, body: body);
       }
     });
   }

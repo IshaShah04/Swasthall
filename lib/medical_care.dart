@@ -1,11 +1,13 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart'; // For kIsWeb and Uint8List
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alarm/alarm.dart';
 
 import 'config/env_config.dart';
@@ -29,7 +31,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
   String _currentMed = "No medication detected";
   TimeOfDay _selectedTime = const TimeOfDay(hour: 8, minute: 0);
 
-  // ---------------- OCR & FILE LOGIC ----------------
+  // ---------------- OCR & AI LOGIC ----------------
 
   Future<void> _pickSource() async {
     showModalBottomSheet(
@@ -40,7 +42,6 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
-            // Camera is generally not supported in standard file pickers on web via this method
             if (!kIsWeb)
               ListTile(
                 leading: Icon(Icons.camera_alt, color: primaryColor),
@@ -76,11 +77,10 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
         fileBytes = await photo.readAsBytes();
       }
     } else {
-      // Universal File Picker
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
-        withData: true, // Crucial for Web
+        withData: true, 
       );
       if (result != null && result.files.single.bytes != null) {
         fileBytes = result.files.single.bytes;
@@ -95,30 +95,45 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
   Future<void> _analyzeWithCloudVision(Uint8List bytes) async {
     setState(() => _isAnalyzing = true);
     try {
+      String? hash;
+      try {
+        hash = md5.convert(bytes).toString();
+      } catch (_) {}
+
+      if (hash != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final cached = prefs.getString('vision_cache_$hash');
+        if (cached != null && cached.isNotEmpty) {
+          final data = jsonDecode(cached);
+          if (data['hasText'] == true) {
+            _processWithGemini(data['text']);
+            return;
+          }
+        }
+      }
+
       final base64Image = base64Encode(bytes);
       final response = await http.post(
-        Uri.parse(
-          "https://vision.googleapis.com/v1/images:annotate?key=${EnvConfig.googleVisionApiKey}",
-        ),
+        Uri.parse("https://vision.googleapis.com/v1/images:annotate?key=${EnvConfig.googleVisionApiKey}"),
         body: jsonEncode({
           "requests": [
             {
               "image": {"content": base64Image},
-              "features": [
-                {"type": "DOCUMENT_TEXT_DETECTION"},
-              ],
-            },
+              "features": [{"type": "DOCUMENT_TEXT_DETECTION"}],
+            }
           ],
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['responses'] != null &&
-            data['responses'][0]['fullTextAnnotation'] != null) {
-          final String text =
-              data['responses'][0]['fullTextAnnotation']['text'];
-          _processDetectedText(text);
+        if (data['responses'] != null && data['responses'][0]['fullTextAnnotation'] != null) {
+          final String text = data['responses'][0]['fullTextAnnotation']['text'];
+          if (hash != null) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('vision_cache_$hash', jsonEncode({'hasText': true, 'text': text}));
+          }
+          _processWithGemini(text);
         } else {
           _showSnackBar("No text found in image.");
         }
@@ -130,11 +145,53 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
     }
   }
 
+  Future<void> _processWithGemini(String text) async {
+  final localMatch = await _searchLocalDatabase(text);
+  
+  try {
+    final response = await http.post(
+      Uri.parse("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${EnvConfig.geminiApiKey}"),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "contents": [{
+          "parts": [{
+            "text": "Analyze this prescription text: '$text'. Extract the medicine name and the most likely intended hour for a reminder (24h format). Return ONLY valid JSON: {'med': 'name', 'h': 20, 'm': 0}"
+          }]
+        }]
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      String rawText = data['candidates'][0]['content']['parts'][0]['text'];
+      
+      // Better way to find the JSON inside the response
+      final jsonStart = rawText.indexOf('{');
+      final jsonEnd = rawText.lastIndexOf('}') + 1;
+      final cleanJson = rawText.substring(jsonStart, jsonEnd);
+      
+      final result = jsonDecode(cleanJson);
+
+      setState(() {
+        _currentMed = localMatch != null 
+            ? "${localMatch['brand_name']} (${localMatch['dosage'] ?? 'TBD'})"
+            : result['med'];
+        _selectedTime = TimeOfDay(hour: result['h'] ?? 8, minute: result['m'] ?? 0);
+      });
+    }
+  } catch (e) {
+    debugPrint("Gemini Error: $e");
+    setState(() {
+      _currentMed = localMatch != null 
+          ? "${localMatch['brand_name']}" 
+          : text.split('\n').first;
+    });
+  }
+}
+
   Future<Map<String, dynamic>?> _searchLocalDatabase(String scannedText) async {
     try {
-      final String response = await rootBundle.loadString(
-        'assets/data/nepal_medicines.json',
-      );
+      final String response = await rootBundle.loadString('assets/data/nepal_medicines.json');
       final List<dynamic> data = jsonDecode(response);
       final text = scannedText.toLowerCase();
 
@@ -148,32 +205,9 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
     return null;
   }
 
-  void _processDetectedText(String text) async {
-    final match = await _searchLocalDatabase(text);
-    final lower = text.toLowerCase();
-
-    setState(() {
-      if (match != null) {
-        _currentMed = "${match['brand_name']} (${match['dosage'] ?? 'TBD'})";
-      } else {
-        _currentMed = text.split('\n').first;
-      }
-
-      if (lower.contains("night") || lower.contains("1-0-1")) {
-        _selectedTime = const TimeOfDay(hour: 20, minute: 0);
-      } else if (lower.contains("morning")) {
-        _selectedTime = const TimeOfDay(hour: 8, minute: 0);
-      }
-    });
-    _showSnackBar(
-      match != null ? "Medicine Matched!" : "Scanned successfully.",
-    );
-  }
-
   // ---------------- ALARM LOGIC ----------------
 
   Future<void> _setRingingAlarm() async {
-    // Alarms are not supported on Web. We provide a fallback notification.
     if (kIsWeb) {
       _showSnackBar("Alarm set! (Note: Browser alarms use notifications only)");
       return;
@@ -181,11 +215,8 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
 
     final now = DateTime.now();
     DateTime scheduleTime = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      _selectedTime.hour,
-      _selectedTime.minute,
+      now.year, now.month, now.day,
+      _selectedTime.hour, _selectedTime.minute,
     );
 
     if (scheduleTime.isBefore(now)) {
@@ -204,9 +235,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
           body: 'Time to take your medicine.',
           stopButton: 'STOP',
         ),
-        volumeSettings: VolumeSettings.fixed(
-          volume: 1.0,
-        ),
+        volumeSettings: VolumeSettings.fixed(volume: 1.0),
       );
 
       await Alarm.set(alarmSettings: alarmSettings);
@@ -217,7 +246,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
     }
   }
 
-  // ---------------- UI BUILDERS ----------------
+  // ---------------- UI BUILDERS (VIBRANT STYLING) ----------------
 
   @override
   Widget build(BuildContext context) {
@@ -232,33 +261,20 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
             onPressed: _isAnalyzing ? null : _pickSource,
             icon: _isAnalyzing
                 ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(Icons.document_scanner),
-            label: Text(
-              _isAnalyzing ? "ANALYZING..." : "SCAN NEW PRESCRIPTION",
-            ),
+            label: Text(_isAnalyzing ? "ANALYZING..." : "SCAN NEW PRESCRIPTION"),
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
               foregroundColor: Colors.white,
               minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             ),
           ),
         ),
-        _buildMedicationCard(
-          _currentMed,
-          "Ongoing Course",
-          "Remaining: 3 days",
-          0.75,
-        ),
+        _buildMedicationCard(_currentMed, "Ongoing Course", "Remaining: 3 days", 0.75),
         const Divider(height: 40, indent: 20, endIndent: 20),
         _buildSectionHeader("Consultation History", "Doctors you have visited"),
         _buildRealTimeConsultationGrid(),
@@ -297,10 +313,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
                   _currentMed,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 GestureDetector(
                   onTap: () async {
@@ -329,14 +342,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
               shape: const StadiumBorder(),
               elevation: 0,
             ),
-            child: const Text(
-              "SET",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: const Text("SET", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -351,23 +357,16 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
           .eq('patient_id', widget.patientId)
           .order('created_at', ascending: false),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
         final bookings = snapshot.data!;
         final seen = <String>{};
-        final uniqueDoctors =
-            bookings.where((b) => seen.add(b['staff_id'].toString())).toList();
+        final uniqueDoctors = bookings.where((b) => seen.add(b['staff_id'].toString())).toList();
 
         if (uniqueDoctors.isEmpty) {
           return const Padding(
             padding: EdgeInsets.all(20),
-            child: Text(
-              "No past visits found.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey),
-            ),
+            child: Text("No past visits found.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
           );
         }
 
@@ -382,10 +381,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
             crossAxisSpacing: 12,
             childAspectRatio: 0.85,
           ),
-          itemBuilder: (context, index) {
-            final doc = uniqueDoctors[index];
-            return _buildDoctorCard(doc);
-          },
+          itemBuilder: (context, index) => _buildDoctorCard(uniqueDoctors[index]),
         );
       },
     );
@@ -421,11 +417,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
             ),
             child: Text(
               doc['type'] ?? "Checkup",
-              style: TextStyle(
-                fontSize: 10,
-                color: primaryColor,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 10, color: primaryColor, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -439,29 +431,14 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: Color(0xFF1E293B),
-            ),
-          ),
-          Text(
-            subtitle,
-            style: const TextStyle(color: Colors.grey, fontSize: 13),
-          ),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B))),
+          Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 13)),
         ],
       ),
     );
   }
 
-  Widget _buildMedicationCard(
-    String name,
-    String desc,
-    String progText,
-    double val,
-  ) {
+  Widget _buildMedicationCard(String name, String desc, String progText, double val) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
@@ -476,20 +453,8 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
             children: [
               Icon(Icons.medication_liquid, color: primaryColor),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Text(
-                progText,
-                style: TextStyle(
-                  color: primaryColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
-                ),
-              ),
+              Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.bold))),
+              Text(progText, style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 11)),
             ],
           ),
           const SizedBox(height: 12),

@@ -71,10 +71,10 @@ class QueueWidgetService {
     );
 
     await flutterLocalNotificationsPlugin.show(
-      DateTime.now().millisecond,
-      title,
-      body,
-      platformDetails,
+      id: DateTime.now().millisecond,
+      title: title,
+      body: body,
+      notificationDetails: platformDetails,
     );
   }
 

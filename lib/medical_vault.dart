@@ -5,6 +5,14 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+
+// Conditional import: web vs fallback
+import 'web_download_stub.dart'
+    if (dart.library.js_interop) 'web_download_web.dart';
+
 import 'supabase_handler.dart';
 
 class MedicalVaultTab extends StatefulWidget {
@@ -27,67 +35,107 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   DateTime? _filterStart;
   DateTime? _filterEnd;
   final String bucketName = 'medical_vault';
+  final _supabaseClient = SupabaseHandler().client;
 
-  // BRAND COLORS
+  String? _selectedCategory;
+
+  final List<Map<String, dynamic>> _categories = [
+    {'id': 'Diagnosis', 'name': 'Diagnosis', 'icon': Icons.healing_rounded, 'color': Colors.indigo},
+    {'id': 'Prescription', 'name': 'Prescriptions', 'icon': Icons.medication_rounded, 'color': Colors.pink},
+    {'id': 'Lab Report', 'name': 'Lab Reports', 'icon': Icons.science_rounded, 'color': Colors.amber},
+    {'id': 'Summary', 'name': 'Summary', 'icon': Icons.assignment_rounded, 'color': Colors.teal},
+    {'id': 'Other', 'name': 'Others', 'icon': Icons.folder_open_rounded, 'color': Colors.blueGrey},
+  ];
+
   final Color primaryColor = const Color(0xFF6366F1);
   final Color surfaceColor = Colors.white;
   final Color bpColor = const Color(0xFFEF4444);
   final Color sugarColor = const Color(0xFF10B981);
 
-  // Controllers for Health Vitals
   final TextEditingController _sysController = TextEditingController();
   final TextEditingController _diaController = TextEditingController();
   final TextEditingController _sugarController = TextEditingController();
 
-  // ---------------- Vital Logging ----------------
-  Future<void> _logVitals(String type, Map<String, dynamic> data) async {
+  Future<void> _downloadFile(String url, String fileName) async {
     try {
-      await SupabaseHandler().client.from('patient_vitals').insert({
+      if (kIsWeb) {
+        triggerWebDownload(url, fileName);
+        _showSnackBar("Download started");
+      } else {
+        final dio = Dio();
+        final dir = await getApplicationDocumentsDirectory();
+        final String savePath = "${dir.path}/$fileName";
+        await dio.download(url, savePath);
+        if (!mounted) return;
+        _showSnackBar("Saved to device");
+      }
+    } catch (e) {
+      _showSnackBar("Download failed: $e");
+    }
+  }
+
+  Future<void> _logVitals(String type, Map<String, dynamic> data) async {
+    if (data.values.any((v) => v.toString().isEmpty)) return;
+    try {
+      await _supabaseClient.from('patient_vitals').insert({
         'patient_id': widget.patientId,
         'type': type,
         'reading': data,
       });
-      _showSnackBar("$type logged successfully");
 
+      if (!mounted) return;
+      _showSnackBar("$type logged successfully");
       _sysController.clear();
       _diaController.clear();
       _sugarController.clear();
-
+      FocusScope.of(context).unfocus();
       setState(() {});
     } catch (e) {
       _showSnackBar("Log failed: $e");
     }
   }
 
-  // ---------------- Upload File/Camera (Universal) ----------------
   Future<void> _pickAndUploadFile() async {
-    if (widget.patientId.isEmpty ||
-        widget.patientId.contains("YOUR_PATIENT_UUID")) {
-      _showSnackBar("Error: Valid Patient Session Required.");
+    if (widget.patientId.isEmpty) {
+      _showSnackBar("Error: Session Required.");
       return;
     }
 
-    Uint8List? fileBytes;
-    String? fileName;
+    final String? category = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text("Select File Category"),
+        children: _categories
+            .map((c) => SimpleDialogOption(
+                  onPressed: () => Navigator.pop(context, c['id']),
+                  child: Row(
+                    children: [
+                      Icon(c['icon'], color: c['color']),
+                      const SizedBox(width: 10),
+                      Text(c['name']),
+                    ],
+                  ),
+                ))
+            .toList(),
+      ),
+    );
+
+    if (category == null || !mounted) return;
 
     final String? source = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
-            if (!kIsWeb) // Camera usually only for Mobile
+            if (!kIsWeb)
               ListTile(
-                leading: const Icon(Icons.camera_alt_rounded, color: Color(0xFF6366F1)),
-                title: const Text('Take a Photo'),
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Camera'),
                 onTap: () => Navigator.pop(context, 'camera'),
               ),
             ListTile(
-              leading: const Icon(Icons.file_copy_rounded, color: Color(0xFF6366F1)),
-              title: const Text('Select from Files'),
+              leading: const Icon(Icons.file_copy),
+              title: const Text('Files'),
               onTap: () => Navigator.pop(context, 'file'),
             ),
           ],
@@ -95,128 +143,198 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
       ),
     );
 
-    if (source == null) return;
+    if (source == null || !mounted) return;
+
+    Uint8List? fileBytes;
+    String? fileName;
 
     try {
       if (source == 'camera') {
-        final ImagePicker picker = ImagePicker();
-        final XFile? photo = await picker.pickImage(
-          source: ImageSource.camera,
-          imageQuality: 85,
-        );
+        final picker = ImagePicker();
+        final photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
         if (photo == null) return;
         fileBytes = await photo.readAsBytes();
         fileName = "CAM_${DateTime.now().millisecondsSinceEpoch}.jpg";
       } else {
         final result = await FilePicker.platform.pickFiles(
-          allowMultiple: false,
           type: FileType.custom,
           allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
-          withData: true, // Necessary for Web to get bytes
+          withData: true,
         );
-        if (result == null || result.files.isEmpty) return;
+        if (result == null) return;
         fileBytes = result.files.first.bytes;
         fileName = result.files.first.name;
       }
 
-      if (fileBytes == null) return;
+      if (fileBytes == null) {
+        throw "File could not be read";
+      }
 
-      // Note: Ensure your SupabaseHandler.uploadMedicalFile accepts Uint8List for Web compatibility
-      final publicUrl = await SupabaseHandler().uploadMedicalFile(
-        fileBytes, 
+      // 1) Upload to storage
+      final fileUrl = await SupabaseHandler().uploadMedicalFile(
+        fileBytes,
         widget.patientId,
         fileName: fileName,
         bucketName: bucketName,
       );
 
-      if (publicUrl == null) {
-        _showSnackBar("Storage upload failed.");
-        return;
-      }
+      if (fileUrl == null) throw "Upload failed";
 
-      String? cleanAppointmentId = widget.appointmentId;
-      if (cleanAppointmentId == null ||
-          cleanAppointmentId.contains("YOUR_APPOINTMENT_UUID")) {
-        cleanAppointmentId = null;
-      }
-
-      final success = await SupabaseHandler().saveMedicalRecord(
+      // 2) Save DB record (THIS is what makes it appear in the folder)
+      final saved = await SupabaseHandler().saveMedicalRecord(
         patientId: widget.patientId,
-        appointmentId: cleanAppointmentId,
-        fileUrl: publicUrl,
+        appointmentId: widget.appointmentId,
+        fileUrl: fileUrl,
         fileName: fileName,
-        providerRole: "Patient Upload",
+        providerRole: category,
       );
 
-      if (success) {
-        _showSnackBar("Record secured in Vault");
+      // ✅ IMPORTANT: if DB save failed, remove the uploaded file so user doesn't get ghost uploads
+      if (!saved) {
+        await SupabaseHandler().deleteFileOnly(fileUrl, bucketName);
+        throw "Record not saved (RLS/policy). Upload rolled back.";
       }
+
+      if (!mounted) return;
+      _showSnackBar("Saved to $category");
     } catch (e) {
+      if (!mounted) return;
       _showSnackBar("Upload failed: $e");
     }
   }
 
-  // ---------------- UI Building Blocks ----------------
-
-  Widget _buildVitalGraphsRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: _selectedCategory != null
+          ? AppBar(
+              title: Text(_selectedCategory!),
+              elevation: 0,
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() => _selectedCategory = null),
+              ),
+            )
+          : null,
+      body: Column(
         children: [
-          Expanded(child: _miniGraphCard("BP Trend", bpColor, [115, 122, 118, 130, 121, 125])),
-          const SizedBox(width: 12),
-          Expanded(child: _miniGraphCard("Sugar Trend", sugarColor, [98, 92, 110, 85, 95, 105])),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniGraphCard(String title, Color color, List<double> values) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 35,
-            width: double.infinity,
-            child: CustomPaint(painter: MiniLinePainter(values, color)),
+          if (_selectedCategory == null) ...[
+            _buildLiveChart(),
+            _buildBPMachineInput(),
+            _buildSugarInput(),
+            _buildActionHeader(),
+          ],
+          Expanded(
+            child: _selectedCategory == null ? _buildFolderGrid() : _buildRecordsList(),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildFolderGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 1.3,
+      ),
+      itemCount: _categories.length,
+      itemBuilder: (context, i) {
+        final cat = _categories[i];
+        return InkWell(
+          onTap: () => setState(() => _selectedCategory = cat['id']),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade100),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(cat['icon'], color: cat['color'], size: 32),
+                const SizedBox(height: 8),
+                Text(cat['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLiveChart() {
+    return Container(
+      height: 180,
+      width: double.infinity,
+      decoration: const BoxDecoration(color: Color(0xFF0F172A)),
+      padding: const EdgeInsets.fromLTRB(5, 20, 15, 5),
+      child: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _supabaseClient.from('patient_vitals').stream(primaryKey: ['id']).order('created_at', ascending: true),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final data = snapshot.data!.where((v) => v['patient_id'] == widget.patientId).toList();
+          List<FlSpot> sysSpots = [];
+          List<FlSpot> sugarSpots = [];
+          for (int i = 0; i < data.length; i++) {
+            final double x = i.toDouble();
+            if (data[i]['type'] == 'BP') {
+              sysSpots.add(FlSpot(x, double.tryParse(data[i]['reading']['sys'].toString()) ?? 0));
+            } else if (data[i]['type'] == 'Sugar') {
+              sugarSpots.add(FlSpot(x, double.tryParse(data[i]['reading']['value'].toString()) ?? 0));
+            }
+          }
+          return LineChart(
+            LineChartData(
+              gridData: const FlGridData(show: false),
+              titlesData: const FlTitlesData(show: false),
+              borderData: FlBorderData(show: false),
+              lineBarsData: [
+                if (sysSpots.isNotEmpty) _lineData(sysSpots, bpColor),
+                if (sugarSpots.isNotEmpty) _lineData(sugarSpots, sugarColor),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  LineChartBarData _lineData(List<FlSpot> spots, Color color) {
+    return LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      color: color,
+      barWidth: 3,
+      dotData: const FlDotData(show: false),
+    );
+  }
+
   Widget _buildBPMachineInput() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(20),
-      ),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _bpDigitalCol("SYS", _sysController),
-          const Text("/", style: TextStyle(color: Colors.white38, fontSize: 32)),
-          _bpDigitalCol("DIA", _diaController),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: () => _logVitals("BP", {"sys": _sysController.text, "dia": _diaController.text}),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: bpColor, shape: BoxShape.circle),
-              child: const Icon(Icons.check, color: Colors.white, size: 28),
-            ),
-          )
+          Row(
+            children: [
+              _bpDigitalCol("SYS", _sysController),
+              const Text("/", style: TextStyle(color: Colors.white24, fontSize: 24)),
+              _bpDigitalCol("DIA", _diaController),
+            ],
+          ),
+          IconButton(
+            onPressed: () => _logVitals("BP", {"sys": _sysController.text, "dia": _diaController.text}),
+            icon: const Icon(Icons.check_circle, color: Colors.white, size: 32),
+          ),
         ],
       ),
     );
@@ -227,20 +345,16 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
       children: [
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10)),
         SizedBox(
-          width: 60,
+          width: 50,
           child: TextField(
             controller: ctrl,
             keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'monospace'),
+            style: const TextStyle(color: Colors.white, fontSize: 22),
             decoration: const InputDecoration(
-                border: InputBorder.none,
-                hintText: "00",
-                hintStyle: TextStyle(color: Colors.white10)),
+              border: InputBorder.none,
+              hintText: "00",
+              hintStyle: TextStyle(color: Colors.white10),
+            ),
           ),
         ),
       ],
@@ -249,32 +363,108 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
 
   Widget _buildSugarInput() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         children: [
-          Icon(Icons.water_drop_rounded, color: sugarColor),
-          const SizedBox(width: 12),
+          Icon(Icons.water_drop_rounded, color: sugarColor, size: 20),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _sugarController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                  hintText: "Enter Blood Sugar (mg/dL)",
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(fontSize: 13)),
+              decoration: const InputDecoration(hintText: "Sugar (mg/dL)", border: InputBorder.none),
             ),
           ),
           TextButton(
             onPressed: () => _logVitals("Sugar", {"value": _sugarController.text}),
             child: Text("LOG", style: TextStyle(color: sugarColor, fontWeight: FontWeight.bold)),
-          )
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActionHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _pickAndUploadFile,
+              icon: const Icon(Icons.upload),
+              label: const Text("Vault Upload"),
+              style: ElevatedButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Colors.white),
+            ),
+          ),
+          const SizedBox(width: 10),
+          IconButton.filledTonal(
+            onPressed: _pickFilterDateRange,
+            icon: Icon(Icons.calendar_month, color: _filterStart != null ? primaryColor : null),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordsList() {
+    final recordStream = _supabaseClient
+        .from('medical_records')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false);
+
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: recordStream,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+        final records = snapshot.data!.where((r) {
+          final bool matchesPatient = r['patient_id'] == widget.patientId;
+          final bool matchesCategory = r['provider_role'] == _selectedCategory;
+
+          if (!matchesPatient || !matchesCategory) return false;
+
+          if (_filterStart == null) return true;
+          final created = DateTime.tryParse(r['created_at'] ?? '');
+          return created != null &&
+              created.isAfter(_filterStart!) &&
+              created.isBefore(_filterEnd!.add(const Duration(days: 1)));
+        }).toList();
+
+        if (records.isEmpty) return _buildEmptyState();
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: records.length,
+          itemBuilder: (context, i) => _buildRecordCard(records[i]),
+        );
+      },
+    );
+  }
+
+  Widget _buildRecordCard(Map<String, dynamic> record) {
+    final url = record['file_url'] ?? "";
+    final isPdf = url.toLowerCase().contains('.pdf');
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade100),
+      ),
+      child: ListTile(
+        onTap: () => _viewFile(url, record['file_name']),
+        onLongPress: () => _deleteFile(record['id'], url),
+        leading: Icon(isPdf ? Icons.picture_as_pdf : Icons.image, color: isPdf ? Colors.red : primaryColor),
+        title: Text(record['file_name'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        subtitle: Text(DateFormat('dd MMM yyyy').format(DateTime.parse(record['created_at']))),
+        trailing: const Icon(Icons.chevron_right, size: 16),
       ),
     );
   }
@@ -284,50 +474,17 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-        ),
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.8,
         child: Column(
           children: [
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
+            ListTile(
+              title: Text(name),
+              trailing: IconButton(icon: const Icon(Icons.download), onPressed: () => _downloadFile(url, name)),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                child: isPdf
-                    ? SfPdfViewer.network(url)
-                    : InteractiveViewer(child: Image.network(url, fit: BoxFit.contain)),
-              ),
-            ),
+            Expanded(child: isPdf ? SfPdfViewer.network(url) : Image.network(url)),
           ],
         ),
       ),
@@ -335,164 +492,21 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   }
 
   Future<void> _deleteFile(String id, String fileUrl) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Delete Record?"),
-        content: const Text("This action cannot be undone."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Keep")),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
     try {
-      final uri = Uri.parse(fileUrl);
-      final path = uri.pathSegments.sublist(uri.pathSegments.indexOf(bucketName) + 1).join('/');
-      await SupabaseHandler().client.storage.from(bucketName).remove([path]);
-      await SupabaseHandler().client.from('medical_records').delete().eq('id', id);
-      _showSnackBar("Record deleted");
+      await SupabaseHandler().deleteFullRecord(id, fileUrl, bucketName);
+      if (!mounted) return;
+      _showSnackBar("Deleted");
     } catch (e) {
+      if (!mounted) return;
       _showSnackBar("Error: $e");
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildVitalGraphsRow(),
-        _buildBPMachineInput(),
-        _buildSugarInput(),
-        _buildActionHeader(),
-        Expanded(
-          child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseHandler().client.from('medical_records').stream(primaryKey: ['id']).eq('patient_id', widget.patientId),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) return Center(child: Text("Sync Error: ${snapshot.error}"));
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-              final records = snapshot.data!.where((r) {
-                if (_filterStart == null) return true;
-                final created = DateTime.tryParse(r['created_at'] ?? '');
-                return created != null &&
-                    created.isAfter(_filterStart!) &&
-                    created.isBefore(_filterEnd!.add(const Duration(days: 1)));
-              }).toList()
-                ..sort((a, b) => DateTime.parse(b['created_at']).compareTo(DateTime.parse(a['created_at'])));
-
-              if (records.isEmpty) return _buildEmptyState();
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: records.length,
-                itemBuilder: (context, i) => _buildRecordCard(records[i]),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionHeader() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: surfaceColor,
-          border: Border(bottom: BorderSide(color: Colors.grey.shade100))),
-      child: Row(
-        children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _pickAndUploadFile,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text("Upload Document", style: TextStyle(fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          _buildFilterButton(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterButton() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _filterStart != null ? primaryColor.withValues(alpha: 0.1) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: IconButton(
-        icon: Icon(Icons.filter_list_rounded, color: _filterStart != null ? primaryColor : Colors.grey),
-        onPressed: _pickFilterDateRange,
-      ),
-    );
-  }
-
-  Widget _buildRecordCard(Map<String, dynamic> record) {
-    final url = record['file_url'] ?? "";
-    final isPdf = url.toLowerCase().contains('.pdf');
-    final date = DateFormat('MMM dd, yyyy').format(DateTime.parse(record['created_at']));
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade100)),
-      child: ListTile(
-        onTap: () => _viewFile(url, record['file_name']),
-        onLongPress: () => _deleteFile(record['id'], url),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-              color: (isPdf ? Colors.red : primaryColor).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12)),
-          child: Icon(isPdf ? Icons.picture_as_pdf : Icons.image,
-              color: isPdf ? Colors.red : primaryColor, size: 24),
-        ),
-        title: Text(record['file_name'],
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            maxLines: 1),
-        subtitle: Text(date, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.folder_open_rounded, size: 64, color: Colors.grey.shade200),
-          const SizedBox(height: 16),
-          const Text("Your vault is empty",
-              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
   }
 
   Future<void> _pickFilterDateRange() async {
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2020),
+      firstDate: DateTime(2022),
       lastDate: DateTime.now(),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(colorScheme: ColorScheme.light(primary: primaryColor)),
-        child: child!,
-      ),
     );
     if (picked != null) {
       setState(() {
@@ -504,44 +518,14 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
 
   void _showSnackBar(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
-  }
-}
-
-class MiniLinePainter extends CustomPainter {
-  final List<double> data;
-  final Color color;
-  MiniLinePainter(this.data, this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (data.isEmpty) return;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    final path = Path();
-    double dx = size.width / (data.length - 1);
-
-    double max = data.reduce((a, b) => a > b ? a : b);
-    double min = data.reduce((a, b) => a < b ? a : b);
-    double range = (max - min) == 0 ? 1 : (max - min);
-
-    for (int i = 0; i < data.length; i++) {
-      double x = i * dx;
-      double y = size.height - ((data[i] - min) / range * size.height);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    canvas.drawPath(path, paint);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
   }
 
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  Widget _buildEmptyState() => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40.0),
+          child: Text("Folder is empty", style: TextStyle(color: Colors.grey)),
+        ),
+      );
 }
