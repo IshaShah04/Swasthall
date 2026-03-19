@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'widgets/app_transitions.dart';
 
 // --- Screen Imports ---
 import 'professional_home.dart';
@@ -120,6 +121,7 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
           child: BottomNavigationBar(
             currentIndex: _selectedIndex,
             onTap: (index) {
+              hapticLight();
               if (_selectedIndex == index) {
                 return;
               }
@@ -161,24 +163,24 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
   List<BottomNavigationBarItem> _buildHospitalNavItems() {
     return const [
       BottomNavigationBarItem(
-          icon: Icon(Icons.dashboard_outlined),
-          activeIcon: Icon(Icons.dashboard),
+          icon: Icon(Icons.dashboard_outlined, semanticLabel: 'Admin dashboard'),
+          activeIcon: Icon(Icons.dashboard, semanticLabel: 'Admin dashboard'),
           label: "Admin"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.biotech_outlined),
-          activeIcon: Icon(Icons.biotech),
+          icon: Icon(Icons.biotech_outlined, semanticLabel: 'Lab management'),
+          activeIcon: Icon(Icons.biotech, semanticLabel: 'Lab management'),
           label: "Lab"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.shield_outlined),
-          activeIcon: Icon(Icons.shield),
+          icon: Icon(Icons.shield_outlined, semanticLabel: 'Insurance'),
+          activeIcon: Icon(Icons.shield, semanticLabel: 'Insurance'),
           label: "Insurance"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.emergency_outlined),
-          activeIcon: Icon(Icons.emergency),
+          icon: Icon(Icons.emergency_outlined, semanticLabel: 'Emergency'),
+          activeIcon: Icon(Icons.emergency, semanticLabel: 'Emergency'),
           label: "Emergency"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.account_balance_wallet_outlined),
-          activeIcon: Icon(Icons.account_balance_wallet),
+          icon: Icon(Icons.account_balance_wallet_outlined, semanticLabel: 'Revenue'),
+          activeIcon: Icon(Icons.account_balance_wallet, semanticLabel: 'Revenue'),
           label: "Revenue"),
     ];
   }
@@ -186,24 +188,24 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
   List<BottomNavigationBarItem> _buildPatientNavItems() {
     return const [
       BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
+          icon: Icon(Icons.home_outlined, semanticLabel: 'Home'),
+          activeIcon: Icon(Icons.home, semanticLabel: 'Home'),
           label: "Home"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.video_chat_outlined),
-          activeIcon: Icon(Icons.video_chat),
+          icon: Icon(Icons.video_chat_outlined, semanticLabel: 'Book consultation'),
+          activeIcon: Icon(Icons.video_chat, semanticLabel: 'Book consultation'),
           label: "Consult"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.history_edu_outlined),
-          activeIcon: Icon(Icons.history_edu),
+          icon: Icon(Icons.history_edu_outlined, semanticLabel: 'Medical records'),
+          activeIcon: Icon(Icons.history_edu, semanticLabel: 'Medical records'),
           label: "Records"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.auto_stories_outlined),
-          activeIcon: Icon(Icons.auto_stories),
+          icon: Icon(Icons.auto_stories_outlined, semanticLabel: 'Study hub'),
+          activeIcon: Icon(Icons.auto_stories, semanticLabel: 'Study hub'),
           label: "Study Hub"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.science_outlined),
-          activeIcon: Icon(Icons.science),
+          icon: Icon(Icons.science_outlined, semanticLabel: 'Lab tests'),
+          activeIcon: Icon(Icons.science, semanticLabel: 'Lab tests'),
           label: "Labs"),
     ];
   }
@@ -211,24 +213,24 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
   List<BottomNavigationBarItem> _buildProfessionalNavItems() {
     return const [
       BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
+          icon: Icon(Icons.home_outlined, semanticLabel: 'Home'),
+          activeIcon: Icon(Icons.home, semanticLabel: 'Home'),
           label: "Home"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.biotech_outlined),
-          activeIcon: Icon(Icons.biotech),
+          icon: Icon(Icons.biotech_outlined, semanticLabel: 'Lab management'),
+          activeIcon: Icon(Icons.biotech, semanticLabel: 'Lab management'),
           label: "Lab Test"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.groups_outlined),
-          activeIcon: Icon(Icons.groups),
+          icon: Icon(Icons.groups_outlined, semanticLabel: 'Patient queue'),
+          activeIcon: Icon(Icons.groups, semanticLabel: 'Patient queue'),
           label: "Patients"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.health_and_safety_outlined),
-          activeIcon: Icon(Icons.health_and_safety),
+          icon: Icon(Icons.health_and_safety_outlined, semanticLabel: 'Coverage'),
+          activeIcon: Icon(Icons.health_and_safety, semanticLabel: 'Coverage'),
           label: "Coverage"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.analytics_outlined),
-          activeIcon: Icon(Icons.analytics),
+          icon: Icon(Icons.analytics_outlined, semanticLabel: 'Professional insights'),
+          activeIcon: Icon(Icons.analytics, semanticLabel: 'Professional insights'),
           label: "Insights"),
     ];
   }

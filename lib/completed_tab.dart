@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -41,7 +42,7 @@ class _CompletedTabState extends State<CompletedTab>
     super.initState();
     if (widget.forceUploadMode && widget.activePatientId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        viewPatientHistory(context, widget.activePatientId!, "Patient Record");
+        viewPatientHistory(context, widget.activePatientId!, "Patient Record", userRole: widget.userRole);
       });
     }
   }
@@ -172,7 +173,7 @@ class _CompletedTabState extends State<CompletedTab>
 
                 if (_searchQuery.isEmpty) return true;
                 final name = (e['patient_name'] ?? "").toString().toLowerCase();
-                final phone = (e['patient_phone'] ?? "").toString();
+                final phone = (e['phone_number'] ?? "").toString();
                 return name.contains(_searchQuery.toLowerCase()) ||
                     phone.contains(_searchQuery);
               }).toList();
@@ -247,7 +248,7 @@ class _CompletedTabState extends State<CompletedTab>
                                     _infoTile(Icons.calendar_today_rounded,
                                         appt['appointment_date'] ?? 'No Date'),
                                     _infoTile(Icons.phone_android_rounded,
-                                        appt['patient_phone'] ?? "No Phone"),
+                                        appt['phone_number'] ?? "No Phone"),
                                   ],
                                 ),
                               ],
@@ -256,7 +257,7 @@ class _CompletedTabState extends State<CompletedTab>
                           const VerticalDivider(width: 24, thickness: 1),
                           Row(
                             children: [
-                              if (isDone)
+                              if (isDone && !kIsWeb)
                                 _actionButton(
                                   icon: _isUploading
                                       ? null
@@ -279,7 +280,7 @@ class _CompletedTabState extends State<CompletedTab>
                                 icon: Icons.folder_shared_rounded,
                                 color: Colors.blueGrey.shade400,
                                 onPressed: () => viewPatientHistory(
-                                    context, patientId, patientName),
+                                    context, patientId, patientName, userRole: widget.userRole),
                               ),
                             ],
                           ),

@@ -64,45 +64,53 @@ class _NurseSettingState extends State<NurseSetting> {
   }
 
   Future<void> _pickAndUploadImage() async {
-    final picker = ImagePicker();
-    final XFile? image =
-        await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+  final picker = ImagePicker();
+  final XFile? image =
+      await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
 
-    if (image == null) return;
+  if (image == null) return;
 
-    setState(() => _isUploading = true);
-    try {
-      final bytes = await image.readAsBytes();
-      final userId = supabase.auth.currentUser!.id;
-      final path = 'avatars/avatar_$userId.jpg';
+  if (!mounted) return;
+  setState(() => _isUploading = true);
 
-      await supabase.storage.from('avatars').uploadBinary(
-            path,
-            bytes,
-            fileOptions: const FileOptions(
-              upsert: true,
-              contentType: 'image/jpeg',
-            ),
-          );
+  try {
+    final bytes = await image.readAsBytes();
+    final userId = supabase.auth.currentUser!.id;
 
-      final imageUrl = supabase.storage.from('avatars').getPublicUrl(path);
+    // Must match SQL policy: {user_id}/avatar.jpg
+    final path = '$userId/avatar.jpg';
 
-      await supabase.from('profiles').update({'avatar_url': imageUrl}).eq('id', userId);
-
-      if (!mounted) return;
-      await _syncData();
-      widget.onRefresh();
-    } catch (e) {
-      debugPrint("Upload Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to upload image")),
+    await supabase.storage.from('avatars').uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(
+            upsert: true,
+            contentType: 'image/jpeg',
+          ),
         );
-      }
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
+
+    final imageUrl = supabase.storage.from('avatars').getPublicUrl(path);
+    final cacheBusterUrl =
+        '$imageUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+
+    await supabase
+        .from('profiles')
+        .update({'avatar_url': cacheBusterUrl}).eq('id', userId);
+
+    if (!mounted) return;
+    await _syncData();
+    widget.onRefresh();
+  } catch (e) {
+    debugPrint("Upload Error: $e");
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to upload image")),
+      );
     }
+  } finally {
+    if (mounted) setState(() => _isUploading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -285,12 +293,15 @@ class _NurseSettingState extends State<NurseSetting> {
 
   // FIX: stream() in your version doesn't support .eq()
   // So stream all + filter locally in Dart (UI stays the same)
+  Stream<List<Map<String, dynamic>>>? _slotsStream;
+
   Widget _buildRealTimeSlotList(String targetDoctorId) {
+    _slotsStream ??= supabase
+        .from('availability_slots')
+        .stream(primaryKey: ['id'])
+        .order('date');
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: supabase
-          .from('availability_slots')
-          .stream(primaryKey: ['id'])
-          .order('date'),
+      stream: _slotsStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) return Text("Error: ${snapshot.error}");
         if (!snapshot.hasData) return const Center(child: LinearProgressIndicator());

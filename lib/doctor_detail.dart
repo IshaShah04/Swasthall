@@ -419,8 +419,12 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 // ADDED HISTORY BUTTON HERE
                 TextButton.icon(
                   onPressed: () {
-                    if (booking['user_id'] != null) {
-                      viewPatientHistory(context, booking['user_id'], booking['patient_name'] ?? "Patient");
+                    final pid = (booking['patient_id'] ?? booking['user_id'])?.toString();
+                    if (pid != null && pid.isNotEmpty) {
+                      final role = supabase.auth.currentUser
+                              ?.userMetadata?['role']?.toString() ?? 'doctor';
+                      viewPatientHistory(context, pid,
+                          booking['patient_name'] ?? "Patient", userRole: role);
                     }
                   },
                   icon: const Icon(Icons.history, size: 14),
@@ -429,8 +433,12 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 ),
                 TextButton(
                   onPressed: () {
-                    if (booking['user_id'] != null) {
-                      viewPatientHistory(context, booking['user_id'], booking['patient_name'] ?? "Patient");
+                    final pid = (booking['patient_id'] ?? booking['user_id'])?.toString();
+                    if (pid != null && pid.isNotEmpty) {
+                      final role = supabase.auth.currentUser
+                              ?.userMetadata?['role']?.toString() ?? 'doctor';
+                      viewPatientHistory(context, pid,
+                          booking['patient_name'] ?? "Patient", userRole: role);
                     }
                   },
                   child: const Text("Health Vault", style: TextStyle(fontSize: 10)),

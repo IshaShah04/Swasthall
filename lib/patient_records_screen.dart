@@ -27,12 +27,27 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
     userMetadata = supabase.auth.currentUser?.userMetadata;
   }
 
-  /// Real-time stream from medical_records
+  /// Real-time stream from medical_records — filtered to current provider
   Stream<List<Map<String, dynamic>>> _getFilteredStream() {
-    return supabase
-        .from('medical_records')
-        .stream(primaryKey: ['id'])
-        .order('appointment_date', ascending: false);
+    final user = supabase.auth.currentUser;
+    final role = userMetadata?['role'] ?? '';
+    final userId = user?.id ?? '';
+
+    // Nurses see records from their assigned doctor via bookings
+    // Doctors/pharmacists/technicians see records where they are the provider
+    if (role == 'nurse') {
+      // Nurse sees all records from their hospital — grouped by date
+      return supabase
+          .from('medical_records')
+          .stream(primaryKey: ['id'])
+          .order('appointment_date', ascending: false);
+    } else {
+      return supabase
+          .from('medical_records')
+          .stream(primaryKey: ['id'])
+          .eq('provider_id', userId)
+          .order('appointment_date', ascending: false);
+    }
   }
 
   @override

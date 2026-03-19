@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'order_success_screen.dart';
+import 'package:swasthall/services/booking_fee_service.dart';
 
 class LabPaymentScreen extends StatefulWidget {
   final Map<String, dynamic> labData;
@@ -24,17 +25,53 @@ class LabPaymentScreen extends StatefulWidget {
 }
 
 class _LabPaymentScreenState extends State<LabPaymentScreen> {
-  String _selectedMethod = "esewa";
+  String _selectedMethod = 'esewa';
 
-  // SYNCED BRAND COLORS
   final Color primaryIndigo = const Color(0xFF6366F1);
   final Color bgLight = const Color(0xFFF8FAFC);
+
+  // ── Fee breakdown ────────────────────────────────────────
+  BookingFeeBreakdown? _feeBreakdown;
+  bool _feeLoading = true;
+  bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFeeBreakdown();
+  }
+
+  Future<void> _loadFeeBreakdown() async {
+    try {
+      final hospitalId =
+          (widget.labData['hospital_id'] ?? widget.labData['id'])
+              ?.toString() ?? '';
+      final breakdown = await BookingFeeService.forLab(
+        hospitalId: hospitalId,
+        baseAmount:  widget.totalAmount,
+      );
+      if (mounted) {
+        setState(() {
+          _feeBreakdown = breakdown;
+          _feeLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Lab fee load error: $e');
+      if (mounted) setState(() => _feeLoading = false);
+    }
+  }
+
+  double get _convenienceFee => _feeBreakdown?.convenienceFee ?? 30;
+  double get _totalPayable =>
+      _feeBreakdown?.totalPayable ?? widget.totalAmount + 30;
 
   Future<void> _processPayment() async {
     final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
-
     if (user == null) return;
+
+    setState(() => _isProcessing = true);
 
     showDialog(
       context: context,
@@ -50,46 +87,47 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
           .eq('id', user.id)
           .single();
 
-      final String patientName = profileData['full_name'] ?? "User";
+      final String patientName = profileData['full_name'] ?? 'User';
       final String professionalId = widget.labData['id'].toString();
-      
-      // FIXED: Using 'test_name' to sync with LabAppointmentScreen
       final String testNames = widget.selectedTests
           .map((e) => e['test_name'] ?? e['name'] ?? 'Test')
-          .join(", ");
+          .join(', ');
+      final String dbDateString =
+          DateFormat('yyyy-MM-dd').format(widget.selectedDate);
 
-      final String dbDateString = DateFormat('yyyy-MM-dd').format(widget.selectedDate);
-
-      // Insert into Supabase
+      // Store base amount in total_amount (without convenience fee)
+      // Convenience fee tracked via platform_transactions trigger
       final response = await supabase
           .from('lab_appointments')
           .insert({
             'professional_id': professionalId,
-            'user_id': user.id,
-            'patient_name': patientName,
-            'test_names': testNames,
+            'hospital_id':
+                widget.labData['hospital_id'] ?? widget.labData['id'],
+            'user_id':          user.id,
+            'patient_name':     patientName,
+            'test_names':       testNames,
             'appointment_date': dbDateString,
             'appointment_time': widget.selectedTime,
-            'total_amount': widget.totalAmount,
-            'payment_status': _selectedMethod == 'cod' ? 'pending' : 'paid',
-            'payment_method': _selectedMethod,
-            'status': 'scheduled',
+            'total_amount':     _totalPayable,   // patient pays this
+            'payment_status':
+                _selectedMethod == 'cod' ? 'pending' : 'paid',
+            'payment_method':   _selectedMethod,
+            'status':           'scheduled',
           })
           .select()
           .single();
 
       if (!mounted) return;
-      Navigator.of(context).pop(); // Close loading dialog
+      Navigator.of(context).pop(); // close loading
 
-      // Navigate to Success Screen
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (context) => OrderSuccessScreen(
             itemLabel: testNames,
-            amount: widget.totalAmount.toStringAsFixed(0),
-            storeName: widget.labData['full_name'] ?? "Lab Center",
-            type: "Lab",
+            amount: _totalPayable.toStringAsFixed(0),
+            storeName: widget.labData['full_name'] ?? 'Lab Center',
+            type: 'Lab',
             labData: widget.labData,
             extraDetails: {
               'date': DateFormat('dd MMM yyyy').format(widget.selectedDate),
@@ -106,11 +144,13 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Booking Failed: ${e.toString()}"),
+          content: Text('Booking Failed: ${e.toString()}'),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -120,7 +160,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
       backgroundColor: bgLight,
       appBar: AppBar(
         title: const Text(
-          "Checkout",
+          'Checkout',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
@@ -136,7 +176,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 10, 20, 15),
               child: Text(
-                "Payment Method",
+                'Payment Method',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -145,20 +185,20 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
               ),
             ),
             _buildPaymentMethod(
-              id: "esewa",
-              name: "eSewa Wallet",
+              id: 'esewa',
+              name: 'eSewa Wallet',
               color: Colors.green,
               icon: Icons.account_balance_wallet_rounded,
             ),
             _buildPaymentMethod(
-              id: "khalti",
-              name: "Khalti SDK",
+              id: 'khalti',
+              name: 'Khalti SDK',
               color: Colors.deepPurple,
               icon: Icons.wallet_rounded,
             ),
             _buildPaymentMethod(
-              id: "cod",
-              name: "Pay at Lab (Cash/QR)",
+              id: 'cod',
+              name: 'Pay at Lab (Cash/QR)',
               color: Colors.blueGrey,
               icon: Icons.payments_rounded,
             ),
@@ -188,6 +228,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Lab header
           Row(
             children: [
               Container(
@@ -196,78 +237,154 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
                   color: primaryIndigo.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.science_rounded, color: primaryIndigo, size: 20),
+                child: Icon(Icons.science_rounded,
+                    color: primaryIndigo, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  widget.labData['full_name'] ?? "Lab Center",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                  widget.labData['full_name'] ?? 'Lab Center',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 17),
                 ),
               ),
             ],
           ),
-          const Padding(padding: EdgeInsets.symmetric(vertical: 15), child: Divider(height: 1)),
-          
-          // FIXED: Test name mapping
+          const Padding(
+              padding: EdgeInsets.symmetric(vertical: 15),
+              child: Divider(height: 1)),
+
+          // Individual tests
           ...widget.selectedTests.map(
             (test) => Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
+              padding: const EdgeInsets.only(bottom: 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    test['test_name'] ?? test['name'] ?? 'Test',
-                    style: TextStyle(color: Colors.grey[800], fontSize: 14),
+                  Expanded(
+                    child: Text(
+                      test['test_name'] ?? test['name'] ?? 'Test',
+                      style:
+                          TextStyle(color: Colors.grey[800], fontSize: 14),
+                    ),
                   ),
                   Text(
-                    "Rs. ${test['price']}",
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    'Rs. ${test['price']}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                 ],
               ),
             ),
           ),
+
           const Divider(height: 20),
-          _summaryRow(
-            "Schedule",
-            "${DateFormat('dd MMM').format(widget.selectedDate)} • ${widget.selectedTime}",
+
+          // Schedule
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Schedule',
+                  style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500)),
+              Text(
+                '${DateFormat('dd MMM').format(widget.selectedDate)} • ${widget.selectedTime}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ],
           ),
-          const SizedBox(height: 15),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: bgLight,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("Total Payable", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text(
-                  "Rs. ${widget.totalAmount.toStringAsFixed(0)}",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: primaryIndigo),
+
+          const SizedBox(height: 16),
+
+          // Fee breakdown
+          if (_feeLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-              ],
+              ),
+            )
+          else ...[
+            // Tests subtotal
+            _feeRow(
+              'Tests Subtotal',
+              'Rs. ${widget.totalAmount.toStringAsFixed(0)}',
             ),
-          ),
+            const SizedBox(height: 6),
+            _feeRow(
+              'Convenience Fee',
+              'Rs. ${_convenienceFee.toStringAsFixed(0)}',
+              sub: 'Platform service charge',
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: bgLight,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Total Payable',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(
+                    'Rs. ${_totalPayable.toStringAsFixed(0)}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: primaryIndigo),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _summaryRow(String label, String value) {
+  Widget _feeRow(String label, String value, {String? sub}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500)),
+            if (sub != null)
+              Text(sub,
+                  style: TextStyle(
+                      fontSize: 11, color: Colors.grey[400])),
+          ],
+        ),
+        Text(value,
+            style: const TextStyle(
+                fontWeight: FontWeight.w600, fontSize: 13)),
       ],
     );
   }
 
-  Widget _buildPaymentMethod({required String id, required String name, required Color color, required IconData icon}) {
-    bool isSelected = _selectedMethod == id;
+  Widget _buildPaymentMethod({
+    required String id,
+    required String name,
+    required Color color,
+    required IconData icon,
+  }) {
+    final bool isSelected = _selectedMethod == id;
     return GestureDetector(
       onTap: () => setState(() => _selectedMethod = id),
       child: AnimatedContainer(
@@ -278,22 +395,32 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? primaryIndigo : Colors.grey.withValues(alpha: 0.1),
+            color: isSelected
+                ? primaryIndigo
+                : Colors.grey.withValues(alpha: 0.1),
             width: isSelected ? 2 : 1,
           ),
         ),
         child: Row(
           children: [
             Container(
-              height: 40, width: 40,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+              height: 40,
+              width: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Icon(icon, color: color, size: 22),
             ),
             const SizedBox(width: 15),
-            Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            Text(name,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 15)),
             const Spacer(),
             Icon(
-              isSelected ? Icons.check_circle_rounded : Icons.radio_button_off_rounded,
+              isSelected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_off_rounded,
               color: isSelected ? primaryIndigo : Colors.grey[300],
             ),
           ],
@@ -304,24 +431,47 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
 
   Widget _buildPayButton() {
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 15, 20, MediaQuery.of(context).padding.bottom + 15),
+      padding: EdgeInsets.fromLTRB(
+          20, 15, 20, MediaQuery.of(context).padding.bottom + 15),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
       ),
       child: ElevatedButton(
-        onPressed: _processPayment,
+        onPressed: (_feeLoading || _isProcessing) ? null : _processPayment,
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryIndigo,
           minimumSize: const Size(double.infinity, 56),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
           elevation: 0,
         ),
-        child: Text(
-          _selectedMethod == 'cod' ? "Confirm Appointment" : "Secure Payment",
-          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
+        child: _isProcessing
+            ? const SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
+              )
+            : Text(
+                _selectedMethod == 'cod'
+                    ? 'Confirm Appointment'
+                    : _feeLoading
+                        ? 'Calculating...'
+                        : 'Pay Rs. ${_totalPayable.toStringAsFixed(0)}',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold),
+              ),
       ),
     );
   }

@@ -2,29 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'booking_success_screen.dart';
-// Ensure this path matches your project structure for the widget service
 import 'package:swasthall/services/queue_widget_service.dart';
-
-enum PaymentStatus { initial, processing, success, failure }
-
-class MockPaymentService {
-  Future<void> requestOtp(String method, double amount) async {
-    debugPrint("Requesting OTP for $method payment of Rs $amount...");
-    await Future.delayed(const Duration(seconds: 1));
-  }
-
-  Future<PaymentStatus> verifyOtp(String code) async {
-    await Future.delayed(const Duration(seconds: 1));
-    // For demo purposes, "1234" is the success code
-    if (code == "1234") return PaymentStatus.success;
-    return PaymentStatus.failure;
-  }
-}
+import 'package:swasthall/services/booking_fee_service.dart';
+import 'package:swasthall/services/offline_booking_queue.dart';
+import 'widgets/app_transitions.dart';
 
 class ConsultationPaymentScreen extends StatefulWidget {
   final Map<String, dynamic> doctorData;
   final String appointmentType;
-  final double price; // Fully flexible price
+  final double price;
   final DateTime selectedDate;
   final String selectedTime;
   final String slotType;
@@ -46,232 +32,179 @@ class ConsultationPaymentScreen extends StatefulWidget {
       _ConsultationPaymentScreenState();
 }
 
-class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
+class _ConsultationPaymentScreenState
+    extends State<ConsultationPaymentScreen> {
   final supabase = Supabase.instance.client;
-  final MockPaymentService _paymentService = MockPaymentService();
-  final TextEditingController _otpController = TextEditingController();
 
   final Color primaryColor = const Color(0xFF6366F1);
-  String _selectedMethod = "esewa";
+  String _selectedMethod = 'esewa';
   bool _isProcessing = false;
 
+  BookingFeeBreakdown? _feeBreakdown;
+  bool _feeLoading = true;
+
   final List<Map<String, dynamic>> _paymentMethods = [
-    {"id": "esewa", "name": "eSewa", "color": const Color(0xFF60BB46)},
-    {"id": "khalti", "name": "Khalti", "color": const Color(0xFF5C2D91)},
-    {"id": "imepay", "name": "IME Pay", "color": const Color(0xFFED1C24)},
-    {"id": "connectips", "name": "Connect IPS", "color": const Color(0xFF00408F)},
+    {'id': 'esewa',      'name': 'eSewa',       'color': const Color(0xFF60BB46)},
+    {'id': 'khalti',     'name': 'Khalti',      'color': const Color(0xFF5C2D91)},
+    {'id': 'imepay',     'name': 'IME Pay',     'color': const Color(0xFFED1C24)},
+    {'id': 'connectips', 'name': 'Connect IPS', 'color': const Color(0xFF00408F)},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFeeBreakdown();
+  }
+
+  Future<void> _loadFeeBreakdown() async {
+    try {
+      final hospitalId = widget.doctorData['hospital_id']?.toString() ?? '';
+      final breakdown = await BookingFeeService.calculate(
+        hospitalId:  hospitalId,
+        bookingType: widget.appointmentType.toLowerCase(),
+        baseAmount:  widget.price,
+      );
+      if (mounted) {
+        setState(() {
+          _feeBreakdown = breakdown;
+          _feeLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Fee load error: $e');
+      if (mounted) setState(() => _feeLoading = false);
+    }
+  }
+
+  double get _totalPayable  => _feeBreakdown?.totalPayable  ?? widget.price + 30;
+  double get _convenienceFee => _feeBreakdown?.convenienceFee ?? 30;
+  double get _baseAmount     => _feeBreakdown?.baseAmount     ?? widget.price;
+
 
   Future<void> _handleInitialPaymentRequest() async {
     setState(() => _isProcessing = true);
     try {
-      await _paymentService.requestOtp(_selectedMethod, widget.price);
-      if (!mounted) return;
-      _showOtpBottomSheet();
-    } catch (e) {
-      _showErrorSnackBar("OTP Request Failed: $e");
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
+      final result = await _saveAppointmentToDatabase();
 
-  void _showOtpBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          left: 24,
-          right: 24,
-          top: 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Verify Payment",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text("Enter the 4-digit OTP sent to your phone (Demo: 1234)",
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _otpController,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              maxLength: 4,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 15),
-              decoration: InputDecoration(
-                hintText: "0000",
-                counterText: "",
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () => _verifyAndFinalize(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                ),
-                child: const Text("Verify & Confirm Booking",
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _verifyAndFinalize() async {
-    final code = _otpController.text;
-    if (mounted) Navigator.pop(context);
-
-    setState(() => _isProcessing = true);
-
-    try {
-      final status = await _paymentService.verifyOtp(code);
-
-      if (status == PaymentStatus.success) {
-        final Map<String, dynamic>? result = await _saveAppointmentToDatabase();
-
-        if (result != null) {
-          // UPDATE HOME SCREEN WIDGET IMMEDIATELY
-          await QueueWidgetService.updateLiveWidget(
-            patientName: supabase.auth.currentUser?.userMetadata?['full_name'] ?? 'Patient',
-            queueNum: result['queue_number'].toString(),
-            bookingId: result['id'].toString(),
-            doctorStatus: "Confirmed at ${widget.doctorData['hospital_name'] ?? 'Hospital'}",
-          );
-        }
-
+      if (result['queued'] == true) {
+        // Offline — booking queued for retry
         if (!mounted) return;
-        _otpController.clear();
-
+        _showQueuedSnackBar();
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
             builder: (context) => BookingSuccessScreen(
-              bookingId: result?['id']?.toString() ?? "N/A",
+              bookingId: 'queued',
               doctorData: widget.doctorData,
               appointmentDate: widget.selectedDate,
               appointmentTime: widget.selectedTime,
               appointmentType: widget.appointmentType,
-              queueNumber: result?['queue_number'] ?? 0,
+              queueNumber: 0,
             ),
           ),
           (route) => false,
         );
-      } else {
-        throw Exception("Invalid OTP. Use '1234' for this demo.");
+        return;
       }
-    } catch (e) {
+
+      // Hard failure returned from queue service
+      if (result['success'] == false) {
+        if (mounted) _showErrorSnackBar(result['error']?.toString() ?? 'Booking failed. Please try again.');
+        return;
+      }
+
+      final booking = result['booking'] as Map<String, dynamic>?;
+      final queueNum = booking?['queue_number'];
+      // RPC returns 'booking_id', not 'id'
+      final bookingId = booking?['booking_id']?.toString() ?? 'N/A';
+
+      if (booking != null && queueNum != null) {
+        await QueueWidgetService.updateLiveWidget(
+          patientName:  supabase.auth.currentUser?.userMetadata?['full_name'] ?? 'Patient',
+          queueNum:     queueNum.toString(),
+          bookingId:    bookingId,
+          doctorStatus: 'Confirmed at ${widget.doctorData['hospital_name'] ?? 'Hospital'}',
+        );
+      }
+
       if (!mounted) return;
-      _showErrorSnackBar(e.toString());
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BookingSuccessScreen(
+            bookingId:       bookingId,
+            doctorData:      widget.doctorData,
+            appointmentDate: widget.selectedDate,
+            appointmentTime: widget.selectedTime,
+            appointmentType: widget.appointmentType,
+            queueNumber:     queueNum ?? 0,
+          ),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) _showErrorSnackBar(e.toString());
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
   }
 
-  Future<Map<String, dynamic>?> _saveAppointmentToDatabase() async {
-  try {
+  Future<Map<String, dynamic>> _saveAppointmentToDatabase() async {
     final user = supabase.auth.currentUser;
-    if (user == null) throw Exception("User not logged in.");
+    if (user == null) {
+      throw 'You must be signed in to book an appointment.';
+    }
 
     final formattedDate = DateFormat('yyyy-MM-dd').format(widget.selectedDate);
+    final rawName = user.userMetadata?['full_name']?.toString() ?? 'Patient';
+    final safeName = rawName.replaceAll(RegExp(r"""[<>{}\\"';]"""), '').trim();
 
-    // ✅ Get patient's ZEGO UID (patient can read own profile even with RLS)
-    String myZegoUid = (user.userMetadata?['zego_uid']?.toString().trim() ?? '');
-    if (myZegoUid.isEmpty) {
-      try {
-        final prof = await supabase
-            .from('profiles')
-            .select('zego_uid')
-            .eq('id', user.id)
-            .maybeSingle();
-
-        myZegoUid = (prof?['zego_uid'] ?? '').toString().trim();
-      } catch (_) {}
-    }
-    if (myZegoUid.isEmpty) {
-      // last resort fallback
-      myZegoUid = user.id;
+    final providerId = widget.doctorData['id']?.toString() ?? '';
+    if (providerId.isEmpty) {
+      throw 'Doctor profile is missing. Please refresh and try again.';
     }
 
-    // 1. Fetch current bookings (using maybeSingle to avoid PGRST116 error)
-    final slotCheck = await supabase
-        .from('availability_slots')
-        .select('current_bookings')
-        .eq('id', widget.slotId)
-        .maybeSingle();
+    final rpcParams = {
+      'p_slot_id': widget.slotId,
+      'p_user_id': user.id,
+      'p_provider_id': widget.doctorData['id'],
+      'p_hospital_id': widget.doctorData['hospital_id'],
+      'p_doctor_email': widget.doctorData['email'],
+      'p_patient_name': safeName,
+      'p_appointment_date': formattedDate,
+      'p_appointment_time': widget.selectedTime,
+      'p_payment_method': _selectedMethod,
+      'p_amount': _totalPayable,
+      'p_consultation_fee': _baseAmount,
+      'p_platform_fee': _convenienceFee,
+      'p_type': widget.appointmentType.toLowerCase(),
+      'p_slots_type': widget.slotType,
+    };
 
-    int nextQueueNumber = (slotCheck?['current_bookings'] ?? 0) + 1;
-
-    // 2. Insert the booking (✅ now also stores patient_zego_uid)
-    final response = await supabase
-        .from('bookings')
-        .insert({
-          'user_id': user.id,                 // keep your existing field
-          'patient_id': user.id,              // ✅ also set if your schema uses patient_id
-          'patient_zego_uid': myZegoUid,      // ✅ IMPORTANT FIX
-          'provider_id': widget.doctorData['id'],
-          'hospital_id': widget.doctorData['hospital_id'],
-          'doctor_email': widget.doctorData['email'],
-          'patient_name': user.userMetadata?['full_name'] ?? 'Patient',
-          'appointment_date': formattedDate,
-          'appointment_time': widget.selectedTime,
-          'status': 'confirmed',
-          'payment_method': _selectedMethod,
-          'amount': widget.price,
-          'type': widget.appointmentType.toLowerCase(),
-          'slots_type': widget.slotType,
-          'queue_number': nextQueueNumber,
-        })
-        .select('id, queue_number')
-        .single();
-
-    // 3. Update the slot count
-    try {
-      await supabase.rpc('increment_slot_booking', params: {
-        'slot_uuid': widget.slotId,
-      });
-    } catch (e) {
-      await supabase
-          .from('availability_slots')
-          .update({'current_bookings': nextQueueNumber})
-          .eq('id', widget.slotId);
-    }
-
-    return response;
-  } catch (e) {
-    debugPrint("Database Error: $e");
-    rethrow;
+    // OfflineBookingQueue handles idempotency key generation + retry on failure
+    return OfflineBookingQueue.submit(rpcParams: rpcParams);
   }
-}
 
   void _showErrorSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showQueuedSnackBar() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Network unavailable. Your booking is saved and will confirm automatically when connection restores.',
+        ),
+        backgroundColor: Color(0xFF6366F1),
+        duration: Duration(seconds: 5),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -282,8 +215,10 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text("Payment Details",
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: const Text(
+          'Payment Details',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
@@ -295,11 +230,15 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
           children: [
             _buildOrderSummary(),
             const SizedBox(height: 32),
-            const Text("Select Payment Method",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text(
+              'Select Payment Method',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 16),
-            ..._paymentMethods
-                .map((m) => _buildPaymentOption(m, _selectedMethod == m['id'])),
+            ..._paymentMethods.map(
+              (m) => _buildPaymentOption(m, _selectedMethod == m['id']),
+            ),
+            const SizedBox(height: 100),
           ],
         ),
       ),
@@ -308,7 +247,8 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
   }
 
   Widget _buildOrderSummary() {
-    bool isPhysical = widget.appointmentType.toLowerCase() == 'physical';
+    final bool isPhysical =
+        widget.appointmentType.toLowerCase() == 'physical';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -316,7 +256,10 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+          ),
         ],
       ),
       child: Column(
@@ -327,33 +270,59 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
               radius: 25,
               backgroundColor: primaryColor.withValues(alpha: 0.1),
               backgroundImage: widget.doctorData['avatar_url'] != null
-                  ? NetworkImage(widget.doctorData['avatar_url'])
+                  ? NetworkImage(widget.doctorData['avatar_url'] as String)
                   : null,
               child: widget.doctorData['avatar_url'] == null
                   ? Icon(Icons.person, color: primaryColor)
                   : null,
             ),
-            title: Text(widget.doctorData['full_name'] ?? "Doctor",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            title: Text(
+              widget.doctorData['full_name'] ?? 'Doctor',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             subtitle: Text(
-                "${widget.doctorData['speciality'] ?? 'Specialist'} • ${widget.slotType}"),
+              '${widget.doctorData['speciality'] ?? 'Specialist'} • ${widget.slotType}',
+            ),
           ),
           const Divider(height: 30),
-          _summaryRow("Date",
-              DateFormat('EEE, MMM d, yyyy').format(widget.selectedDate)),
-          _summaryRow("Check-in Time", widget.selectedTime),
+          _infoRow('Date', DateFormat('EEE, MMM d, yyyy').format(widget.selectedDate)),
+          _infoRow('Check-in Time', widget.selectedTime),
           if (isPhysical)
-            _summaryRow("Location", widget.doctorData['hospital_name'] ?? "Hospital"),
-          _summaryRow("Consultation Fee", "Rs ${widget.price.toInt()}",
-              isTotal: true),
+            _infoRow('Location', widget.doctorData['hospital_name'] ?? 'Hospital'),
+          const Divider(height: 24),
+          if (_feeLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else ...[
+            _feeRow('Consultation Fee', 'Rs. ${_baseAmount.toStringAsFixed(0)}'),
+            _feeRow(
+              'Convenience Fee',
+              'Rs. ${_convenienceFee.toStringAsFixed(0)}',
+              sub: 'Platform service charge',
+            ),
+            const Divider(height: 20),
+            _feeRow(
+              'Total Payable',
+              'Rs. ${_totalPayable.toStringAsFixed(0)}',
+              isTotal: true,
+            ),
+          ],
           if (isPhysical)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8)
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
@@ -361,7 +330,7 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        "Queue number will be assigned after payment.",
+                        'Queue number will be assigned after payment.',
                         style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
                       ),
                     ),
@@ -374,26 +343,61 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
     );
   }
 
-  Widget _summaryRow(String label, String value, {bool isTotal = false}) =>
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(label,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
           Flexible(
-            child: Text(value,
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                    fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
-                    color: isTotal ? const Color(0xFF10B981) : Colors.black,
-                    fontSize: isTotal ? 18 : 14)),
-          )
-        ]),
-      );
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _feeRow(String label, String value, {bool isTotal = false, String? sub}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                    color: isTotal ? Colors.black : Colors.grey.shade700,
+                    fontSize: isTotal ? 15 : 14,
+                    fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                  )),
+              if (sub != null)
+                Text(sub, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+            ],
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
+              fontSize: isTotal ? 18 : 14,
+              color: isTotal ? const Color(0xFF10B981) : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildPaymentOption(Map<String, dynamic> method, bool isSelected) {
     return GestureDetector(
-      onTap: () => setState(() => _selectedMethod = method['id']),
+      onTap: () => setState(() => _selectedMethod = method['id'] as String),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 12),
@@ -402,25 +406,31 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
           border: Border.all(
-              color: isSelected ? method['color'] : Colors.grey.shade200,
-              width: 2),
-        ),
-        child: Row(children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? method['color'] : Colors.transparent,
-                border: Border.all(color: method['color'], width: 2)),
+            color: isSelected ? method['color'] as Color : Colors.grey.shade200,
+            width: 2,
           ),
-          const SizedBox(width: 16),
-          Text(method['name'],
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const Spacer(),
-          if (isSelected)
-            Icon(Icons.check_circle_rounded, color: method['color'])
-        ]),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? method['color'] as Color : Colors.transparent,
+                border: Border.all(color: method['color'] as Color, width: 2),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              method['name'] as String,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            if (isSelected)
+              Icon(Icons.check_circle_rounded, color: method['color'] as Color),
+          ],
+        ),
       ),
     );
   }
@@ -429,28 +439,38 @@ class _ConsultationPaymentScreenState extends State<ConsultationPaymentScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.black12))),
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.black12)),
+      ),
       child: SafeArea(
         child: ElevatedButton(
-          onPressed: _isProcessing ? null : _handleInitialPaymentRequest,
+          onPressed: (_isProcessing || _feeLoading)
+              ? null
+              : () {
+                  hapticMedium();
+                  _handleInitialPaymentRequest();
+                },
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryColor,
             minimumSize: const Size(double.infinity, 56),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
           child: _isProcessing
               ? const SizedBox(
                   height: 24,
                   width: 24,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2))
-              : Text("Pay Rs ${widget.price.toInt()}",
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+              : Text(
+                  _feeLoading
+                      ? 'Calculating...'
+                      : 'Pay Rs. ${_totalPayable.toStringAsFixed(0)}',
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16)),
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
         ),
       ),
     );

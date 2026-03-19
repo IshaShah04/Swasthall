@@ -21,6 +21,22 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "8.11.1" apply false
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
+    id("com.google.gms.google-services") version "4.4.2" apply false
+}
+
+// Required repositories for ZEGO SDK and Flutter plugins
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+        // ZEGO SDK — required for zego_uikit_prebuilt_call and signaling
+        maven { url = uri("https://maven.zego.im") }
+        // JitPack — required by some Flutter plugins
+        maven { url = uri("https://jitpack.io") }
+        // Flutter storage — required by flutter_tools gradle plugin
+        maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
+    }
 }
 
 include(":app")

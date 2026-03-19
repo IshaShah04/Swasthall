@@ -64,16 +64,18 @@ class _BookingScreenState extends State<BookingScreen> {
   try {
     final String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
     final doctorId = widget.doctorData['id'].toString();
+    final now = DateTime.now();
+    final bool isToday = DateUtils.isSameDay(_selectedDate, now);
 
-    // 1. Fetch the actual availability set by the Nurse
+    // 1. Fetch availability set by the Nurse
     final availabilityData = await supabase
         .from('availability_slots')
         .select()
         .eq('provider_id', doctorId)
         .eq('date', formattedDate)
-        .eq('slot_type', widget.appointmentType.toLowerCase()); // Filter by Online/Physical
+        .eq('slot_type', widget.appointmentType.toLowerCase());
 
-    // 2. Fetch already booked appointments
+    // 2. Fetch all bookings for this doctor+date (not cancelled)
     final bookedData = await supabase
         .from('bookings')
         .select('appointment_time')
@@ -81,35 +83,45 @@ class _BookingScreenState extends State<BookingScreen> {
         .eq('appointment_date', formattedDate)
         .neq('status', 'cancelled');
 
-    final Set<String> takenTimes = (bookedData as List)
-        .map((b) => b['appointment_time'].toString().toUpperCase())
-        .toSet();
+    // Count bookings per hour-label so we can compare against hourly_cap
+    final Map<String, int> bookedCountPerHour = {};
+    for (final b in bookedData as List) {
+      final t = b['appointment_time'].toString().toUpperCase();
+      bookedCountPerHour[t] = (bookedCountPerHour[t] ?? 0) + 1;
+    }
 
     List<Map<String, dynamic>> dynamicSlots = [];
 
-    // 3. Generate slots based on availability_slots table
     for (var row in availabilityData) {
       DateTime start = DateTime.parse(row['start_time']).toLocal();
-      DateTime end = DateTime.parse(row['end_time']).toLocal();
-      
-      // Create hourly intervals between start and end
+      DateTime end   = DateTime.parse(row['end_time']).toLocal();
+
+      // hourly_cap: how many patients can book within the same hour.
+      // null means physical slot (1 booking per hour-label only).
+      final int cap = (row['hourly_cap'] as int?) ?? 1;
+
       DateTime current = start;
       while (current.isBefore(end)) {
-        String timeLabel = DateFormat('hh:00 a').format(current);
-        
-        // Prevent booking past times if the date is today
-        bool isPast = DateUtils.isSameDay(_selectedDate, DateTime.now()) && 
-                      current.hour <= DateTime.now().hour;
+        final String timeLabel = DateFormat('hh:00 a').format(current);
+        final String timeLabelUpper = timeLabel.toUpperCase();
 
-        if (!takenTimes.contains(timeLabel.toUpperCase()) && !isPast) {
+        // ✅ FIX: use strict < so the current hour is NOT skipped while
+        //         it is still ongoing (e.g. 8:15 → 8 AM slot stays visible)
+        final bool isPast = isToday && current.hour < now.hour;
+
+        // Count how many are already booked for this hour
+        final int alreadyBooked = bookedCountPerHour[timeLabelUpper] ?? 0;
+
+        // Slot is open if it's not in the past AND cap not yet reached
+        if (!isPast && alreadyBooked < cap) {
           dynamicSlots.add({
-            'id': current.hour, // Using hour as ID
+            'id':           row['id'],
             'display_time': timeLabel,
-            'iso_start': current.toIso8601String(),
-            'slot_type': row['slot_type'],
+            'iso_start':    current.toIso8601String(),
+            'slot_type':    row['slot_type'],
           });
         }
-        // Increment by 1 hour (you can change this to 30 mins if needed)
+
         current = current.add(const Duration(hours: 1));
       }
     }
@@ -338,7 +350,7 @@ class _BookingScreenState extends State<BookingScreen> {
           selectedDate: _selectedDate,
           selectedTime: _selectedSlotData!['display_time'],
           slotType: _selectedSlotData!['slot_type'],
-          slotId: widget.doctorData['id'].toString(),
+          slotId: _selectedSlotData!['id'].toString(),
         ),
       ),
     );

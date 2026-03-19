@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'plan_details_screen.dart'; // Ensure this matches your filename
+import 'widgets/safe_network_image.dart';
 
 class AllPlansScreen extends StatefulWidget {
   const AllPlansScreen({super.key});
@@ -10,6 +11,14 @@ class AllPlansScreen extends StatefulWidget {
 }
 
 class _AllPlansScreenState extends State<AllPlansScreen> {
+  late final Stream<List<Map<String, dynamic>>> _plansStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _plansStream = supabase.from('insurance_plans').stream(primaryKey: ['id']);
+  }
+
   final supabase = Supabase.instance.client;
   String searchQuery = "";
 
@@ -56,8 +65,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
           // 2. Dynamic Grouped List
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream:
-                  supabase.from('insurance_plans').stream(primaryKey: ['id']),
+              stream: _plansStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -121,6 +129,8 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                   height: 64,
                   width: 64,
                   fit: BoxFit.cover,
+                  loadingBuilder: (_, child, progress) =>
+                      progress == null ? child : const ShimmerBox(width: 64, height: 64),
                   errorBuilder: (c, e, s) => Container(
                     color: const Color(0xFFEEF2FF),
                     child: const Icon(Icons.shield, color: Color(0xFF6366F1)),

@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/secure_logout.dart';
 import 'supabase_handler.dart';
 import 'staff_management_section.dart';
+import 'widgets/safe_network_image.dart';
 
 class HospitalProfileScreen extends StatefulWidget {
   const HospitalProfileScreen({super.key});
@@ -68,7 +70,6 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
       return;
     }
 
-    debugPrint("🟦 LOAD: user.id = ${user.id}");
 
     try {
       final results = await Future.wait<dynamic>([
@@ -117,7 +118,6 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
       return;
     }
 
-    debugPrint("🟩 SAVE: user.id = ${user.id}");
     debugPrint("🟩 SAVE: RAW _staffList BEFORE SAVE = $_staffList");
     debugPrint("🟩 SAVE: RAW _pairingList BEFORE SAVE = $_pairingList");
 
@@ -125,12 +125,14 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
       String? finalAvatarUrl = _avatarUrl;
 
       if (_pickedXFile != null) {
-        final fileName =
-            'avatar_${user.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final uploadedUrl =
-            await handler.uploadImage(_pickedXFile!, 'avatars', fileName);
-        if (uploadedUrl != null) finalAvatarUrl = uploadedUrl;
-      }
+  final fileName = '${user.id}/avatar.jpg';
+  final uploadedUrl =
+      await handler.uploadImage(_pickedXFile!, 'avatars', fileName);
+  if (uploadedUrl != null) {
+    finalAvatarUrl =
+        '$uploadedUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+  }
+}
 
       // 1) Update Hospital Profile
       await supabase.from('profiles').upsert({
@@ -243,10 +245,8 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
           s['email'].toString().toLowerCase(): s['id'].toString()
       };
 
-      debugPrint("🟩 SAVE: emailMap for pairings = $emailMap");
 
       await supabase.from('staff_pairings').delete().eq('hospital_id', user.id);
-      debugPrint("🟩 SAVE: staff_pairings cleared for hospital_id=${user.id}");
 
       final insertPairs = _pairingList.where((p) {
         final dEmail = p['doctor_email']?.toString().toLowerCase().trim();
@@ -309,9 +309,7 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
               icon: const Icon(Icons.check, color: Colors.green)),
           IconButton(
             onPressed: () async {
-              final navigator = Navigator.of(context);
-              await supabase.auth.signOut();
-              if (mounted) navigator.pushReplacementNamed('/login');
+              await SecureLogout.perform(context);
             },
             icon: const Icon(Icons.logout, color: Colors.redAccent),
           ),
@@ -353,7 +351,6 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
                 },
                 onUpdateStaff: (index, key, val) {
                   setState(() => _staffList[index][key] = val);
-                  debugPrint("🟨 UI: Updated staff[$index][$key] = $val");
                   debugPrint("🟨 UI: _staffList now = $_staffList");
                 },
               ),
@@ -384,19 +381,18 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
     return Center(
       child: Stack(
         children: [
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: Colors.grey.shade100,
-            backgroundImage: _webImageBytes != null
-                ? MemoryImage(_webImageBytes!)
-                : (_avatarUrl != null && _avatarUrl!.isNotEmpty
-                        ? NetworkImage(_avatarUrl!)
-                        : null) as ImageProvider?,
-            child: _webImageBytes == null &&
-                    (_avatarUrl == null || _avatarUrl!.isEmpty)
-                ? const Icon(Icons.business, size: 40, color: Colors.grey)
-                : null,
-          ),
+          _webImageBytes != null
+              ? CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.grey.shade100,
+                  backgroundImage: MemoryImage(_webImageBytes!),
+                )
+              : SafeAvatar(
+                  url: _avatarUrl,
+                  radius: 50,
+                  fallbackIcon: Icons.business,
+                  backgroundColor: Colors.grey.shade100,
+                ),
           Positioned(
             bottom: 0,
             right: 0,

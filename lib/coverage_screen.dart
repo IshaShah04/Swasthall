@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'plan_details_screen.dart'; 
+import 'widgets/safe_network_image.dart';
 
 class CoverageScreen extends StatefulWidget {
   const CoverageScreen({super.key});
@@ -45,32 +46,47 @@ class _CoverageScreenState extends State<CoverageScreen> {
     }
 
     try {
-      // 1. One-time fetch to get the UUID immediately
-      final response = await _supabase
-          .from('profiles')
+      String? resolvedHospitalId;
+
+      // Get hospital_id from staff table (matched by auth uid or email)
+      final staffRes = await _supabase
+          .from('staff')
           .select('hospital_id')
           .eq('id', user.id)
           .maybeSingle();
 
+      resolvedHospitalId = staffRes?['hospital_id']?.toString();
+
+      // Fallback: match by email (some staff rows use email as key)
+      if (resolvedHospitalId == null || resolvedHospitalId == 'null') {
+        final staffByEmail = await _supabase
+            .from('staff')
+            .select('hospital_id')
+            .eq('email', user.email ?? '')
+            .maybeSingle();
+
+        resolvedHospitalId = staffByEmail?['hospital_id']?.toString();
+      }
+
       if (mounted) {
         setState(() {
-          _hospitalId = response?['hospital_id']?.toString();
+          _hospitalId = resolvedHospitalId;
           _isLoading = false;
         });
       }
 
-      // 2. Real-time stream for profile updates
+      // 3. Real-time stream — keep listening to staff table for changes
       _profileSubscription = _supabase
-          .from('profiles')
+          .from('staff')
           .stream(primaryKey: ['id'])
-          .eq('id', user.id)
+          .eq('email', user.email ?? '')
           .listen((data) {
             if (data.isNotEmpty && mounted) {
               setState(() {
                 _hospitalId = data.first['hospital_id']?.toString();
               });
             }
-          }, onError: (err) => debugPrint("Profile Sync Error: $err"));
+          }, onError: (err) => debugPrint("Staff Sync Error: $err"));
 
     } catch (e) {
       debugPrint("Data Init Error: $e");
@@ -237,7 +253,9 @@ class _CoverageScreenState extends State<CoverageScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: (plan['icon_url'] != null && plan['icon_url'].toString().isNotEmpty)
-                  ? Image.network(plan['icon_url'], width: 24, height: 24, 
+                  ? Image.network(plan['icon_url'], width: 24, height: 24,
+                      loadingBuilder: (_, child, progress) =>
+                          progress == null ? child : const ShimmerBox(width: 24, height: 24),
                       errorBuilder: (_, __, ___) => Icon(Icons.shield, color: brandIndigo, size: 24))
                   : Icon(Icons.shield_outlined, color: brandIndigo, size: 24),
               ),

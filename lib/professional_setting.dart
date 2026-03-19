@@ -4,6 +4,7 @@ import 'doctor_setting.dart';
 import 'nurse_setting.dart';
 import 'pharmacist_setting.dart';
 import 'technician_setting.dart';
+import 'services/secure_logout.dart';
 
 class ProfessionalSettings extends StatefulWidget {
   final String userRole; // This comes from the login/auth state
@@ -72,9 +73,7 @@ class _ProfessionalSettingsState extends State<ProfessionalSettings> {
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    final navigator = Navigator.of(context);
-    await _supabase.auth.signOut();
-    navigator.pushReplacementNamed('/login');
+    await SecureLogout.perform(context);
   }
 
   @override

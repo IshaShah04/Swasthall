@@ -9,41 +9,115 @@ class SupabaseHandler {
 
   final SupabaseClient client = Supabase.instance.client;
 
-  // ---------------- STAFF CONTEXT LOGIC ----------------
+  // ─────────────────────────────────────────────────────────────────────────
+  // PRIVATE BUCKET REGISTRY
+  // These buckets are set to PRIVATE in Supabase dashboard.
+  // Files are stored by PATH only — signed URLs are generated on demand.
+  // Public buckets (avatars, lab-assets, doctor-images etc.) use getPublicUrl.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  static const _privateBuckets = {'medical_vault', 'insurance_vault'};
+
+  bool _isPrivate(String bucketName) => _privateBuckets.contains(bucketName);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PATH EXTRACTOR
+  // Works whether the stored value is:
+  //   (a) a plain storage path:  "patient_id/timestamp_file.pdf"
+  //   (b) an old public URL:     "https://.../object/public/bucket/path"
+  //   (c) an old signed URL:     "https://.../object/sign/bucket/path?token=..."
+  // Always returns the raw storage path so we can generate fresh signed URLs.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  String _extractPath(String pathOrUrl, String bucketName) {
+    if (!pathOrUrl.startsWith('http')) return pathOrUrl;
+    final uri = Uri.parse(Uri.decodeComponent(pathOrUrl));
+    final int bucketIndex = uri.pathSegments.indexOf(bucketName);
+    if (bucketIndex == -1) return pathOrUrl;
+    return uri.pathSegments.sublist(bucketIndex + 1).join('/');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // GET FILE DISPLAY URL
+  // Central method for resolving any stored path/URL into a displayable URL.
+  //
+  // Private buckets → signed URL (1 hour expiry, refreshed on every call)
+  // Public buckets  → permanent public URL
+  //
+  // Use this everywhere you display a file from storage instead of using
+  // the raw stored value directly.
+  //
+  // Example:
+  //   final url = await SupabaseHandler().getFileDisplayUrl('medical_vault', record['file_url']);
+  //   Image.network(url ?? '');
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<String?> getFileDisplayUrl(
+    String bucketName,
+    String pathOrUrl, {
+    int expiresInSeconds = 3600,
+  }) async {
+    try {
+      if (_isPrivate(bucketName)) {
+        final String storagePath = _extractPath(pathOrUrl, bucketName);
+        return await client.storage
+            .from(bucketName)
+            .createSignedUrl(storagePath, expiresInSeconds);
+      }
+      // Public bucket — return public URL (permanent, no expiry)
+      if (pathOrUrl.startsWith('http')) return pathOrUrl;
+      return client.storage.from(bucketName).getPublicUrl(pathOrUrl);
+    } catch (e) {
+      debugPrint('getFileDisplayUrl error ($bucketName): $e');
+      return null;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LEGACY ALIAS — keeps existing callers working without changes
+  // Internally calls getFileDisplayUrl now.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<String?> getAuthenticatedUrl(String bucketName, String path) =>
+      getFileDisplayUrl(bucketName, path);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STAFF CONTEXT LOGIC
+  // ─────────────────────────────────────────────────────────────────────────
 
   /// Fetches the Doctor ID a nurse is assigned to.
   Future<String?> getAssignedDoctorId(String role) async {
     final user = client.auth.currentUser;
     if (user == null) return null;
 
-    final String normalizedRole = role.toLowerCase().trim();
-
-    if (normalizedRole == 'nurse') {
+    if (role.toLowerCase().trim() == 'nurse') {
       try {
         final data = await client
             .from('staff_assignments_view')
             .select('doctor_id')
             .eq('nurse_email', user.email!)
             .maybeSingle();
-
         return data?['doctor_id'] as String?;
       } catch (e) {
-        debugPrint("Error fetching doctor assignment: $e");
+        debugPrint('Error fetching doctor assignment: $e');
         return null;
       }
     }
     return user.id;
   }
 
-  // ---------------- UTILS ----------------
+  // ─────────────────────────────────────────────────────────────────────────
+  // UTILS
+  // ─────────────────────────────────────────────────────────────────────────
 
-  static String getNormalizedRoomId(String bookingId) {
-    return "room_${bookingId.replaceAll('-', '')}";
-  }
+  static String getNormalizedRoomId(String bookingId) =>
+      'room_${bookingId.replaceAll('-', '')}';
 
-  // ---------------- CALL STATUS HELPERS (NEW) ----------------
+  // ─────────────────────────────────────────────────────────────────────────
+  // CALL STATUS HELPERS
+  // ─────────────────────────────────────────────────────────────────────────
 
-  /// Doctor starts ringing patient
+  /// Doctor starts ringing patient.
   Future<void> setCalling(String bookingId, {bool nurse = false}) async {
     try {
       await client.from('bookings').update({
@@ -51,11 +125,11 @@ class SupabaseHandler {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', bookingId);
     } catch (e) {
-      debugPrint("setCalling error: $e");
+      debugPrint('setCalling error: $e');
     }
   }
 
-  /// Call is actually connected (both joined room)
+  /// Both parties have joined the room.
   Future<void> setConsulting(String bookingId) async {
     try {
       await client.from('bookings').update({
@@ -63,11 +137,11 @@ class SupabaseHandler {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', bookingId);
     } catch (e) {
-      debugPrint("setConsulting error: $e");
+      debugPrint('setConsulting error: $e');
     }
   }
 
-  /// End call (doctor => completed, nurse => confirmed)
+  /// End call — doctor marks completed, nurse marks confirmed.
   Future<void> endConsultation(String bookingId, {bool nurse = false}) async {
     try {
       await client.from('bookings').update({
@@ -75,13 +149,26 @@ class SupabaseHandler {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', bookingId);
     } catch (e) {
-      debugPrint("endConsultation error: $e");
+      debugPrint('endConsultation error: $e');
     }
   }
 
-  // ---------------- STORAGE LOGIC ----------------
+  // ─────────────────────────────────────────────────────────────────────────
+  // STORAGE — UPLOAD
+  // ─────────────────────────────────────────────────────────────────────────
 
-  /// UNIVERSAL UPLOAD: Works on Web, Android, and iOS using byte data.
+  /// Universal medical file upload (Web + Android + iOS).
+  ///
+  /// Returns:
+  ///   • Private bucket (medical_vault, insurance_vault):
+  ///     → storage PATH  e.g. "patient_id/1234567890_report.pdf"
+  ///     → Store this path in the DB. Call getFileDisplayUrl() to display.
+  ///   • Public bucket:
+  ///     → permanent public URL  (no change from before)
+  ///
+  /// Why store path not URL for private buckets?
+  ///   Signed URLs expire after 1 hour. Storing the path lets you generate
+  ///   a fresh signed URL any time via getFileDisplayUrl().
   Future<String?> uploadMedicalFile(
     Uint8List fileBytes,
     String patientId, {
@@ -93,7 +180,6 @@ class SupabaseHandler {
           fileName.contains('.') ? '.${fileName.split('.').last}' : '';
       final String sanitizedName =
           fileName.replaceAll(RegExp(r'[^\w\.]'), '_');
-
       final String path =
           '$patientId/${DateTime.now().millisecondsSinceEpoch}_$sanitizedName';
 
@@ -107,14 +193,21 @@ class SupabaseHandler {
         ),
       );
 
+      // Private bucket → return storage path for DB storage
+      if (_isPrivate(bucketName)) return path;
+
+      // Public bucket → return permanent public URL
       return client.storage.from(bucketName).getPublicUrl(path);
     } catch (e) {
-      debugPrint("Medical file upload error: $e");
+      debugPrint('Medical file upload error: $e');
       return null;
     }
   }
 
-  /// UNIVERSAL IMAGE UPLOAD: Uses XFile bytes for platform independence.
+  /// Universal image upload (avatars, lab-assets, doctor-images, etc.).
+  ///
+  /// Same return behaviour as uploadMedicalFile:
+  ///   private bucket → path, public bucket → public URL.
   Future<String?> uploadImage(
     XFile xFile,
     String bucketName,
@@ -135,35 +228,57 @@ class SupabaseHandler {
         ),
       );
 
+      if (_isPrivate(bucketName)) return path;
       return client.storage.from(bucketName).getPublicUrl(path);
     } catch (e) {
-      debugPrint("Image upload error: $e");
+      debugPrint('Image upload error: $e');
       return null;
     }
   }
 
-  Future<String?> getAuthenticatedUrl(String bucketName, String path) async {
+  // ─────────────────────────────────────────────────────────────────────────
+  // STORAGE — DELETE
+  // Works with stored paths AND with old public/signed URLs already in DB.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> deleteFullRecord(
+    String recordId,
+    String fileUrl,
+    String bucketName,
+  ) async {
     try {
-      return client.storage.from(bucketName).getPublicUrl(path);
+      final String path = _extractPath(fileUrl, bucketName);
+      await client.storage.from(bucketName).remove([path]);
+      await client.from('medical_records').delete().eq('id', recordId);
     } catch (e) {
-      return null;
+      debugPrint('Delete error: $e');
+      rethrow;
     }
   }
 
-  // ---------------- DATABASE LOGIC ----------------
-  // ✅ Kept your original method so other files don't break.
-
-  Future<bool> updateAppointmentStatus(String appointmentId, String status) async {
+  Future<void> deleteFileOnly(String fileUrl, String bucketName) async {
     try {
-      final normalizedStatus = status.toLowerCase().trim();
+      final String path = _extractPath(fileUrl, bucketName);
+      await client.storage.from(bucketName).remove([path]);
+    } catch (e) {
+      debugPrint('deleteFileOnly error: $e');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DATABASE LOGIC
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<bool> updateAppointmentStatus(
+      String appointmentId, String status) async {
+    try {
       await client.from('bookings').update({
-        'status': normalizedStatus,
+        'status': status.toLowerCase().trim(),
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', appointmentId);
-
       return true;
     } catch (e) {
-      debugPrint("updateAppointmentStatus error: $e");
+      debugPrint('updateAppointmentStatus error: $e');
       return false;
     }
   }
@@ -177,7 +292,7 @@ class SupabaseHandler {
       }).eq('id', appointmentId);
       return true;
     } catch (e) {
-      debugPrint("markAsTriaged error: $e");
+      debugPrint('markAsTriaged error: $e');
       return false;
     }
   }
@@ -192,25 +307,28 @@ class SupabaseHandler {
           .filter('status', 'in', '("consulting", "nurse_calling", "calling")')
           .order('created_at', ascending: false)
           .limit(1);
-
       return data.isNotEmpty ? data.first : null;
     } catch (e) {
-      debugPrint("getActiveBooking error: $e");
+      debugPrint('getActiveBooking error: $e');
       return null;
     }
   }
 
-  /// Uses 'provider_role' to align with MedicalVaultTab filtering
+  /// Saves a medical record row.
+  /// NOTE: pass the value returned by uploadMedicalFile() directly as [fileUrl].
+  /// For private buckets this will be a storage path; for public a full URL.
+  /// Use getFileDisplayUrl() whenever you need to show the file in the UI.
   Future<bool> saveMedicalRecord({
     required String patientId,
     required String fileUrl,
     required String fileName,
     String? appointmentId,
-    String providerRole = "Doctor",
+    String providerRole = 'Doctor',
   }) async {
     try {
       await client.from('medical_records').insert({
         'patient_id': patientId,
+        'provider_id': client.auth.currentUser?.id,
         'appointment_id': appointmentId,
         'file_url': fileUrl,
         'file_name': fileName,
@@ -219,7 +337,7 @@ class SupabaseHandler {
       });
       return true;
     } catch (e) {
-      debugPrint("Save record error: $e");
+      debugPrint('Save record error: $e');
       return false;
     }
   }
@@ -232,50 +350,22 @@ class SupabaseHandler {
         .order('created_at', ascending: false);
   }
 
-  Future<void> deleteFullRecord(
-      String recordId, String fileUrl, String bucketName) async {
-    try {
-      final Uri uri = Uri.parse(Uri.decodeComponent(fileUrl));
-      final int bucketIndex = uri.pathSegments.indexOf(bucketName);
-      if (bucketIndex == -1) throw "Bucket name not found in URL";
-
-      final String path = uri.pathSegments.sublist(bucketIndex + 1).join('/');
-
-      await client.storage.from(bucketName).remove([path]);
-      await client.from('medical_records').delete().eq('id', recordId);
-    } catch (e) {
-      debugPrint("Delete error: $e");
-      rethrow;
-    }
-  }
-
-  Future<void> deleteFileOnly(String fileUrl, String bucketName) async {
-  final Uri uri = Uri.parse(Uri.decodeComponent(fileUrl));
-  final int bucketIndex = uri.pathSegments.indexOf(bucketName);
-  if (bucketIndex == -1) return;
-  final String path = uri.pathSegments.sublist(bucketIndex + 1).join('/');
-  await client.storage.from(bucketName).remove([path]);
-}
+  // ─────────────────────────────────────────────────────────────────────────
+  // MIME TYPE HELPER
+  // ─────────────────────────────────────────────────────────────────────────
 
   String _getMimeType(String ext) {
-    final String cleanExt =
+    final String e =
         ext.startsWith('.') ? ext.toLowerCase() : '.$ext'.toLowerCase();
-    switch (cleanExt) {
-      case '.pdf':
-        return 'application/pdf';
+    switch (e) {
+      case '.pdf':  return 'application/pdf';
       case '.jpg':
-      case '.jpeg':
-        return 'image/jpeg';
-      case '.png':
-        return 'image/png';
-      case '.gif':
-        return 'image/gif';
-      case '.webp':
-        return 'image/webp';
-      case '.txt':
-        return 'text/plain';
-      default:
-        return 'application/octet-stream';
+      case '.jpeg': return 'image/jpeg';
+      case '.png':  return 'image/png';
+      case '.gif':  return 'image/gif';
+      case '.webp': return 'image/webp';
+      case '.txt':  return 'text/plain';
+      default:      return 'application/octet-stream';
     }
   }
 }

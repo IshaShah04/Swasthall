@@ -1,17 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class LabOffer extends StatelessWidget {
+class LabOffer extends StatefulWidget {
   const LabOffer({super.key});
 
   @override
+  State<LabOffer> createState() => _LabOfferState();
+}
+
+class _LabOfferState extends State<LabOffer> {
+  late final Stream<List<Map<String, dynamic>>> _offerStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _offerStream = Supabase.instance.client
+        .from('lab_offers')
+        .stream(primaryKey: ['id'])
+        .limit(1);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // This stream listens to your 'lab_offers' table in real-time
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: Supabase.instance.client
-          .from('lab_offers')
-          .stream(primaryKey: ['id'])
-          .limit(1), // Gets the latest offer
+      stream: _offerStream,
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const SizedBox.shrink(); // Hide if no offers exist

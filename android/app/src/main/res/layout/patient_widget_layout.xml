@@ -3,77 +3,68 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="12dp"
-    android:background="@android:color/white">
+    android:padding="16dp"
+    android:background="@drawable/widget_card_bg"
+    android:id="@+id/widget_root">
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/widget_queue_number"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="#--"
+        android:textColor="#6366F1"
+        android:textSize="30sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_queue_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:layout_marginTop="4dp"
+        android:text="of --"
+        android:textColor="#0F172A"
+        android:textSize="13sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
 
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/queue_num"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="#12"
-                android:textStyle="bold"
-                android:textColor="#6366F1"
-                android:textSize="22sp" />
-
-            <TextView
-                android:id="@+id/patient_name"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Ramesh K.C."
-                android:textColor="#1E293B"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end" />
-        </LinearLayout>
-
-        <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:src="@android:drawable/ic_menu_recent_history"
-            android:contentDescription="Waiting"
-            android:tint="#94A3B8" />
-    </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="#F1F5F9"
-        android:layout_marginVertical="10dp"/>
-
-    <LinearLayout
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/widget_doctor_name"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
-        
-        <TextView
-            android:id="@+id/last_sync"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Updated: Just now"
-            android:textColor="#94A3B8"
-            android:textSize="10sp" />
+        android:layout_marginTop="10dp"
+        android:text="SwasthAll"
+        android:textColor="#6366F1"
+        android:textSize="12sp"
+        android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/doctor_status"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Doctor is serving #11"
-            android:textColor="#6366F1"
-            android:textSize="10sp"
-            android:textStyle="italic" />
-    </LinearLayout>
+    <ProgressBar
+        android:id="@+id/widget_progress_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:layout_marginTop="12dp"
+        android:max="100"
+        android:progress="0"
+        android:progressDrawable="@drawable/widget_progress_horizontal" />
+
+    <TextView
+        android:id="@+id/widget_next_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="🎉 You are next!"
+        android:textColor="#4F46E5"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/last_sync"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Updated just now"
+        android:textColor="#94A3B8"
+        android:textSize="11sp" />
+
 </LinearLayout>

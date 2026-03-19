@@ -1,73 +1,161 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- ── NETWORK ─────────────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- ── AUDIO / VIDEO ──────────────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- ── CALL / SCREEN WAKE ─────────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission
+        android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- ── FOREGROUND SERVICES (Android 14+) ─────────────────────────────── -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> 
+
+    <!-- ── NOTIFICATIONS ─────────────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
-    
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- ── VOIP / TELECOM ────────────────────────────────────────────────── -->
+    <!-- Required for Android ConnectionService (WhatsApp-style killed-app  -->
+    <!-- wake-up). Lets ZEGO register a PhoneAccount with Android Telecom.  -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+
+    <!-- ── ALARM / SCHEDULING ────────────────────────────────────────────── -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
-        android:label="Swasthall"
         android:name="${applicationName}"
+        android:allowBackup="false"
         android:icon="@mipmap/launcher_icon"
-        android:usesCleartextTraffic="true">
+        android:label="Swasthall"
+        android:networkSecurityConfig="@xml/network_security_config">
 
+        <!-- ── ZEGO CALL FOREGROUND SERVICE ─────────────────────────────── -->
         <service
             android:name="com.zegocloud.uikit.prebuilt.call.internal.ZegoCallForegroundService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="phoneCall|camera|microphone" />
-        
+
+        <!-- ── ZEGO ZIM NETWORK SERVICE (required for offline call push) ── -->
+        <!--   Without this, calls to offline/killed app WILL NOT arrive.   -->
+        <service
+            android:name="im.zego.zim.internal.network.ZIMNetworkService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall" />
+
+        <!-- ── ZEGO TELECOM CONNECTION SERVICE ──────────────────────────── -->
+        <!-- Registers Swasthall as a VoIP app with Android's Telecom API.  -->
+        <!-- Android OS handles incoming call wake-up like a real phone      -->
+        <!-- call — works even when the app is killed (like WhatsApp).       -->
+        <!-- Requires MANAGE_OWN_CALLS permission (above).                  -->
+        <service
+            android:name="com.zegocloud.uikit.prebuilt.call.flutter.ZegoCallConnectionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.ConnectionService" />
+            </intent-filter>
+        </service>
+
+        <receiver
+    android:name=".ZegoFcmBroadcastReceiver"
+    android:enabled="true"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="com.zegocloud.zegouikit.call.fcm"/>
+    </intent-filter>
+</receiver>
+
+        <!-- ── HOME WIDGET ───────────────────────────────────────────────── -->
         <service
             android:name="es.antonborri.home_widget.HomeWidgetBackgroundService"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="true" />
 
+        <receiver
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ── MAIN ACTIVITY ─────────────────────────────────────────────── -->
+        <!--   singleTask required for ZEGO offline call tap-to-open:        -->
+        <!--   reuses the existing activity instance so ZEGO's internal      -->
+        <!--   call manager can attach to it. singleTop creates a new        -->
+        <!--   instance when app is backgrounded, breaking offline wake-up.  -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleInstance"
+            android:launchMode="singleTask"
             android:showOnLockScreen="true"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
+            android:supportsPictureInPicture="true"
             android:taskAffinity=""
             android:theme="@style/Theme.App.Starting"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
-                    
+            android:windowSoftInputMode="adjustResize"
+            android:resizeableActivity="true">
+
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
-            
+
             <meta-data
                 android:name="com.zegocloud.uikit.prebuilt.call.ZegoCallInvitationNotificationConfig"
                 android:value="true" />
-            
+
+            <!-- Deep link: booking confirmation screen -->
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="swasthall" android:host="booking" />
             </intent-filter>
-            
+
+            <!-- Deep link: physical queue -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="swasthall" android:host="physical" />
+            </intent-filter>
+
+            <!-- Launcher -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- ZEGO call deep link (required for offline call tap-to-open) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -76,20 +164,27 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name="es.antonborri.home_widget.HomeWidgetProvider" android:exported="true">
+        <!-- ── APP WIDGETS ───────────────────────────────────────────────── -->
+        <receiver
+            android:name=".PatientWidgetProvider"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data android:name="android.appwidget.provider"
-                       android:resource="@xml/patient_widget_info" />
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/patient_widget_info" />
         </receiver>
 
-        <receiver android:name=".NurseWidgetProvider" android:exported="true">
+        <receiver
+            android:name=".NurseWidgetProvider"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data android:name="android.appwidget.provider"
-                       android:resource="@xml/nurse_widget_info" />
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/nurse_widget_info" />
         </receiver>
 
         <meta-data
@@ -99,8 +194,9 @@
 
     <queries>
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
         </intent>
     </queries>
+
 </manifest>

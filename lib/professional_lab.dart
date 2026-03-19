@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'widgets/safe_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfessionalLabScreen extends StatefulWidget {
@@ -145,6 +146,8 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
                   test['image_url'] ??
                       "https://api.dicebear.com/7.x/shapes/svg?seed=${test['name']}",
                   fit: BoxFit.cover,
+                  loadingBuilder: (_, child, progress) =>
+                      progress == null ? child : ShimmerBox(width: 60, height: 60, borderRadius: 30),
                   errorBuilder: (context, error, stackTrace) =>
                       Icon(Icons.biotech, color: primaryColor),
                 ),

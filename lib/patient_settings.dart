@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 // Note: dart:io is removed to ensure Web compatibility
 import 'services/account_service.dart';
+import 'legal_viewer_screen.dart';
+import 'services/secure_logout.dart';
 
 class PatientSettings extends StatefulWidget {
   const PatientSettings({super.key});
@@ -20,7 +22,12 @@ class _PatientSettingsState extends State<PatientSettings> {
   bool _loading = true;
   bool _isUploading = false;
   String? _avatarUrl;
-  final Color primaryTeal = const Color(0xFF0D9488);
+  bool _allowResearch = true;
+  bool _allowNewsletters = true;
+  String? _selectedBloodGroup;
+  final _heightController = TextEditingController();
+  static const List<String> _bloodGroups = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
+  final Color primaryTeal = const Color(0xFF6366F1);
 
   @override
   void initState() {
@@ -35,7 +42,7 @@ class _PatientSettingsState extends State<PatientSettings> {
 
       final data = await _supabase
           .from('profiles')
-          .select('full_name, phone_number, avatar_url')
+          .select('full_name, phone_number, avatar_url, allow_research, allow_newsletters, blood_group, height_cm')
           .eq('id', user.id)
           .single();
 
@@ -45,6 +52,10 @@ class _PatientSettingsState extends State<PatientSettings> {
           _phoneController.text = data['phone_number'] ?? '';
           _emailController.text = user.email ?? '';
           _avatarUrl = data['avatar_url'];
+          _allowResearch = data['allow_research'] ?? true;
+          _allowNewsletters = data['allow_newsletters'] ?? true;
+          _selectedBloodGroup = data['blood_group']?.toString();
+          _heightController.text = data['height_cm']?.toString() ?? '';
           _loading = false;
         });
       }
@@ -54,44 +65,52 @@ class _PatientSettingsState extends State<PatientSettings> {
   }
 
   Future<void> _handleImageUpload() async {
-    final picker = ImagePicker();
-    // imageQuality 50 keeps the file size optimized for mobile and web
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+  final picker = ImagePicker();
+  final XFile? image = await picker.pickImage(
+    source: ImageSource.gallery,
+    imageQuality: 50,
+  );
 
-    if (image == null) return;
-    setState(() => _isUploading = true);
+  if (image == null) return;
+  setState(() => _isUploading = true);
 
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return;
-
-      // UNIVERSAL LOGIC: Use readAsBytes instead of File(path)
-      // This allows the code to run on Web without crashing.
-      final imageBytes = await image.readAsBytes();
-      final fileExt = image.path.split('.').last;
-      final fileName = '${user.id}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
-
-      // Use uploadBinary for cross-platform compatibility
-      await _supabase.storage.from('avatars').uploadBinary(
-            fileName,
-            imageBytes,
-            fileOptions: FileOptions(contentType: 'image/$fileExt', upsert: true),
-          );
-
-      final String publicUrl = _supabase.storage.from('avatars').getPublicUrl(fileName);
-
-      if (mounted) {
-        setState(() {
-          _avatarUrl = publicUrl;
-          _isUploading = false;
-        });
-      }
-      await _updateProfile(silent: true);
-    } catch (e) {
+  try {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
       if (mounted) setState(() => _isUploading = false);
-      _showError("Upload failed");
+      return;
     }
+
+    final imageBytes = await image.readAsBytes();
+    final fileExt = image.path.split('.').last;
+
+    // Must match SQL policy: {user_id}/filename.ext
+    final fileName = '${user.id}/avatar.$fileExt';
+
+    await _supabase.storage.from('avatars').uploadBinary(
+          fileName,
+          imageBytes,
+          fileOptions: FileOptions(
+            contentType: 'image/$fileExt',
+            upsert: true,
+          ),
+        );
+
+    final String publicUrl =
+        _supabase.storage.from('avatars').getPublicUrl(fileName);
+
+    if (!mounted) return;
+    setState(() {
+      _avatarUrl = publicUrl;
+      _isUploading = false;
+    });
+
+    await _updateProfile(silent: true);
+  } catch (e) {
+    if (mounted) setState(() => _isUploading = false);
+    _showError("Upload failed");
   }
+}
 
   Future<void> _updateProfile({bool silent = false}) async {
     if (!silent) setState(() => _loading = true);
@@ -101,6 +120,10 @@ class _PatientSettingsState extends State<PatientSettings> {
         'full_name': _nameController.text,
         'phone_number': _phoneController.text,
         'avatar_url': _avatarUrl,
+        'allow_research': _allowResearch,
+        'allow_newsletters': _allowNewsletters,
+        'blood_group': _selectedBloodGroup,
+        'height_cm': double.tryParse(_heightController.text.trim()),
       }).eq('id', user!.id);
 
       await AccountService.saveCurrentAccount();
@@ -122,89 +145,327 @@ class _PatientSettingsState extends State<PatientSettings> {
     }
   }
 
-  Future<void> _showAccountSwitcher() async {
-    final navigator = Navigator.of(context);
-    await AccountService.saveCurrentAccount();
-    final savedAccounts = await AccountService.getSavedAccounts();
-    final currentUserId = _supabase.auth.currentUser?.id;
+  // ── Submit data access / deletion request to Supabase ────
+  Future<void> _submitDataRequest(String type) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+      await _supabase.from('deletion_requests').insert({
+        'user_id': user.id,
+        'status': 'pending',
+        'notes': type == 'download' ? 'Data access/download request' : 'Account deletion request',
+        'requested_at': DateTime.now().toIso8601String(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(type == 'download'
+              ? "Request submitted! Check your email within 3 business days."
+              : "Deletion request submitted. We'll process it within 3 business days."),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: primaryTeal,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    } catch (_) {
+      _showError("Failed — please email privacy@swasthall.com");
+    }
+  }
 
-    if (!mounted) return;
-
-    showModalBottomSheet(
+  // ── Data download dialog ──────────────────────────────────
+  void _requestDataDownload() {
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text("Download My Data",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+            "Your data will be sent to your registered email within 3 business days.",
+            style: TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
           ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                  width: 45,
-                  height: 5,
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-              const SizedBox(height: 25),
-              const Text("Profiles on this Device", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
-              const SizedBox(height: 20),
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: savedAccounts.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final acc = savedAccounts[index];
-                    bool isCurrent = acc['id'] == currentUserId;
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isCurrent ? primaryTeal.withValues(alpha: 0.05) : Colors.grey[50],
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: isCurrent ? primaryTeal : Colors.transparent, width: 1.5),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-                        leading: CircleAvatar(
-                          radius: 24,
-                          backgroundImage: acc['avatar_url'] != null ? NetworkImage(acc['avatar_url']) : null,
-                          child: acc['avatar_url'] == null ? const Icon(Icons.person) : null,
-                        ),
-                        title: Text(acc['full_name'] ?? 'User', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(acc['email'], style: const TextStyle(fontSize: 12)),
-                        trailing: isCurrent
-                            ? Icon(Icons.check_circle_rounded, color: primaryTeal)
-                            : const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-                        onTap: isCurrent
-                            ? null
-                            : () async {
-                                await AccountService.switchAccount(acc['refresh_token']);
-                                if (mounted) navigator.pushReplacementNamed('/home');
-                              },
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: () => navigator.pushNamed('/login'),
-                icon: const Icon(Icons.add_circle_outline_rounded),
-                label: const Text("Add New Account"),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  side: BorderSide(color: Colors.grey[300]!),
-                ),
-              ),
-            ],
+          const SizedBox(height: 12),
+          _docRow(Icons.picture_as_pdf_outlined, "Medical records — PDF"),
+          _docRow(Icons.table_chart_outlined, "Appointments & history — CSV"),
+          _docRow(Icons.code_outlined, "Full profile export — JSON"),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              "Or email privacy@swasthall.com with subject \"Data Access Request\"",
+              style: TextStyle(fontSize: 12, color: Color(0xFF6366F1)),
+            ),
           ),
-        );
-      },
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryTeal,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await _submitDataRequest('download');
+            },
+            child: const Text("Request", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
+
+  // ── Account deletion dialog ───────────────────────────────
+  void _confirmDeleteAccount() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 22),
+          SizedBox(width: 8),
+          Text("Delete Account", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+            "Download your medical records first — you'll lose access after deletion.",
+            style: TextStyle(fontSize: 13, color: Color(0xFF374151)),
+          ),
+          const SizedBox(height: 12),
+          _warningRow("Personal data deleted within 30 days"),
+          _warningRow("Medical records kept 7 years (Nepal law)"),
+          _warningRow("Family Health Pass credits forfeited"),
+          _warningRow("Cannot be undone"),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await _submitDataRequest('delete');
+              if (!mounted) return;
+              await SecureLogout.perform(context);
+            },
+            child: const Text("Delete My Account", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _docRow(IconData icon, String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(children: [
+          Icon(icon, size: 14, color: primaryTeal),
+          const SizedBox(width: 8),
+          Text(text, style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
+        ]),
+      );
+
+  Widget _warningRow(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 5),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.circle, size: 6, color: Colors.redAccent),
+          const SizedBox(width: 8),
+          Expanded(
+              child: Text(text,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF374151)))),
+        ]),
+      );
+    
+
+  Future<void> _showAccountSwitcher() async {
+  await AccountService.saveCurrentAccount();
+  final savedAccounts = await AccountService.getSavedAccounts();
+  final currentUserId = _supabase.auth.currentUser?.id;
+
+  if (!mounted) return;
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) {
+      return Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 45,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 25),
+            const Text(
+              "Profiles on this Device",
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+            ),
+            const SizedBox(height: 20),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: savedAccounts.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, index) {
+                  final acc = savedAccounts[index];
+                  final bool isCurrent = acc['id'] == currentUserId;
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: isCurrent
+                          ? primaryTeal.withValues(alpha: 0.05)
+                          : Colors.grey[50],
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: isCurrent ? primaryTeal : Colors.transparent,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 15,
+                        vertical: 5,
+                      ),
+                      leading: CircleAvatar(
+                        radius: 24,
+                        backgroundImage: acc['avatar_url'] != null
+                            ? NetworkImage(acc['avatar_url'])
+                            : null,
+                        child: acc['avatar_url'] == null
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
+                      title: Text(
+                        acc['full_name'] ?? 'User',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        acc['email'] ?? '',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: isCurrent
+                          ? Icon(Icons.check_circle_rounded, color: primaryTeal)
+                          : const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                      onTap: isCurrent
+                          ? null
+                          : () async {
+                              final refreshToken = acc['refresh_token'];
+                              final targetUserId = acc['id']?.toString();
+
+                              if (refreshToken == null ||
+                                  refreshToken.toString().isEmpty) {
+                                _showError(
+                                  'Saved session missing. Please log in again.',
+                                );
+                                return;
+                              }
+
+                              Navigator.pop(sheetContext);
+
+                              try {
+                                await AccountService.switchAccount(refreshToken);
+
+                                await Future.delayed(
+                                  const Duration(milliseconds: 400),
+                                );
+
+                                final switchedUserId =
+                                    _supabase.auth.currentUser?.id;
+
+                                if (!mounted) return;
+
+                                if (targetUserId != null &&
+                                    switchedUserId == targetUserId) {
+                                  await _refreshAfterSwitch();
+                                  return;
+                                }
+
+                                _showError(
+                                  'Failed to switch account. Please log in again.',
+                                );
+                              } catch (e) {
+                                await Future.delayed(
+                                  const Duration(milliseconds: 400),
+                                );
+
+                                final currentId = _supabase.auth.currentUser?.id;
+
+                                if (!mounted) return;
+
+                                if (targetUserId != null &&
+                                    currentId == targetUserId) {
+                                  await _refreshAfterSwitch();
+                                  return;
+                                }
+
+                                _showError(
+                                  'Failed to switch account. Please log in again.',
+                                );
+                              }
+                            },
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context, rootNavigator: true)
+                    .pushNamed('/login');
+              },
+              icon: const Icon(Icons.add_circle_outline_rounded),
+              label: const Text("Add New Account"),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                side: BorderSide(color: Colors.grey[300]!),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _refreshAfterSwitch() async {
+  _nameController.clear();
+  _phoneController.clear();
+  _emailController.clear();
+  _heightController.clear();
+
+  if (!mounted) return;
+
+  setState(() {
+    _loading = true;
+    _avatarUrl = null;
+    _allowResearch = true;
+    _allowNewsletters = true;
+    _selectedBloodGroup = null;
+  });
+
+  await _loadUserData();
+}
 
   void _showError(String message) {
     if (mounted) {
@@ -283,6 +544,52 @@ class _PatientSettingsState extends State<PatientSettings> {
                   _buildTextField("Phone Number", _phoneController, Icons.phone_android_rounded),
                   const SizedBox(height: 20),
                   _buildTextField("Email Address", _emailController, Icons.alternate_email_rounded, enabled: false),
+                  const SizedBox(height: 28),
+                  _sectionLabel("Health Info"),
+                  const SizedBox(height: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 8),
+                        child: Text("Blood Group",
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey[600])),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedBloodGroup,
+                            isExpanded: true,
+                            hint: Row(children: [
+                              Icon(Icons.bloodtype_outlined, color: Colors.grey[400], size: 20),
+                              const SizedBox(width: 12),
+                              Text("Select blood group",
+                                  style: TextStyle(color: Colors.grey[400], fontSize: 15)),
+                            ]),
+                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey[400]),
+                            items: _bloodGroups.map((g) => DropdownMenuItem(
+                              value: g,
+                              child: Row(children: [
+                                const Icon(Icons.bloodtype_outlined, color: Colors.redAccent, size: 20),
+                                const SizedBox(width: 12),
+                                Text(g, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                              ]),
+                            )).toList(),
+                            onChanged: (val) => setState(() => _selectedBloodGroup = val),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField("Height (cm)", _heightController, Icons.straighten_rounded,
+                      keyboardType: TextInputType.number),
                   const SizedBox(height: 40),
                   Container(
                     width: double.infinity,
@@ -306,16 +613,101 @@ class _PatientSettingsState extends State<PatientSettings> {
                     ),
                   ),
                   const SizedBox(height: 25),
-                  TextButton(
-                    onPressed: () async {
-                      final navigator = Navigator.of(context);
-                      final userId = _supabase.auth.currentUser?.id;
-                      await _supabase.auth.signOut();
-                      if (userId != null) await AccountService.removeAccount(userId);
-                      if (mounted) navigator.pushReplacementNamed('/login');
-                    },
-                    child: const Text("Remove account from this device",
-                        style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+
+                  // ── Data & Privacy ─────────────────────
+                  _sectionLabel("Data & Privacy"),
+                  const SizedBox(height: 10),
+                  _settingsCard([
+                    _tile(
+                      icon: Icons.download_outlined,
+                      title: "Download My Data",
+                      sub: "Records sent to your email (PDF / CSV / JSON)",
+                      onTap: _requestDataDownload,
+                    ),
+                    _divider(),
+                    _switchTile(
+                      icon: Icons.science_outlined,
+                      title: "Anonymized Research Use",
+                      sub: "Help improve Swasthall with de-identified data",
+                      value: _allowResearch,
+                      onChanged: (v) {
+                        setState(() => _allowResearch = v);
+                        _updateProfile(silent: true);
+                      },
+                    ),
+                    _divider(),
+                    _switchTile(
+                      icon: Icons.campaign_outlined,
+                      title: "Health Tips & Newsletters",
+                      sub: "Receive health updates from Swasthall",
+                      value: _allowNewsletters,
+                      onChanged: (v) {
+                        setState(() => _allowNewsletters = v);
+                        _updateProfile(silent: true);
+                      },
+                    ),
+                  ]),
+                  const SizedBox(height: 20),
+
+                  // ── Legal Documents ────────────────────
+                  _sectionLabel("Legal Documents"),
+                  const SizedBox(height: 10),
+                  _settingsCard([
+                    _tile(icon: Icons.gavel_outlined, title: "Terms and Conditions",
+                        sub: "Rules for using Swasthall",
+                        onTap: () => _openDoc(LegalDocType.terms)),
+                    _divider(),
+                    _tile(icon: Icons.privacy_tip_outlined, title: "Privacy Policy",
+                        sub: "How we collect and use your data",
+                        onTap: () => _openDoc(LegalDocType.privacy)),
+                    _divider(),
+                    _tile(icon: Icons.videocam_outlined, title: "Telemedicine Consent",
+                        sub: "Your consent to remote healthcare",
+                        onTap: () => _openDoc(LegalDocType.telemedicine)),
+                    _divider(),
+                    _tile(icon: Icons.medical_information_outlined, title: "Medical Disclaimer",
+                        sub: "Platform limitations",
+                        onTap: () => _openDoc(LegalDocType.medicalDisclaimer)),
+                    _divider(),
+                    _tile(
+                      icon: Icons.emergency_outlined,
+                      iconColor: const Color(0xFFF59E0B),
+                      title: "Emergency Notice",
+                      sub: "Emergency feature limitations",
+                      onTap: () => _openDoc(LegalDocType.emergency),
+                    ),
+                  ]),
+                  const SizedBox(height: 20),
+
+                  // ── Account ────────────────────────────
+                  _sectionLabel("Account"),
+                  const SizedBox(height: 10),
+                  _settingsCard([
+                    _tile(
+                      icon: Icons.logout_rounded,
+                      iconColor: Colors.grey,
+                      title: "Remove from this Device",
+                      sub: "Sign out and clear saved session",
+                      onTap: () async {
+                        if (!mounted) return;
+                        await SecureLogout.perform(context);
+                      },
+                    ),
+                    _divider(),
+                    _tile(
+                      icon: Icons.delete_forever_outlined,
+                      iconColor: Colors.redAccent,
+                      titleColor: Colors.redAccent,
+                      title: "Delete My Account",
+                      sub: "Permanently delete account and personal data",
+                      onTap: _confirmDeleteAccount,
+                    ),
+                  ]),
+
+                  const SizedBox(height: 16),
+                  Center(
+                    child: Text("Swasthall Pvt. Ltd.  •  v1.0",
+                        style: TextStyle(color: Colors.grey[400], fontSize: 11)),
                   ),
                   const SizedBox(height: 40),
                 ],
@@ -324,7 +716,97 @@ class _PatientSettingsState extends State<PatientSettings> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, IconData icon, {bool enabled = true}) {
+  // ── New section/card helpers ──────────────────────────────
+
+  void _openDoc(LegalDocType type) => Navigator.push(
+      context, MaterialPageRoute(builder: (_) => LegalViewerScreen(docType: type)));
+
+  Widget _sectionLabel(String label) => Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.grey[500],
+                letterSpacing: 0.5)),
+      );
+
+  Widget _settingsCard(List<Widget> children) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.grey.shade100),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3))
+          ],
+        ),
+        child: Column(children: children),
+      );
+
+  Widget _divider() => Divider(
+      height: 1, thickness: 1, indent: 18, endIndent: 18, color: Colors.grey.shade100);
+
+  Widget _tile({
+    required IconData icon,
+    required String title,
+    required String sub,
+    Color? iconColor,
+    Color? titleColor,
+    VoidCallback? onTap,
+  }) {
+    final ic = iconColor ?? primaryTeal;
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+            color: ic.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, color: ic, size: 18),
+      ),
+      title: Text(title,
+          style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: titleColor ?? const Color(0xFF1F2937))),
+      subtitle: Text(sub,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+      trailing: Icon(Icons.chevron_right_rounded, color: Colors.grey.shade300, size: 20),
+    );
+  }
+
+  Widget _switchTile({
+    required IconData icon,
+    required String title,
+    required String sub,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+            color: primaryTeal.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, color: primaryTeal, size: 18),
+      ),
+      title: Text(title,
+          style: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1F2937))),
+      subtitle: Text(sub,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+      trailing: Switch(value: value, onChanged: onChanged, activeThumbColor: primaryTeal),
+    );
+  }
+
+  Widget _buildTextField(String label, TextEditingController controller, IconData icon, {bool enabled = true, TextInputType? keyboardType}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -335,6 +817,7 @@ class _PatientSettingsState extends State<PatientSettings> {
         TextField(
           controller: controller,
           enabled: enabled,
+          keyboardType: keyboardType,
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
           decoration: InputDecoration(
             prefixIcon: Icon(icon, color: enabled ? primaryTeal : Colors.grey[400], size: 20),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'widgets/safe_network_image.dart';
 
 class DoctorSetting extends StatefulWidget {
   final Map<String, dynamic>? userData;
@@ -94,59 +95,66 @@ class _DoctorSettingState extends State<DoctorSetting> {
 
   /// UNIVERSAL UPLOAD LOGIC (Android, iOS, and Web)
   Future<void> _pickAndUploadImage() async {
-    final picker = ImagePicker();
-    final messenger = ScaffoldMessenger.of(context);
+  final picker = ImagePicker();
+  final messenger = ScaffoldMessenger.of(context);
 
-    // Pick the image
-    final XFile? image =
-        await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
-    
-    if (image == null) return;
+  final XFile? image =
+      await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+
+  if (image == null) return;
+
+  if (!mounted) return;
+  setState(() => _isUploading = true);
+
+  try {
+    final String userId =
+        _localUserData?['id'] ?? _supabase.auth.currentUser!.id;
+
+    // Must match SQL policy: {user_id}/avatar.jpg
+    final String path = '$userId/avatar.jpg';
+
+    final imageBytes = await image.readAsBytes();
+
+    await _supabase.storage.from('avatars').uploadBinary(
+          path,
+          imageBytes,
+          fileOptions: const FileOptions(
+            upsert: true,
+            contentType: 'image/jpeg',
+          ),
+        );
+
+    final String imageUrl = _supabase.storage.from('avatars').getPublicUrl(path);
+
+    final cacheBusterUrl =
+        "$imageUrl?t=${DateTime.now().millisecondsSinceEpoch}";
+
+    await _supabase
+        .from('profiles')
+        .update({'avatar_url': cacheBusterUrl}).eq('id', userId);
 
     if (!mounted) return;
-    setState(() => _isUploading = true);
 
-    try {
-      final String userId =
-          _localUserData?['id'] ?? _supabase.auth.currentUser!.id;
-      final String path = 'avatars/avatar_$userId.jpg';
+    setState(() {
+      _localUserData = Map<String, dynamic>.from(_localUserData ?? {})
+        ..['avatar_url'] = cacheBusterUrl;
+    });
 
-      // UNIVERSAL FIX: Convert XFile to Bytes instead of using File(path)
-      final imageBytes = await image.readAsBytes();
-
-      await _supabase.storage.from('avatars').uploadBinary(
-            path,
-            imageBytes,
-            fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'),
-          );
-
-      final String imageUrl =
-          _supabase.storage.from('avatars').getPublicUrl(path);
-      
-      // Add a timestamp to the URL to bypass browser cache
-      final cacheBusterUrl = "$imageUrl?t=${DateTime.now().millisecondsSinceEpoch}";
-
-      await _supabase
-          .from('profiles')
-          .update({'avatar_url': cacheBusterUrl}).eq('id', userId);
-
-      if (!mounted) return;
-
-      setState(() {
-        _localUserData = Map<String, dynamic>.from(_localUserData ?? {})
-          ..['avatar_url'] = cacheBusterUrl;
-      });
-
-      widget.onRefresh();
-      messenger.showSnackBar(
-          const SnackBar(content: Text("Profile picture updated!")));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(
-          content: Text("Upload failed: $e"), backgroundColor: Colors.red));
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
-    }
+    widget.onRefresh();
+    messenger.showSnackBar(
+      const SnackBar(content: Text("Profile picture updated!")),
+    );
+  } catch (e) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text("Upload failed: $e"),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } finally {
+    if (mounted) setState(() => _isUploading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -186,34 +194,44 @@ class _DoctorSettingState extends State<DoctorSetting> {
     );
   }
 
+  // Cache the nurse name so we don't re-fetch on every rebuild.
+  Future<String>? _nurseNameFuture;
+
+  Future<String> _fetchNurseName(String doctorId) async {
+    try {
+      final pairing = await _supabase
+          .from('staff_pairings')
+          .select('nurse_id')
+          .eq('doctor_id', doctorId)
+          .maybeSingle();
+      if (pairing == null) return 'No Nurse Assigned';
+      final nurseId = pairing['nurse_id']?.toString();
+      if (nurseId == null) return 'No Nurse Assigned';
+      final profile = await _supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', nurseId)
+          .maybeSingle();
+      return profile?['full_name']?.toString() ?? 'Unnamed Nurse';
+    } catch (_) {
+      return 'No Nurse Assigned';
+    }
+  }
+
   Widget _buildNurseTile() {
     final String doctorId =
         _localUserData?['id'] ?? _supabase.auth.currentUser?.id ?? '';
 
     if (doctorId.isEmpty) return const SizedBox.shrink();
 
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _supabase
-          .from('staff_pairings')
-          .stream(primaryKey: ['id']).eq('doctor_id', doctorId),
-      builder: (context, pairingSnapshot) {
-        if (!pairingSnapshot.hasData || pairingSnapshot.data!.isEmpty) {
-          return _nurseLayout("No Nurse Assigned");
-        }
+    // Lazy init: build the future once, reuse on rebuilds.
+    _nurseNameFuture ??= _fetchNurseName(doctorId);
 
-        final nurseId = pairingSnapshot.data!.first['nurse_id'];
-
-        return StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _supabase
-              .from('profiles')
-              .stream(primaryKey: ['id']).eq('id', nurseId),
-          builder: (context, profileSnapshot) {
-            final nurseName = (profileSnapshot.hasData && profileSnapshot.data!.isNotEmpty)
-                ? profileSnapshot.data!.first['full_name']
-                : "Loading...";
-            return _nurseLayout(nurseName ?? "Unnamed Nurse");
-          },
-        );
+    return FutureBuilder<String>(
+      future: _nurseNameFuture,
+      builder: (context, snapshot) {
+        final name = snapshot.data ?? 'Loading...';
+        return _nurseLayout(name);
       },
     );
   }
@@ -281,18 +299,21 @@ class _DoctorSettingState extends State<DoctorSetting> {
           Stack(
             alignment: Alignment.bottomRight,
             children: [
-              CircleAvatar(
+              SafeAvatar(
+                url: (avatarUrl != null && avatarUrl.toString().isNotEmpty)
+                    ? avatarUrl.toString()
+                    : null,
                 radius: 55,
+                fallbackIcon: Icons.person,
                 backgroundColor: themeColor.withValues(alpha: 0.1),
-                backgroundImage:
-                    (avatarUrl != null && avatarUrl.toString().isNotEmpty)
-                        ? NetworkImage(avatarUrl)
-                        : null,
-                child: (avatarUrl == null || avatarUrl.toString().isEmpty) &&
-                        !_isUploading
-                    ? Icon(Icons.person, size: 50, color: themeColor)
-                    : (_isUploading ? const CircularProgressIndicator() : null),
               ),
+              if (_isUploading)
+                const Positioned.fill(
+                  child: CircleAvatar(
+                    backgroundColor: Colors.black38,
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                ),
               GestureDetector(
                 onTap: _isUploading ? null : _pickAndUploadImage,
                 child: Container(

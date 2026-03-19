@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'add_plan_screen.dart'; // Import the new screen we will create
+import 'widgets/safe_network_image.dart';
 
 class InsuranceScreen extends StatefulWidget {
   const InsuranceScreen({super.key});
@@ -11,6 +12,13 @@ class InsuranceScreen extends StatefulWidget {
 
 class _InsuranceScreenState extends State<InsuranceScreen> {
   final supabase = Supabase.instance.client;
+  late final Stream<List<Map<String, dynamic>>> _plansStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _plansStream = supabase.from('insurance_plans').stream(primaryKey: ['id']);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +38,7 @@ class _InsuranceScreenState extends State<InsuranceScreen> {
           _buildHeader(),
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
-              // Real-time stream from Supabase
-              stream: supabase.from('insurance_plans').stream(primaryKey: ['id']),
+              stream: _plansStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -114,6 +121,8 @@ class _InsuranceScreenState extends State<InsuranceScreen> {
                 child: Image.network(
                   plan['icon_url'], 
                   height: 50, width: 50, fit: BoxFit.cover,
+                  loadingBuilder: (_, child, progress) =>
+                      progress == null ? child : const ShimmerBox(width: 50, height: 50),
                   errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
                 ),
               ),

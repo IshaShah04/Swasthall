@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'widgets/safe_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'consultation_booking.dart';
 import 'patient_settings.dart'; 
 import 'services/voice_service.dart';
+import 'services/earliest_slot_service.dart';
 
 class ConsultationDescription extends StatefulWidget {
   final Map<String, dynamic> doctorData;
@@ -20,9 +22,13 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
   final Color accentColor = const Color(0xFF10B981);
   final VoiceService _voiceService = VoiceService();
 
+  // Stored once in initState — FutureBuilder reuses without re-firing on rebuild.
+  Future<Map<String, dynamic>>? _detailsFuture;
+
   @override
   void initState() {
     super.initState();
+    _detailsFuture = _getDoctorFullDetails();
     _voiceService.initTts();
   }
 
@@ -214,7 +220,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
     return Scaffold(
       backgroundColor: Colors.white,
       floatingActionButton: FutureBuilder<Map<String, dynamic>>(
-        future: _getDoctorFullDetails(),
+        future: _detailsFuture,
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const SizedBox.shrink();
           return FloatingActionButton(
@@ -229,7 +235,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
         },
       ),
       body: FutureBuilder<Map<String, dynamic>>(
-        future: _getDoctorFullDetails(),
+        future: _detailsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -260,6 +266,8 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                       Image.network(
                         staticDoc['avatar_url'] ?? 'https://via.placeholder.com/400',
                         fit: BoxFit.cover,
+                        loadingBuilder: (_, child, progress) =>
+                            progress == null ? child : const ShimmerBox(width: double.infinity, height: 300),
                         errorBuilder: (context, error, stackTrace) => Container(
                             color: Colors.grey.shade200,
                             child: const Icon(Icons.person, size: 80)),
@@ -372,7 +380,31 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                     color: accentColor)),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        // ── Earliest available slot banner ─────────────────────────────
+        FutureBuilder<String?>(
+          future: fetchEarliestSlot(supabase, widget.doctorData['id'].toString()),
+          builder: (context, snap) {
+            if (!snap.hasData || snap.data == null) return const SizedBox.shrink();
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF10B981)),
+                const SizedBox(width: 6),
+                Text(
+                  'Next available: ${snap.data!}',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF10B981), fontWeight: FontWeight.w600),
+                ),
+              ]),
+            );
+          },
+        ),
         Row(
           children: [
             Expanded(

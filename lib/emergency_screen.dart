@@ -1,7 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class EmergencyScreen extends StatelessWidget {
   const EmergencyScreen({super.key});
+
+  // Nepal emergency number
+  static const String _ambulance = '102';
+
+  Future<void> _call(BuildContext context, String number) async {
+    final uri = Uri(scheme: 'tel', path: number);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not launch dialler. Call $number manually.'),
+          backgroundColor: Colors.red,
+          action: SnackBarAction(label: 'OK', onPressed: () {}, textColor: Colors.white),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,15 +69,12 @@ class EmergencyScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildEmergencySection("24/7 Emergency & Trauma", [
-                  _emergencyItem("Aseptic ER", Icons.healing, emergencyRed),
-                  _emergencyItem(
-                      "Accident Support", Icons.local_hospital, emergencyRed),
+                  _emergencyItem("Aseptic ER", Icons.healing, emergencyRed, phone: _ambulance, ctx: context),
+                  _emergencyItem("Accident Support", Icons.local_hospital, emergencyRed, phone: _ambulance, ctx: context),
                 ]),
                 _buildEmergencySection("Medical Transport", [
-                  _emergencyItem("Ground Ambulance", Icons.airport_shuttle,
-                      emergencyRed), // Fixed: replaced .ambulance
-                  _emergencyItem(
-                      "HEMS (Air)", Icons.airplanemode_active, emergencyRed),
+                  _emergencyItem("Ground Ambulance", Icons.airport_shuttle, emergencyRed, phone: _ambulance, ctx: context),
+                  _emergencyItem("HEMS (Air)", Icons.airplanemode_active, emergencyRed, phone: _ambulance, ctx: context),
                 ]),
                 _buildEmergencySection("Specialized Care Units", [
                   _emergencyItem("ICU (Intensive Care)", Icons.monitor_heart,
@@ -118,8 +135,9 @@ class EmergencyScreen extends StatelessWidget {
     );
   }
 
-  Widget _emergencyItem(String label, IconData icon, Color color) {
-    return Container(
+  Widget _emergencyItem(String label, IconData icon, Color color,
+      {String? phone, BuildContext? ctx}) {
+    final tile = Container(
       width: 150,
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
@@ -128,8 +146,7 @@ class EmergencyScreen extends StatelessWidget {
         border: Border.all(color: const Color(0xFFF3F4F6)),
         boxShadow: [
           BoxShadow(
-            color: color.withAlpha(
-                15), // Fixed: replaced .withValues(alpha:   for precision
+            color: color.withAlpha(15),
             blurRadius: 8,
             offset: const Offset(0, 4),
           )
@@ -141,7 +158,7 @@ class EmergencyScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withAlpha(25), // Fixed: replaced .withValues(alpha:
+              color: color.withAlpha(25),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 30),
@@ -161,5 +178,13 @@ class EmergencyScreen extends StatelessWidget {
         ],
       ),
     );
+
+    if (phone != null && ctx != null) {
+      return GestureDetector(
+        onTap: () => _call(ctx, phone),
+        child: tile,
+      );
+    }
+    return tile;
   }
 }

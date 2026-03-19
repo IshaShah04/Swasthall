@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -7,7 +10,7 @@ plugins {
 
 android {
     namespace = "com.raunak.swasthall"
-    compileSdk = 36 
+    compileSdk = 36
 
     ndkVersion = "28.2.13676358"
 
@@ -15,15 +18,30 @@ android {
         getByName("main").java.srcDirs("src/main/kotlin")
     }
 
+    // ── Release signing ──────────────────────────────────────────────────────
+    // Store keystore credentials in android/key.properties (never commit to git)
+    signingConfigs {
+        val keyPropertiesFile = rootProject.file("key.properties")
+        if (keyPropertiesFile.exists()) {
+            val keyProperties = Properties()
+            keyProperties.load(FileInputStream(keyPropertiesFile))
+            create("release") {
+                storeFile     = file(keyProperties.getProperty("storeFile"))
+                storePassword = keyProperties.getProperty("storePassword")
+                keyAlias      = keyProperties.getProperty("keyAlias")
+                keyPassword   = keyProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     defaultConfig {
-        applicationId = "com.raunak.swasthall"
-        minSdk = 24
-        targetSdk = 36 
-        versionCode = 1
-        versionName = "1.0"
+        applicationId  = "com.raunak.swasthall"
+        minSdk         = 24
+        targetSdk      = 36
+        versionCode    = 1
+        versionName    = "1.0"
         multiDexEnabled = true
 
-        // Ensure ZegoCloud only builds for supported architectures
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
@@ -31,17 +49,18 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = true
+            isMinifyEnabled   = true
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro" // This points to the file we modified in step 1
+                "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            val releaseConfig = signingConfigs.findByName("release")
+            signingConfig = releaseConfig ?: signingConfigs.getByName("debug")
         }
 
         getByName("debug") {
-            isMinifyEnabled = false
+            isMinifyEnabled   = false
             isShrinkResources = false
         }
     }
@@ -52,13 +71,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
     packaging {
         resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes  += "/META-INF/{AL2.0,LGPL2.1}"
             pickFirsts += "**/libc++_shared.so"
         }
     }
@@ -72,7 +93,10 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.multidex:multidex:2.0.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
     implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
     implementation("com.google.firebase:firebase-messaging")
-    implementation ("im.zego:zpns-fcm:2.7.0")
+    implementation("im.zego:zpns-fcm:2.7.0")
+
+    implementation("com.google.android.play:core:1.10.3")
 }

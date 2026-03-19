@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'widgets/safe_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart'; // Add intl for time formatting
@@ -17,21 +18,63 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
   final supabase = Supabase.instance.client;
   String searchQuery = '';
 
-  late final Stream<List<Map<String, dynamic>>> _labStream;
-  late final Stream<List<Map<String, dynamic>>> _nextAppointmentStream;
+  Stream<List<Map<String, dynamic>>>? _labStream;
+  Stream<List<Map<String, dynamic>>>? _nextAppointmentStream;
 
   @override
   void initState() {
     super.initState();
-    _labStream = supabase
-        .from('lab_tests')
-        .stream(primaryKey: ['id']).order('created_at', ascending: false);
+    _loadHospitalAndInitStreams();
+  }
 
-    _nextAppointmentStream = supabase
-        .from('lab_appointments')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false)
-        .limit(1);
+  Future<void> _loadHospitalAndInitStreams() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // Hospital admin: hospital_id is in profiles
+      final profileRes = await supabase
+          .from('profiles')
+          .select('hospital_id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      String? hospitalId = profileRes?['hospital_id']?.toString();
+
+      // Staff fallback: fetch via email (matches how professional_home works)
+      if (hospitalId == null || hospitalId.isEmpty || hospitalId == 'null') {
+        final staffRes = await supabase
+            .from('staff')
+            .select('hospital_id')
+            .eq('email', user.email ?? '')
+            .maybeSingle();
+        hospitalId = staffRes?['hospital_id']?.toString();
+      }
+
+      if (!mounted) return;
+      setState(() {
+        if (hospitalId != null && hospitalId.isNotEmpty && hospitalId != 'null') {
+          _labStream = supabase
+              .from('lab_tests')
+              .stream(primaryKey: ['id'])
+              .eq('hospital_id', hospitalId)
+              .order('created_at', ascending: false);
+
+          _nextAppointmentStream = supabase
+              .from('lab_appointments')
+              .stream(primaryKey: ['id'])
+              .eq('hospital_id', hospitalId)
+              .order('created_at', ascending: false)
+              .limit(1);
+        } else {
+          // No hospital linked — empty streams
+          _labStream = const Stream.empty();
+          _nextAppointmentStream = const Stream.empty();
+        }
+      });
+    } catch (e) {
+      debugPrint('HospitalLab init error: $e');
+    }
   }
 
   // Helper to fetch working time for a specific provider
@@ -83,6 +126,9 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
               ),
 
               // 2. NEXT APPOINTMENT SECTION
+              if (_nextAppointmentStream == null)
+                const SizedBox.shrink()
+              else
               StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _nextAppointmentStream,
                 builder: (context, snapshot) {
@@ -157,7 +203,18 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
 
               // 3. MAIN CONTENT
               Expanded(
-                child: StreamBuilder<List<Map<String, dynamic>>>(
+                child: _labStream == null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.domain_disabled_rounded, size: 48, color: Colors.grey[300]),
+                            const SizedBox(height: 12),
+                            const Text('No hospital linked', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      )
+                    : StreamBuilder<List<Map<String, dynamic>>>(
                   stream: _labStream,
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
@@ -227,7 +284,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                     );
                   },
                 ),
-              ),
+              ),  // closes null-check ternary
             ],
           ),
           Positioned(
@@ -332,7 +389,13 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(15),
                     child: (test['images'] != null && test['images'].isNotEmpty)
-                        ? Image.network(test['images'][0], fit: BoxFit.cover)
+                        ? Image.network(
+                            test['images'][0],
+                            fit: BoxFit.cover,
+                            loadingBuilder: (_, child, progress) =>
+                                progress == null ? child : const ShimmerBox(width: double.infinity, height: 120),
+                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 40),
+                          )
                         : const Icon(Icons.biotech, color: Colors.black26),
                   ),
                 ),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -93,31 +94,85 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     _pulseController.repeat();
 
     try {
-      // 1. Fetch exact data from Supabase
-      final staffResponse = await Supabase.instance.client.from('staff').select(
-          'id, name, speciality, avatar_url, degree, hospital_name, address, first_consultation_fee');
+      // ── 1. Fetch staff table (primary source) ──────────────────────────
+      final staffResponse = await Supabase.instance.client
+          .from('staff')
+          .select(
+            'id, name, speciality, avatar_url, degree, hospital_name, '
+            'address, first_consultation_fee, followup_consultation_fee, '
+            'rating, profile_id',
+          );
 
+      // ── 2. Fetch all linked profiles in one query ──────────────────────
+      // Collect non-null profile_ids from staff rows
+      final profileIds = staffResponse
+          .map((s) => s['profile_id'])
+          .where((pid) => pid != null)
+          .toList();
+
+      Map<String, Map<String, dynamic>> profileMap = {};
+      if (profileIds.isNotEmpty) {
+        final profileResponse = await Supabase.instance.client
+            .from('profiles')
+            .select(
+              'id, full_name, avatar_url, bio, qualifications, '
+              'location, description, speciality',
+            )
+            .inFilter('id', profileIds);
+
+        // Index profiles by id for O(1) lookup
+        for (final p in profileResponse) {
+          profileMap[p['id'].toString()] = Map<String, dynamic>.from(p);
+        }
+      }
+
+      // ── 3. Fetch lab tests ─────────────────────────────────────────────
       final labData = await Supabase.instance.client
           .from('lab_tests')
           .select('name, price, location');
 
-      // 2. Store original database values in the local list
-      _allFetchedDoctors =
-          List<Map<String, dynamic>>.from(staffResponse.map((doc) => {
-                'id': doc['id'],
-                'doctorName': doc['name'] ?? 'Specialist',
-                'speciality': doc['speciality'] ?? 'General',
-                'degree': doc['degree'] ?? '',
-                'hospital': doc['hospital_name'] ?? 'Facility',
-                'address': doc['address'] ?? 'Nepal',
-                'avatar_url': doc['avatar_url'],
-                // This is our "Source of Truth" for the UI
-                'consultationFee': doc['first_consultation_fee'] != null
-                    ? "Rs. ${doc['first_consultation_fee']}"
-                    : 'N/A',
-              }));
+      // ── 4. Merge staff + profile data ──────────────────────────────────
+      // Staff columns take priority; profile fills in whatever is missing.
+      _allFetchedDoctors = staffResponse.map((staff) {
+        final profileId = staff['profile_id']?.toString();
+        final profile =
+            profileId != null ? (profileMap[profileId] ?? {}) : <String, dynamic>{};
 
-      // 3. Get AI Analysis (passing our data so AI knows the fees)
+        return <String, dynamic>{
+          // Identity — use staff.id as the main lookup key
+          'id': staff['id'],
+          'profile_id': profileId,
+
+          // Name: staff.name first, fallback to profiles.full_name
+          'name': staff['name'] ?? profile['full_name'] ?? 'Specialist',
+
+          // Speciality: staff first, profile fallback
+          'speciality': staff['speciality'] ?? profile['speciality'] ?? 'General',
+
+          // Visual
+          'avatar_url': staff['avatar_url'] ?? profile['avatar_url'],
+
+          // Credentials
+          'degree': staff['degree'] ?? profile['qualifications'] ?? '',
+
+          // Location
+          'hospital_name': staff['hospital_name'] ?? '',
+          'address': staff['address'] ?? profile['location'] ?? 'Nepal',
+
+          // Fees — from staff table only
+          'first_consultation_fee': staff['first_consultation_fee'],
+          'followup_consultation_fee': staff['followup_consultation_fee'],
+
+          // Rating
+          'rating': staff['rating'],
+
+          // Extra info from profiles
+          'bio': profile['bio'] ?? '',
+          'description': profile['description'] ?? '',
+        };
+      }).toList();
+
+      // ── 5. Get AI Analysis ─────────────────────────────────────────────
       final aiResponse = await AIAssistantService.getRecommendationAndCost(
         userInput: userInputText,
         localDoctors: _allFetchedDoctors,
@@ -139,8 +194,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       if (!mounted) return;
       setState(() {
         _isThinking = false;
-        _pulseController.stop();
       });
+      _pulseController.stop();
+      _pulseController.reset();
     }
   }
 
@@ -232,30 +288,49 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     );
   }
 
-  Widget _buildActionCard(Map<String, dynamic> est, String specialty) {
-    // CRITICAL FIX: Find the actual doctor data from our fetched list using the ID
-    final dbDoctor = _allFetchedDoctors.firstWhere(
-      (d) => d['id'].toString() == est['doctorId'].toString(),
-      orElse: () => {},
-    );
+  Widget _buildActionCard(dynamic est, String specialty) {
+    if (est is! Map) return const SizedBox.shrink();
 
-    // Use DB fee if found, otherwise fallback to AI's estimate string
-    final String fixedFee = dbDoctor.isNotEmpty
-        ? dbDoctor['consultationFee']
-        : (est['consultationFee'] ?? "N/A");
+    // Find doctor from local list using ID attached by _enrichEstimatesWithIds
+    final doctorId = est['doctorId']?.toString();
+    final dbDoctor = doctorId != null
+        ? _allFetchedDoctors.firstWhere(
+            (d) => d['id'].toString() == doctorId,
+            orElse: () => {},
+          )
+        : <String, dynamic>{};
+
+    // Merge: DB values take priority over AI estimates
+    final String displayName =
+        dbDoctor['name'] ?? est['doctorName'] ?? 'Doctor';
+    final String displayHospital =
+        dbDoctor['hospital_name'] ?? est['hospital'] ?? '';
+    final String displayAddress =
+        dbDoctor['address'] ?? est['address'] ?? 'Nepal';
+    final String displayLocation = displayHospital.isNotEmpty
+        ? '$displayHospital • $displayAddress'
+        : displayAddress;
+
+    // Use real fee from DB, formatted; fall back to AI estimate string
+    final rawFee = dbDoctor['first_consultation_fee'];
+    final String displayFee = rawFee != null
+        ? 'Rs. ${rawFee.toString()}'
+        : (est['consultationFee'] ?? 'N/A');
+
+    final String displayOtherCosts = est['otherCostsRange'] ?? 'N/A';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        onTap: () {
-          if (dbDoctor.isNotEmpty) {
-            Navigator.push(
-                context,
-                MaterialPageRoute(
+        onTap: dbDoctor.isNotEmpty
+            ? () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
                     builder: (c) =>
-                        ConsultationDescription(doctorData: dbDoctor)));
-          }
-        },
+                        ConsultationDescription(doctorData: dbDoctor),
+                  ),
+                )
+            : null,
         borderRadius: BorderRadius.circular(15),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -275,21 +350,22 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                            dbDoctor['doctorName'] ??
-                                est['doctorName'] ??
-                                "Doctor",
+                        Text(displayName,
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 16)),
                         Text(
-                            "${dbDoctor['hospital'] ?? est['hospital'] ?? 'Clinic'} • ${dbDoctor['address'] ?? est['address'] ?? 'Location'}",
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.grey.shade600)),
+                          displayLocation,
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey.shade600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios,
-                      size: 14, color: Color(0xFF6366F1)),
+                  if (dbDoctor.isNotEmpty)
+                    const Icon(Icons.arrow_forward_ios,
+                        size: 14, color: Color(0xFF6366F1)),
                 ],
               ),
               const Divider(height: 20),
@@ -299,17 +375,19 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                   Expanded(
                     flex: 4,
                     child: _priceTag(
-                        isNepali ? "परामर्श शुल्क" : "Consultation Fee",
-                        fixedFee, // Uses value from DB directly
-                        Colors.blueGrey),
+                      isNepali ? "परामर्श शुल्क" : "Consultation Fee",
+                      displayFee,
+                      Colors.blueGrey,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     flex: 6,
                     child: _priceTag(
-                        isNepali ? "अन्य अनुमानित लागत" : "Other Est. Costs",
-                        est['otherCostsRange'] ?? "N/A",
-                        const Color(0xFF6366F1)),
+                      isNepali ? "अन्य अनुमानित लागत" : "Other Est. Costs",
+                      displayOtherCosts,
+                      const Color(0xFF6366F1),
+                    ),
                   ),
                 ],
               ),
@@ -352,7 +430,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                   const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           Text(
-              isNepali ? "मलाई लक्षणहरू बताउनुहोस्।" : "Tell me your symptoms.",
+              isNepali
+                  ? "मलाई लक्षणहरू बताउनुहोस्।"
+                  : "Tell me your symptoms.",
               style: const TextStyle(color: Colors.blueGrey, fontSize: 16)),
         ],
       ),
@@ -372,8 +452,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 shape: BoxShape.circle,
                 color: Colors.redAccent.withValues(alpha: 0.1),
               ),
-              child:
-                  const Icon(Icons.favorite, color: Colors.redAccent, size: 80),
+              child: const Icon(Icons.favorite,
+                  color: Colors.redAccent, size: 80),
             ),
           ),
           const SizedBox(height: 30),
@@ -403,16 +483,17 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       ),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: _listen,
-            child: CircleAvatar(
-              backgroundColor:
-                  _isListening ? Colors.redAccent : const Color(0xFFF1F5F9),
-              child: Icon(_isListening ? Icons.mic : Icons.mic_none,
-                  color: _isListening ? Colors.white : Colors.black54),
+          if (!kIsWeb)
+            GestureDetector(
+              onTap: _listen,
+              child: CircleAvatar(
+                backgroundColor:
+                    _isListening ? Colors.redAccent : const Color(0xFFF1F5F9),
+                child: Icon(_isListening ? Icons.mic : Icons.mic_none,
+                    color: _isListening ? Colors.white : Colors.black54),
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
+          if (!kIsWeb) const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: _controller,
@@ -446,6 +527,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   void dispose() {
     _pulseController.dispose();
     _controller.dispose();
+    _speech.stop();
     _voiceService.stop();
     super.dispose();
   }

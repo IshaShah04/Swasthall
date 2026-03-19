@@ -60,12 +60,12 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
       final String path = 'plan_icons/$fileName';
 
       if (kIsWeb) {
-        await supabase.storage.from('insurance_vault').uploadBinary(path, _webImage!);
+        await supabase.storage.from('avatars').uploadBinary(path, _webImage!);
       } else {
-        await supabase.storage.from('insurance_vault').upload(path, _imageFile!);
+        await supabase.storage.from('avatars').upload(path, _imageFile!);
       }
 
-      return supabase.storage.from('insurance_vault').getPublicUrl(path);
+      return supabase.storage.from('avatars').getPublicUrl(path);
     } catch (e) {
       debugPrint('Upload Error: $e');
       return null;

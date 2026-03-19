@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'widgets/safe_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'lab_appointment.dart';
 import 'services/voice_service.dart'; // 1. Import VoiceService
@@ -313,6 +314,9 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
             Image.network(
               widget.labData['avatar_url'] ?? 'https://via.placeholder.com/400',
               fit: BoxFit.cover,
+              loadingBuilder: (_, child, progress) =>
+                  progress == null ? child : const ShimmerBox(width: double.infinity, height: 300),
+              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 40),
             ),
             Container(
               decoration: const BoxDecoration(

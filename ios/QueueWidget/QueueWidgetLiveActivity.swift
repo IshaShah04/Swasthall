@@ -3,57 +3,83 @@ import WidgetKit
 import SwiftUI
 
 struct QueueWidgetAttributes: ActivityAttributes {
+    
     public struct ContentState: Codable, Hashable {
-        // Dynamic data that changes (e.g., your place in line)
         var queueNumber: Int
         var status: String
     }
 
-    // Static data that doesn't change once started
     var patientName: String
 }
 
+@available(iOS 16.1, *)
 struct QueueWidgetLiveActivity: Widget {
+    
     var body: some WidgetConfiguration {
+        
         ActivityConfiguration(for: QueueWidgetAttributes.self) { context in
-            // LOCK SCREEN VIEW
+            
+            // 🔒 LOCK SCREEN VIEW
             VStack {
                 HStack {
-                    VStack(alignment: .leading) {
-                        Text("Patient: \(context.attributes.patientName)")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Patient")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text(context.attributes.patientName)
                             .font(.headline)
+                        
                         Text(context.state.status)
                             .font(.subheadline)
+                            .foregroundColor(.blue)
                     }
+                    
                     Spacer()
-                    VStack {
+                    
+                    VStack(spacing: 4) {
                         Text("Number")
                             .font(.caption)
+                            .foregroundColor(.secondary)
+                        
                         Text("\(context.state.queueNumber)")
-                            .font(.system(size: 24, weight: .bold))
+                            .font(.system(size: 28, weight: .bold))
                     }
                 }
             }
             .padding()
-
+            
         } dynamicIsland: { context in
-            // DYNAMIC ISLAND VIEW (The pill at the top)
+            
             DynamicIsland {
-                ExpandedRegion(.leading) {
-                    Text("P: \(context.attributes.patientName)")
+                
+                // Expanded Island
+                DynamicIslandExpandedRegion(.leading) {
+                    VStack(alignment: .leading) {
+                        Text(context.attributes.patientName)
+                            .font(.headline)
+                    }
                 }
-                ExpandedRegion(.trailing) {
+                
+                DynamicIslandExpandedRegion(.trailing) {
                     Text("#\(context.state.queueNumber)")
+                        .font(.title2)
+                        .bold()
                 }
-                ExpandedRegion(.bottom) {
+                
+                DynamicIslandExpandedRegion(.bottom) {
                     Text("Status: \(context.state.status)")
+                        .font(.subheadline)
                 }
+                
             } compactLeading: {
                 Text("#\(context.state.queueNumber)")
+                    .bold()
             } compactTrailing: {
-                Image(systemName: "person.2.fill")
+                Image(systemName: "person.fill")
             } minimal: {
                 Text("\(context.state.queueNumber)")
+                    .bold()
             }
         }
     }

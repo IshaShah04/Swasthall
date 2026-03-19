@@ -1,14 +1,20 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_handler.dart';
-import 'call_landing_page.dart';
 import 'quick_categories.dart';
 import 'special_offers.dart';
 import 'insurance_subscription.dart';
 import 'all_plans_screen.dart';
 import 'services/voice_service.dart';
 import 'patient_settings.dart';
+import 'consultation_search.dart';
 import 'ai_assistant_screen.dart';
+import 'notification_screen.dart';
+import 'widgets/safe_network_image.dart';
+// DEBUG ONLY — remove this import before production release
+import 'debug/policy_debug_screen.dart';
 
 class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({super.key});
@@ -20,7 +26,11 @@ class PatientHomeScreen extends StatefulWidget {
 class _PatientHomeScreenState extends State<PatientHomeScreen> {
   Map<String, dynamic>? _activeBooking;
   String? _avatarUrl;
+  int _unreadCount = 0;
   final VoiceService _voiceService = VoiceService();
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
+  final TextEditingController _homeSearchController = TextEditingController();
 
   @override
   void initState() {
@@ -28,12 +38,50 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     _checkForActiveCall();
     _initVoice();
     _loadUserProfile();
+    _loadUnreadCount();
   }
 
   @override
   void dispose() {
     _voiceService.stop();
+    _speech.stop();
+    _homeSearchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleHomeListening() async {
+    if (_isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+    final available = await _speech.initialize(
+      onError: (_) {
+        if (mounted) setState(() => _isListening = false);
+      },
+    );
+    if (!available) return;
+    if (mounted) setState(() => _isListening = true);
+    _speech.listen(
+      onResult: (result) {
+        if (result.recognizedWords.isNotEmpty && mounted) {
+          setState(() => _homeSearchController.text = result.recognizedWords);
+        }
+        if (result.finalResult && mounted) {
+          setState(() => _isListening = false);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ConsultationSearch(
+                preSelectedHospital: null,
+              ),
+            ),
+          );
+        }
+      },
+      listenFor: const Duration(seconds: 15),
+      pauseFor: const Duration(seconds: 4),
+    );
   }
 
   Future<void> _loadUserProfile() async {
@@ -53,12 +101,11 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
         });
       }
     } catch (e) {
-      debugPrint("Error loading avatar: $e");
+      debugPrint('Error loading avatar: $e');
     }
   }
 
   Future<void> _initVoice() async {
-    // Just initializes the engine, no speaking
     await _voiceService.initTts();
   }
 
@@ -68,22 +115,22 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
         title: const Text(
-          "Voice Language",
-          style:
-              TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+          'Voice Language',
+          style: TextStyle(
+              fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
           textAlign: TextAlign.center,
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildLanguageOption(
-                "English", VoiceService.english, "Language set to English."),
+                'English', VoiceService.english, 'Language set to English.'),
             const Divider(height: 1),
             _buildLanguageOption(
-                "नेपाली", VoiceService.nepali, "भाषा नेपालीमा मिलाइएको छ।"),
+                'नेपाली', VoiceService.nepali, 'भाषा नेपालीमा मिलाइएको छ।'),
             const Divider(height: 1),
             _buildLanguageOption(
-                "हिंदी", VoiceService.hindi, "भाषा हिंदी में सेट की गई है।"),
+                'हिंदी', VoiceService.hindi, 'भाषा हिंदी में सेट की गई है।'),
           ],
         ),
       ),
@@ -93,9 +140,11 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   Widget _buildLanguageOption(
       String label, String code, String confirmationText) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
       title: Text(label,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          style:
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       trailing: _voiceService.currentLanguage == code
           ? const Icon(Icons.check_circle, color: Color(0xFF6366F1))
           : null,
@@ -104,14 +153,18 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
         if (!mounted) return;
         Navigator.pop(context);
         setState(() {});
-
-        // Only speaks the confirmation that language was changed
         _voiceService.speakWithSavedLanguage(confirmationText);
       },
     );
   }
 
-  // Removed _playCurrentScreenInstructions call from logic to keep boot silent
+  Future<void> _loadUnreadCount() async {
+    try {
+      final count = await Supabase.instance.client
+          .rpc('get_unread_notification_count');
+      if (mounted) setState(() => _unreadCount = (count as int?) ?? 0);
+    } catch (_) {}
+  }
 
   Future<void> _checkForActiveCall() async {
     final user = Supabase.instance.client.auth.currentUser;
@@ -125,6 +178,18 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     }
   }
 
+  // ── DEBUG ONLY ────────────────────────────────────────────────────────────
+  // Opens the policy debug screen. Only visible in debug builds.
+  // Long-press the avatar to open — invisible to end users.
+  void _openDebugScreen() {
+    if (!kDebugMode) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PolicyDebugScreen()),
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     const Color brandBlue = Color(0xFF6366F1);
@@ -132,22 +197,44 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          _voiceService.stop();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AiAssistantScreen(
-                languageCode: _voiceService.currentLanguage,
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // DEBUG ONLY — remove this entire block before production release
+          if (kDebugMode)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: FloatingActionButton.small(
+                heroTag: 'debug_fab',
+                backgroundColor: Colors.red.shade600,
+                tooltip: 'Policy debug',
+                onPressed: _openDebugScreen,
+                child: const Icon(Icons.bug_report,
+                    color: Colors.white, size: 18),
               ),
             ),
-          );
-        },
-        backgroundColor: brandBlue,
-        icon: const Icon(Icons.auto_awesome, color: Colors.white),
-        label: const Text("AI Assistant",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          // END DEBUG
+          FloatingActionButton.extended(
+            heroTag: 'ai_fab',
+            onPressed: () {
+              _voiceService.stop();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AiAssistantScreen(
+                    languageCode: _voiceService.currentLanguage,
+                  ),
+                ),
+              );
+            },
+            backgroundColor: brandBlue,
+            icon: const Icon(Icons.auto_awesome, color: Colors.white),
+            label: const Text('AI Assistant',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -169,26 +256,29 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
               const SizedBox(height: 25),
               _buildSearchBar(brandBlue),
               const SizedBox(height: 25),
-              const _SectionHeader(title: "Quick Categories"),
+              _StaggeredSection(delay: 0,   child: const _SectionHeader(title: 'Quick Categories')),
               const SizedBox(height: 16),
-              QuickCategories(brandBlue: brandBlue),
+              _StaggeredSection(delay: 80,  child: QuickCategories(brandBlue: brandBlue)),
               const SizedBox(height: 30),
-              const _SectionHeader(title: "Special Offers"),
+              _StaggeredSection(delay: 160, child: const _SectionHeader(title: 'Special Offers')),
               const SizedBox(height: 16),
-              const SpecialOffers(),
+              _StaggeredSection(delay: 240, child: const SpecialOffers()),
               const SizedBox(height: 30),
-              _SectionHeader(
-                title: "Insurance & Subscription",
-                onSeeAllTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const AllPlansScreen()),
-                  );
-                },
+              _StaggeredSection(
+                delay: 320,
+                child: _SectionHeader(
+                  title: 'Insurance & Subscription',
+                  onSeeAllTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const AllPlansScreen()),
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 16),
-              const InsuranceSubscription(),
+              _StaggeredSection(delay: 400, child: const InsuranceSubscription()),
               const SizedBox(height: 40),
             ],
           ),
@@ -201,17 +291,18 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        // Long-press avatar to open debug screen in debug builds
         GestureDetector(
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (context) => const PatientSettings())),
-          child: CircleAvatar(
+          onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const PatientSettings())),
+          onLongPress: kDebugMode ? _openDebugScreen : null,
+          child: SafeAvatar(
+            url: _avatarUrl,
             radius: 20,
+            fallbackIcon: Icons.person_outline,
             backgroundColor: const Color(0xFFE0E7FF),
-            backgroundImage:
-                _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
-            child: _avatarUrl == null
-                ? Icon(Icons.person_outline, color: brandBlue, size: 22)
-                : null,
           ),
         ),
         Expanded(
@@ -228,7 +319,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
               ),
               const SizedBox(width: 10),
               const Text(
-                "Swasthall",
+                'Swasthall',
                 style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
@@ -246,8 +337,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                   color: Color(0xFF6366F1), size: 24),
               visualDensity: VisualDensity.compact,
             ),
-            _buildAppBarIcon(Icons.notifications_none_outlined,
-                badgeCount: "3"),
+            _buildAppBarIcon(Icons.notifications_none_outlined, badgeCount: _unreadCount > 0 ? _unreadCount.toString() : null),
           ],
         ),
       ],
@@ -255,26 +345,66 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   }
 
   Widget _buildSearchBar(Color brandBlue) {
-    return Container(
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 15,
-              offset: const Offset(0, 5))
-        ],
-      ),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: "Search medicines, doctors...",
-          hintStyle: TextStyle(color: Colors.grey.shade400),
-          prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
-          suffixIcon: Icon(Icons.tune_rounded, color: brandBlue),
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide.none),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ConsultationSearch()),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 15,
+                offset: const Offset(0, 5))
+          ],
+        ),
+        child: AbsorbPointer(
+          absorbing: !_isListening,
+          child: TextField(
+            controller: _homeSearchController,
+            style: const TextStyle(fontSize: 15),
+            decoration: InputDecoration(
+              hintText: _isListening
+                  ? 'Listening... speak a name'
+                  : 'Search medicines, doctors...',
+              hintStyle: TextStyle(
+                color: _isListening ? brandBlue : Colors.grey.shade400,
+                fontSize: 14,
+              ),
+              prefixIcon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: _isListening
+                    ? const Icon(Icons.mic,
+                        color: Colors.redAccent, key: ValueKey('mic_on'))
+                    : const Icon(Icons.search_rounded,
+                        color: Colors.grey, key: ValueKey('search')),
+              ),
+              suffixIcon: kIsWeb ? null : GestureDetector(
+                onTap: _toggleHomeListening,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _isListening ? Colors.redAccent : brandBlue,
+                  ),
+                  child: Icon(
+                    _isListening ? Icons.mic : Icons.mic_none,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none),
+            ),
+          ),
         ),
       ),
     );
@@ -284,27 +414,31 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-            colors: [brandBlue, brandBlue.withValues(alpha: 0.8)]),
+        gradient: LinearGradient(colors: [
+          brandBlue,
+          brandBlue.withValues(alpha: 0.8)
+        ]),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         children: [
           const CircleAvatar(
               backgroundColor: Colors.white24,
-              child: Icon(Icons.videocam_rounded, color: Colors.white)),
+              child:
+                  Icon(Icons.videocam_rounded, color: Colors.white)),
           const SizedBox(width: 15),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Active Session",
+                Text('Active Session',
                     style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 16)),
-                Text("Tap to rejoin call",
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                Text('Tap to rejoin call',
+                    style:
+                        TextStyle(color: Colors.white70, fontSize: 13)),
               ],
             ),
           ),
@@ -317,7 +451,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
               elevation: 0,
             ),
             onPressed: _resumeCall,
-            child: const Text("Rejoin",
+            child: const Text('Rejoin',
                 style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
@@ -326,21 +460,18 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   }
 
   void _resumeCall() {
-    if (_activeBooking == null) return;
-    final roomId =
-        SupabaseHandler.getNormalizedRoomId(_activeBooking!['id'].toString());
-    _voiceService.stop();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PatientVideoCallPage(
-          callID: roomId,
-          userID: Supabase.instance.client.auth.currentUser!.id,
-          userName: Supabase.instance.client.auth.currentUser
-                  ?.userMetadata?['full_name'] ??
-              "Patient",
-          professionalName: "Medical Specialist",
+    // NEVER push PatientVideoCallPage (raw ZegoUIKitPrebuiltCall) here.
+    // The correct flow: doctor sends invitation via service.send(),
+    // ZEGO delivers it to patient, ZEGO's own page manager opens the
+    // call screen automatically via requireConfig in main.dart.
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Your doctor will call you shortly. Open your booking to receive the call.',
         ),
+        duration: Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -349,7 +480,11 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     return Stack(
       children: [
         IconButton(
-          onPressed: () {},
+          onPressed: () {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => NotificationScreen(userRole: 'patient')));
+            setState(() => _unreadCount = 0);
+          },
           icon: Icon(icon, size: 26, color: const Color(0xFF1F2937)),
         ),
         if (badgeCount != null)
@@ -390,11 +525,55 @@ class _SectionHeader extends StatelessWidget {
         if (onSeeAllTap != null)
           TextButton(
             onPressed: onSeeAllTap,
-            child: const Text("See All",
+            child: const Text('See All',
                 style: TextStyle(
-                    color: Color(0xFF6366F1), fontWeight: FontWeight.bold)),
+                    color: Color(0xFF6366F1),
+                    fontWeight: FontWeight.bold)),
           ),
       ],
     );
   }
+}
+// ── _StaggeredSection — fade+slide entrance for home page sections ─────────
+class _StaggeredSection extends StatefulWidget {
+  final Widget child;
+  final int delay; // milliseconds
+
+  const _StaggeredSection({required this.child, required this.delay});
+
+  @override
+  State<_StaggeredSection> createState() => _StaggeredSectionState();
+}
+
+class _StaggeredSectionState extends State<_StaggeredSection>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _opacity;
+  late Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
+    _opacity = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _slide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    Future.delayed(Duration(milliseconds: widget.delay), () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+        opacity: _opacity,
+        child: SlideTransition(position: _slide, child: widget.child),
+      );
 }

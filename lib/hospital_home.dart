@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'notification_screen.dart';
+import 'hospital_insurance_requests_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'hospital_profile.dart';
 import 'doctor_detail.dart';
+import 'widgets/safe_network_image.dart';
 
 class HospitalHomeScreen extends StatefulWidget {
   const HospitalHomeScreen({super.key});
@@ -14,6 +17,7 @@ class HospitalHomeScreen extends StatefulWidget {
 class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
   final supabase = Supabase.instance.client;
   final Color brandBlue = const Color(0xFF6366F1);
+  int _unreadCount = 0;
 
   // Streams
   Stream<List<Map<String, dynamic>>>? _staffStream;
@@ -28,6 +32,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUnreadCount();
     _initStreams();
   }
 
@@ -104,6 +109,14 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
     }).toList();
   }
 
+  Future<void> _loadUnreadCount() async {
+    try {
+      final count = await Supabase.instance.client
+          .rpc('get_unread_notification_count');
+      if (mounted) setState(() => _unreadCount = (count as int?) ?? 0);
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_profileStream == null || _staffStream == null) {
@@ -167,66 +180,88 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
-      leadingWidth: 70,
+      leadingWidth: 56,
       leading: StreamBuilder<Map<String, dynamic>>(
         stream: _profileStream,
         builder: (context, snapshot) {
           final avatarUrl = snapshot.data?['avatar_url'];
           return Padding(
-            padding: const EdgeInsets.only(left: 16),
+            padding: const EdgeInsets.only(left: 12),
             child: GestureDetector(
               onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
                       builder: (context) => const HospitalProfileScreen())),
-              child: CircleAvatar(
-                backgroundColor: Colors.grey.shade200,
-                backgroundImage:
-                    avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                child: avatarUrl == null
-                    ? const Icon(Icons.person, color: Colors.grey)
-                    : null,
+              child: SafeAvatar(
+                url: avatarUrl,
+                radius: 20,
+                fallbackIcon: Icons.person_outline,
+                backgroundColor: const Color(0xFFE0E7FF),
               ),
             ),
           );
         },
       ),
-      title: StreamBuilder<Map<String, dynamic>>(
-        stream: _profileStream,
-        builder: (context, snapshot) {
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: brandBlue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(Icons.medical_services, color: brandBlue, size: 20),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  snapshot.data?['full_name'] ?? "Hospital Admin",
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Color(0xFF1E293B),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18),
-                ),
-              ),
-            ],
-          );
-        },
+      // ── Logo + wordmark — matches patient home appbar ──
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/swasthall_icon.png',
+            height: 32,
+            width: 32,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) =>
+                Icon(Icons.health_and_safety, color: brandBlue, size: 28),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            "Swasthall",
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1F2937),
+              letterSpacing: -0.5,
+            ),
+          ),
+        ],
       ),
+      centerTitle: true,
       actions: [
-        IconButton(
-          icon: const Icon(Icons.notifications_none_outlined,
-              color: Colors.pinkAccent),
-          onPressed: () {},
+        Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_none_outlined,
+                  color: Color(0xFF1F2937), size: 26),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => const NotificationScreen(userRole: 'hospital')));
+                setState(() => _unreadCount = 0);
+              },
+            ),
+            if (_unreadCount > 0)
+              Positioned(
+                right: 8, top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                      color: Colors.red, shape: BoxShape.circle),
+                  child: Text(_unreadCount.toString(),
+                      style: const TextStyle(color: Colors.white,
+                          fontSize: 8, fontWeight: FontWeight.bold)),
+                ),
+              ),
+          ],
         ),
-        const SizedBox(width: 8),
+        IconButton(
+          icon: const Icon(Icons.request_page_outlined,
+              color: Color(0xFF6366F1), size: 24),
+          tooltip: 'Insurance Requests',
+          onPressed: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => const HospitalInsuranceRequestsScreen())),
+        ),
+        const SizedBox(width: 4),
       ],
     );
   }
@@ -318,16 +353,55 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                   return createdAt.isAfter(_startDate);
                 }).toList();
 
-                if (filteredData.isEmpty) {
-                  return const Center(
-                      child: Text("No data for this period",
-                          style: TextStyle(color: Colors.grey)));
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.bar_chart_rounded,
+                          size: 36, color: Colors.grey.shade300),
+                      const SizedBox(height: 8),
+                      Text("Could not load revenue",
+                          style: TextStyle(color: Colors.grey.shade400)),
+                    ]),
+                  );
                 }
 
+                if (filteredData.isEmpty) {
+                  return Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.bar_chart_rounded,
+                          size: 36, color: Colors.grey.shade300),
+                      const SizedBox(height: 8),
+                      Text("No data for this period",
+                          style: TextStyle(color: Colors.grey.shade400)),
+                    ]),
+                  );
+                }
+
+                // BUG FIX 1: amount could be null or String — safe parse
                 final spots = filteredData.asMap().entries.map((e) {
-                  return FlSpot(
-                      e.key.toDouble(), (e.value['amount'] as num).toDouble());
+                  final raw = e.value['amount'];
+                  final amount = (raw is num)
+                      ? raw.toDouble()
+                      : double.tryParse(raw?.toString() ?? '') ?? 0.0;
+                  return FlSpot(e.key.toDouble(), amount);
                 }).toList();
+
+                // BUG FIX 2: LineChart crashes with only 1 point — show total instead
+                if (spots.length == 1) {
+                  return Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text(
+                        "NPR ${filteredData.first['amount']?.toString() ?? '0'}",
+                        style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: brandBlue),
+                      ),
+                      Text("Total revenue",
+                          style: TextStyle(color: Colors.grey.shade400)),
+                    ]),
+                  );
+                }
 
                 return LineChart(
                   LineChartData(
@@ -400,15 +474,11 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircleAvatar(
+                  SafeAvatar(
+                    url: doc['avatar_url']?.toString(),
                     radius: 32,
+                    name: doc['name']?.toString(),
                     backgroundColor: Colors.grey.shade100,
-                    backgroundImage: doc['avatar_url'] != null
-                        ? NetworkImage(doc['avatar_url'])
-                        : null,
-                    child: doc['avatar_url'] == null
-                        ? const Icon(Icons.person, color: Colors.grey)
-                        : null,
                   ),
                   const SizedBox(height: 8),
                   Text(doc['name'] ?? "Doctor",
@@ -492,20 +562,16 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
           ),
         ),
         Positioned(
-          top: -42, // Adjusted for larger radius
+          top: -42,
           child: Container(
             padding: const EdgeInsets.all(4),
             decoration: const BoxDecoration(
                 color: Color(0xFFF8FAFC), shape: BoxShape.circle),
-            child: CircleAvatar(
-              radius: 42, // INCREASED SIZE
+            child: SafeAvatar(
+              url: member['avatar_url']?.toString(),
+              radius: 42,
+              name: member['name']?.toString(),
               backgroundColor: Colors.white,
-              backgroundImage: member['avatar_url'] != null
-                  ? NetworkImage(member['avatar_url'])
-                  : null,
-              child: member['avatar_url'] == null
-                  ? const Icon(Icons.person, size: 40, color: Colors.grey)
-                  : null,
             ),
           ),
         ),

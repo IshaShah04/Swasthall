@@ -24,6 +24,7 @@ class _LoginPageState extends State<LoginPage>
   bool _isLoading = false;
   bool _isPhoneLogin = false;
   bool _isOtpSent = false;
+  bool _passwordVisible = false;
 
   // ── BRAND COLORS (matched to app theme) ────────────────────────────────
   static const Color _brandColor  = Color(0xFF6366F1);
@@ -73,7 +74,6 @@ class _LoginPageState extends State<LoginPage>
 
   Future<void> _handleLogin() async {
     if (_isLoading) return;
-    debugPrint("DEBUG: 🚀 Login Process Started");
     setState(() => _isLoading = true);
 
     try {
@@ -112,7 +112,6 @@ class _LoginPageState extends State<LoginPage>
       }
 
       if (res.user != null) {
-        debugPrint("DEBUG: ✅ LOGIN SUCCESS. User ID: ${res.user!.id}");
         await _supabase.auth.refreshSession();
 
         final profileData = await _supabase
@@ -126,15 +125,14 @@ class _LoginPageState extends State<LoginPage>
             res.user!.userMetadata?['role'] ??
             'patient';
 
-        debugPrint("DEBUG: Finalizing session for role: $userRole");
 
         try {
           await AccountService.saveCurrentAccount().timeout(
             const Duration(seconds: 3),
-            onTimeout: () => debugPrint("DEBUG: ⚠️ AccountService timeout"),
+            onTimeout: () {},
           );
-        } catch (e) {
-          debugPrint("DEBUG: ❌ AccountService Error: $e");
+        } catch (_) {
+          // AccountService failure is non-fatal — session is already valid.
         }
 
         if (mounted) {
@@ -148,7 +146,6 @@ class _LoginPageState extends State<LoginPage>
         }
       }
     } catch (e) {
-      debugPrint("DEBUG: ❌ Login Error: $e");
       _showMessage("Login Failed: ${e.toString()}", isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -156,16 +153,68 @@ class _LoginPageState extends State<LoginPage>
   }
 
   Future<void> _handleForgotPassword() async {
-    if (_emailController.text.isEmpty) {
-      _showMessage("Please enter your email first", isError: true);
+    // If email field already has a value use it directly
+    String email = _emailController.text.trim();
+
+    // Otherwise show a dialog to enter email
+    if (email.isEmpty) {
+      final TextEditingController dialogEmailController = TextEditingController();
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Reset Password', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Enter your registered email address and we will send you a reset link.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: dialogEmailController,
+                keyboardType: TextInputType.emailAddress,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Email Address',
+                  prefixIcon: const Icon(Icons.email_outlined, color: _brandColor),
+                  filled: true,
+                  fillColor: _bgColor,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brandColor, width: 2)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: _brandColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              child: const Text('Send Link'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      email = dialogEmailController.text.trim();
+    }
+
+    if (email.isEmpty) {
+      _showMessage('Please enter your email address', isError: true);
       return;
     }
+
     try {
-      await _supabase.auth
-          .resetPasswordForEmail(_emailController.text.trim());
-      _showMessage("Password reset link sent to your email.");
+      setState(() => _isLoading = true);
+      await _supabase.auth.resetPasswordForEmail(email);
+      _showMessage('Password reset link sent to $email');
     } catch (e) {
-      _showMessage("Error: ${e.toString()}", isError: true);
+      _showMessage('Error: ${e.toString()}', isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -512,12 +561,22 @@ class _LoginPageState extends State<LoginPage>
   }) {
     return TextField(
       controller: controller,
-      obscureText: isPassword,
+      obscureText: isPassword && !_passwordVisible,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, color: _brandColor),
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(
+                  _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                  color: Colors.grey,
+                  size: 20,
+                ),
+                onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
+              )
+            : null,
         filled: true,
         fillColor: _bgColor,
         border: OutlineInputBorder(

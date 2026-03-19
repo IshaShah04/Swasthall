@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'widgets/safe_network_image.dart';
 // Note: dart:io is removed for Web compatibility
 
 class PharmacistSetting extends StatefulWidget {
@@ -25,52 +26,60 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
   TimeOfDay endTime = const TimeOfDay(hour: 18, minute: 0);
 
   Future<void> _pickAndUploadImage() async {
-    final picker = ImagePicker();
-    final messenger = ScaffoldMessenger.of(context);
+  final picker = ImagePicker();
+  final messenger = ScaffoldMessenger.of(context);
 
-    // imageQuality 50 keeps the file size small for faster web/mobile uploads
-    final XFile? image =
-        await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
-    if (image == null) return;
+  final XFile? image =
+      await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+  if (image == null) return;
 
-    setState(() => _isUploading = true);
+  if (!mounted) return;
+  setState(() => _isUploading = true);
 
-    try {
-      // UNIVERSAL LOGIC: Use readAsBytes instead of File(path)
-      final imageBytes = await image.readAsBytes();
-      final String userId =
-          widget.userData?['id'] ?? _supabase.auth.currentUser!.id;
-      final String fileExt = image.path.split('.').last;
-      final String path = 'avatars/avatar_$userId.$fileExt';
+  try {
+    final imageBytes = await image.readAsBytes();
+    final String userId =
+        widget.userData?['id'] ?? _supabase.auth.currentUser!.id;
+    final String fileExt = image.path.split('.').last;
 
-      // Use uploadBinary for cross-platform compatibility
-      await _supabase.storage.from('avatars').uploadBinary(
-            path,
-            imageBytes,
-            fileOptions:
-                FileOptions(contentType: 'image/$fileExt', upsert: true),
-          );
+    // Must match SQL policy: {user_id}/avatar.ext
+    final String path = '$userId/avatar.$fileExt';
 
-      final String imageUrl =
-          _supabase.storage.from('avatars').getPublicUrl(path);
+    await _supabase.storage.from('avatars').uploadBinary(
+          path,
+          imageBytes,
+          fileOptions: FileOptions(
+            contentType: 'image/$fileExt',
+            upsert: true,
+          ),
+        );
 
-      await _supabase
-          .from('profiles')
-          .update({'avatar_url': imageUrl}).eq('id', userId);
+    final String imageUrl = _supabase.storage.from('avatars').getPublicUrl(path);
+    final String cacheBusterUrl =
+        '$imageUrl?t=${DateTime.now().millisecondsSinceEpoch}';
 
-      if (!mounted) return;
-      widget.onRefresh();
+    await _supabase
+        .from('profiles')
+        .update({'avatar_url': cacheBusterUrl}).eq('id', userId);
+
+    if (!mounted) return;
+    widget.onRefresh();
+    messenger.showSnackBar(
+      const SnackBar(content: Text("Profile image updated!")),
+    );
+  } catch (e) {
+    if (mounted) {
       messenger.showSnackBar(
-          const SnackBar(content: Text("Profile image updated!")));
-    } catch (e) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(
-            content: Text("Upload failed: $e"), backgroundColor: Colors.red));
-      }
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
+        SnackBar(
+          content: Text("Upload failed: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
+  } finally {
+    if (mounted) setState(() => _isUploading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -125,20 +134,21 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
             child: Stack(
               alignment: Alignment.bottomRight,
               children: [
-                CircleAvatar(
+                SafeAvatar(
+                  url: (avatarUrl != null && avatarUrl.toString().isNotEmpty)
+                      ? avatarUrl.toString()
+                      : null,
                   radius: 50,
+                  fallbackIcon: Icons.person,
                   backgroundColor: themeColor.withValues(alpha: 0.1),
-                  backgroundImage:
-                      (avatarUrl != null && avatarUrl.toString().isNotEmpty)
-                          ? NetworkImage(avatarUrl)
-                          : null,
-                  child: (avatarUrl == null || avatarUrl.toString().isEmpty) &&
-                          !_isUploading
-                      ? Icon(Icons.person, size: 50, color: themeColor)
-                      : (_isUploading
-                          ? const CircularProgressIndicator()
-                          : null),
                 ),
+                if (_isUploading)
+                  const Positioned.fill(
+                    child: CircleAvatar(
+                      backgroundColor: Colors.black38,
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                  ),
                 GestureDetector(
                   onTap: _isUploading ? null : _pickAndUploadImage,
                   child: CircleAvatar(
@@ -224,12 +234,17 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
     );
   }
 
+  Stream<List<Map<String, dynamic>>>? _slotsStream;
+
   Widget _buildLiveSlotStream() {
     final providerId = widget.userData?['id'] ?? _supabase.auth.currentUser?.id;
+    if (providerId == null) return const SizedBox.shrink();
+    _slotsStream ??= _supabase
+        .from('availability_slots')
+        .stream(primaryKey: ['id'])
+        .eq('provider_id', providerId);
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _supabase
-          .from('availability_slots')
-          .stream(primaryKey: ['id']).eq('provider_id', providerId!),
+      stream: _slotsStream,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(

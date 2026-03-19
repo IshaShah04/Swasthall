@@ -18,9 +18,6 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
 #.vscode/
 
 # Flutter/Dart/Pub related
@@ -44,6 +41,44 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Environment and secrets (use env.example.json as template)
+# ── Environment and secrets ────────────────────────────────────────────────
 env.json
+
+# ── Android secrets — NEVER commit ────────────────────────────────────────
 android/app/google-services.json
+android/key.properties
+android/*.jks
+android/*.keystore
+*.jks
+*.keystore
+
+# ── iOS secrets — NEVER commit ────────────────────────────────────────────
+ios/Runner/GoogleService-Info.plist
+ios/Runner/GoogleService-Info*.plist
+
+# ── Supabase local temp files — contain real project ref + DB URLs ─────────
+supabase/.temp/
+
+# ── Environment config — NEVER commit secrets ─────────────────────────────
+.env
+.env.*
+lib/config/env_config_local.dart
+
+# ── Flutter assets env file — use --dart-define instead ───────────────────
+assets/env.json
+web/env.json
+
+# ── Crashlytics upload symbol scripts (auto-generated, not needed in git) ──
+ios/Pods/
+ios/Podfile.lock
+
+# ── Node.js (docx generation scripts) ─────────────────────────────────────
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# ── Build artifacts — never commit release builds ─────────────────────────
+*.ipa
+*.aab
+*.apk
+swasthall_ready_files/

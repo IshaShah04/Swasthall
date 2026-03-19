@@ -30,12 +30,12 @@ dependencies:
   
   # Utilities & Media
   speech_to_text: ^7.3.0
-  url_launcher: ^6.3.1
+  url_launcher: ^6.3.2
   cached_network_image: ^3.4.1
   meta: ^1.17.0
   
   # ZEGO Cloud & Backend
-  zego_uikit_prebuilt_call: ^4.22.3
+  zego_uikit_prebuilt_call: ^4.22.2
   permission_handler: ^12.0.1
   supabase_flutter: ^2.12.0
   intl: ^0.20.2
@@ -56,13 +56,17 @@ dependencies:
   fl_chart: ^1.1.1
   connectivity_plus: ^6.1.5
   shared_preferences: ^2.5.4
-  translator: ^1.0.4+1
   flutter_secure_storage: ^10.0.0
   live_activities: ^2.4.6
   home_widget: ^0.9.0
   flutter_native_splash: ^2.4.7
   firebase_core: ^4.5.0
   firebase_messaging: ^16.1.2
+  app_links: ^6.4.1
+  google_mlkit_translation: ^0.13.1
+  uuid: ^4.5.3
+  timeago: ^3.7.1
+  firebase_crashlytics: ^5.0.8
 
 dev_dependencies:
   flutter_test:
@@ -96,7 +100,11 @@ flutter:
   uses-material-design: true
   assets:
     - assets/data/nepal_medicines.json
+    - assets/data/nepal_medicines_ne.json
+    - assets/data/nepal_medicines_hi.json
     - env.json
     - assets/swasthall_logo.png
     - assets/swasthall_icon.png
     - assets/swasthall_logo_white.png
+    - assets/alarm.mp3
+    - assets/swasthall_ringtone.mp3

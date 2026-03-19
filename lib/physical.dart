@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'supabase_handler.dart';
 import 'shared_widgets.dart';
-import 'services/queue_widget_service.dart'; // Import your new service
+import 'services/queue_widget_service.dart';
 
 class PhysicalQueuePage extends StatefulWidget {
   final String userRole;
@@ -20,45 +21,69 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
   String? _providerId;
   bool _isInitializing = true;
 
+  late final Stream<List<Map<String, dynamic>>> _bookingsStream;
+
   @override
   void initState() {
     super.initState();
     _initializeRoleContext();
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    _bookingsStream = SupabaseHandler().client
+        .from('bookings')
+        .stream(primaryKey: ['id'])
+        .eq('appointment_date', today)
+        .order('queue_number', ascending: true);
   }
 
   Future<void> _initializeRoleContext() async {
     final user = SupabaseHandler().client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() => _isInitializing = false);
+      return;
+    }
 
     try {
-      final data = await SupabaseHandler()
-          .client
-          .from('nurse_staff_unified')
-          .select('id, assigned_doctor_id')
-          .or('doctor_email.eq.${user.email},nurse_email.eq.${user.email}')
-          .maybeSingle();
+      if (widget.userRole.toLowerCase() == "nurse") {
+        final data = await SupabaseHandler()
+            .client
+            .from('nurse_staff_unified')
+            .select('assigned_doctor_id')
+            .eq('nurse_email', user.email!)
+            .maybeSingle();
 
-      if (data != null && mounted) {
-        setState(() {
-          _providerId = (widget.userRole.toLowerCase() == "nurse")
-              ? data['assigned_doctor_id']
-              : data['id'];
-          _isInitializing = false;
-        });
+        if (mounted) {
+          setState(() {
+            _providerId = data?['assigned_doctor_id']?.toString();
+            _isInitializing = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _providerId = user.id.toString();
+            _isInitializing = false;
+          });
+        }
       }
     } catch (e) {
       debugPrint("Context Error: $e");
-      if (mounted) setState(() => _isInitializing = false);
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
     }
   }
 
-  /// Refreshes the External Widget Data based on the current live list
   void _syncWidget(List<Map<String, dynamic>> activeItems) {
     if (activeItems.isNotEmpty) {
       final topPatient = activeItems.first;
+      final dynamic rawQueue = topPatient['queue_number'];
+      final int queueNumber = rawQueue is int
+          ? rawQueue
+          : int.tryParse(rawQueue?.toString() ?? '0') ?? 0;
+
       QueueWidgetService.updateLiveWidget(
         patientName: topPatient['patient_name'] ?? "Unknown",
-        queueNum: "1", // This represents the person currently 'up next'
+        queueNum: queueNumber.toString(),
         bookingId: topPatient['id'].toString(),
       );
     } else {
@@ -71,21 +96,20 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
 
     if (mounted) {
       if (success) {
-        // We don't need to manually call _syncWidget here because 
-        // the StreamBuilder will detect the DB change and trigger it automatically.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Patient marked as $status"),
-            backgroundColor: status.toLowerCase() == 'completed'
-                ? Colors.green
-                : Colors.orange,
+            backgroundColor:
+                status.toLowerCase() == 'completed' ? Colors.green : Colors.orange,
             behavior: SnackBarBehavior.floating,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text("Action failed"), backgroundColor: Colors.red),
+            content: Text("Action failed"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -111,7 +135,10 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
           title: const Text(
             "Doctor Professional Suite",
             style: TextStyle(
-                color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
           ),
           bottom: TabBar(
             indicatorColor: brandIndigo,
@@ -142,11 +169,8 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
   }
 
   Widget _buildQueueList({required bool isActiveTab}) {
-    final supabase = SupabaseHandler().client;
-
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: supabase.from('bookings').stream(
-          primaryKey: ['id']).order('appointment_time', ascending: true),
+      stream: _bookingsStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -154,13 +178,16 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
 
         final allItems = snapshot.data ?? [];
         final filteredItems = allItems.where((e) {
-          final isPhysical = e['type']?.toString().toLowerCase() == 'physical';
-          final isMyQueue = e['provider_id'] == _providerId;
+          final isPhysical =
+              e['type']?.toString().trim().toLowerCase() == 'physical';
+          final isMyQueue =
+              e['provider_id']?.toString() == _providerId?.toString();
           final status = e['status']?.toString().toLowerCase() ?? '';
 
           bool matchesTab;
           if (isActiveTab) {
-            matchesTab = ['confirmed', 'scheduled', 'pending', 'in_progress'].contains(status);
+            matchesTab = ['confirmed', 'scheduled', 'pending', 'in_progress']
+                .contains(status);
           } else {
             matchesTab = ['completed', 'skipped', 'absent'].contains(status);
           }
@@ -169,11 +196,14 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
           final matchesSearch = name.contains(_searchQuery.toLowerCase());
 
           return isPhysical && isMyQueue && matchesTab && matchesSearch;
-        }).toList();
+        }).toList()
+          ..sort((a, b) {
+            final int qa = int.tryParse(a['queue_number']?.toString() ?? '0') ?? 0;
+            final int qb = int.tryParse(b['queue_number']?.toString() ?? '0') ?? 0;
+            return qa.compareTo(qb);
+          });
 
-        // BRIDGE LOGIC: Update the external widget if we are on the Live Tab
         if (isActiveTab && _searchQuery.isEmpty) {
-          // We only sync if there's no active search to avoid flickering
           _syncWidget(filteredItems);
         }
 
@@ -184,15 +214,21 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
           itemCount: filteredItems.length,
           itemBuilder: (context, index) {
             final patient = filteredItems[index];
-            return _buildPatientCard(patient, index + 1, isLive: isActiveTab);
+            final int queueNum =
+                int.tryParse(patient['queue_number']?.toString() ?? '0') ?? 0;
+
+            return _buildPatientCard(patient, queueNum, isLive: isActiveTab);
           },
         );
       },
     );
   }
 
-  Widget _buildPatientCard(Map<String, dynamic> patient, int queueNum,
-      {required bool isLive}) {
+  Widget _buildPatientCard(
+    Map<String, dynamic> patient,
+    int queueNum, {
+    required bool isLive,
+  }) {
     final status = patient['status']?.toString().toUpperCase() ?? "";
 
     return Container(
@@ -204,9 +240,10 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
         border: Border.all(color: Colors.grey.shade100),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4))
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
         ],
       ),
       child: Row(
@@ -215,21 +252,26 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
           const SizedBox(width: 16),
           Expanded(
             child: InkWell(
-              onTap: () => viewPatientHistory(context, patient['user_id'] ?? '',
-                  patient['patient_name'] ?? 'Patient'),
+              onTap: () => viewPatientHistory(
+                context,
+                (patient['patient_id'] ?? patient['user_id'] ?? '').toString(),
+                patient['patient_name'] ?? 'Patient',
+                userRole: widget.userRole,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     patient['patient_name'] ?? "Unknown Patient",
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Color(0xFF1E293B)),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF1E293B),
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    patient['patient_phone'] ?? "No contact info",
+                    patient['phone_number'] ?? "No contact info",
                     style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                   ),
                 ],
@@ -244,7 +286,9 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
                   color: Colors.orange,
                   label: "Skip",
                   onTap: () => _updateAppointmentStatus(
-                      patient['id'].toString(), 'skipped'),
+                    patient['id'].toString(),
+                    'skipped',
+                  ),
                 ),
                 const SizedBox(width: 12),
                 _actionCircleButton(
@@ -252,7 +296,9 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
                   color: Colors.green,
                   label: "Done",
                   onTap: () => _updateAppointmentStatus(
-                      patient['id'].toString(), 'completed'),
+                    patient['id'].toString(),
+                    'completed',
+                  ),
                 ),
               ],
             )
@@ -264,26 +310,33 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
   }
 
   Widget _buildQueueIndicator(int num, bool isLive, String status) {
-    Color bgColor = isLive ? brandIndigo.withValues(alpha: 0.1) : Colors.grey.shade100;
-    Color txtColor = isLive ? brandIndigo : Colors.grey.shade400;
+    final Color bgColor =
+        isLive ? brandIndigo.withValues(alpha: 0.1) : Colors.grey.shade100;
+    final Color txtColor = isLive ? brandIndigo : Colors.grey.shade400;
 
     return Container(
       width: 48,
       height: 48,
       decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
       child: Center(
-        child: Text("#$num",
-            style: TextStyle(
-                color: txtColor, fontWeight: FontWeight.bold, fontSize: 15)),
+        child: Text(
+          "#$num",
+          style: TextStyle(
+            color: txtColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _actionCircleButton(
-      {required IconData icon,
-      required Color color,
-      required String label,
-      required VoidCallback onTap}) {
+  Widget _actionCircleButton({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       child: Column(
@@ -291,16 +344,21 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
         children: [
           Icon(icon, color: color, size: 28),
           const SizedBox(height: 2),
-          Text(label,
-              style: TextStyle(
-                  color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildStatusBadge(String status) {
-    bool isCompleted = status == "COMPLETED";
+    final bool isCompleted = status == "COMPLETED";
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -355,17 +413,21 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-              isActiveTab
-                  ? Icons.assignment_turned_in_rounded
-                  : Icons.history_rounded,
-              size: 60,
-              color: Colors.grey.shade200),
+            isActiveTab
+                ? Icons.assignment_turned_in_rounded
+                : Icons.history_rounded,
+            size: 60,
+            color: Colors.grey.shade200,
+          ),
           const SizedBox(height: 16),
-          Text(isActiveTab ? "No Active Queue" : "No Records Found",
-              style: TextStyle(
-                  color: Colors.grey.shade400,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold)),
+          Text(
+            isActiveTab ? "No Active Queue" : "No Records Found",
+            style: TextStyle(
+              color: Colors.grey.shade400,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );

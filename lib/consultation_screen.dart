@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'widgets/safe_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'consultation_description.dart';
 import 'consultation_search.dart';
 import 'booking_success_screen.dart';
 import 'services/voice_service.dart';
+import 'services/app_cache.dart';
+import 'services/earliest_slot_service.dart';
 
 class ConsultationScreen extends StatefulWidget {
   final String patientId;
@@ -18,6 +21,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   final VoiceService _voiceService = VoiceService();
 
   Map<String, dynamic>? selectedHospital;
+  bool _speakerOn = false; // ← speaker must be explicitly turned on by user
   final Color primaryColor = const Color(0xFF6366F1);
   final Color emergencyRed = const Color(0xFFE11D48);
 
@@ -47,8 +51,9 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     super.dispose();
   }
 
-  /// Plays screen-specific instructions in the pre-selected language
+  /// Plays screen-specific instructions — only fires if user has enabled speaker
   void _playInstructions() async {
+    if (!_speakerOn) return;
     String text = "";
     final lang = _voiceService.currentLanguage;
 
@@ -116,14 +121,24 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       backgroundColor: const Color(0xFFF1F5F9),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          _voiceService.stop();
-          _playInstructions();
+          setState(() => _speakerOn = !_speakerOn);
+          if (_speakerOn) {
+            // First tap: turn on and immediately read the current screen state
+            _playInstructions();
+          } else {
+            // Second tap: turn off and stop any ongoing speech
+            _voiceService.stop();
+          }
         },
-        backgroundColor: primaryColor,
-        child: const Icon(Icons.volume_up, color: Colors.white),
+        backgroundColor: _speakerOn ? Colors.red : primaryColor,
+        tooltip: _speakerOn ? 'Speaker ON – tap to turn off' : 'Tap to enable voice guidance',
+        child: Icon(
+          _speakerOn ? Icons.volume_up : Icons.volume_off,
+          color: Colors.white,
+        ),
       ),
       body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
+        physics: const ClampingScrollPhysics(), // No bounce — prevents glitch on content load
         slivers: [
           SliverAppBar(
             automaticallyImplyLeading: false,
@@ -329,11 +344,62 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     );
   }
 
+  Future<List> _fetchHospitalsCached() async {
+    const key = 'hospitals_list';
+    final cached = AppCache.get<List>(key);
+    if (cached != null) return cached;
+    final data = await supabase
+        .from('hospitals')
+        .select('id, name, location, avatar_url, rating');
+    AppCache.set(key, data, ttl: const Duration(minutes: 10));
+    return data;
+  }
+
+  /// Fetches staff + all their profiles in exactly 2 queries (no N+1).
+  Future<Map<String, dynamic>> _fetchStaffWithProfiles(
+      String hospitalId, String role) async {
+    final staffList = await supabase
+        .from('staff')
+        .select('*')
+        .eq('hospital_id', hospitalId)
+        .ilike('role', '%$role%')
+        .limit(4);
+
+    if (staffList.isEmpty) return {'staff': [], 'profiles': {}};
+
+    final ids = staffList.map((s) => s['id'].toString()).toList();
+    final profiles = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url')
+        .inFilter('id', ids);
+
+    final profileMap = <String, dynamic>{
+      for (final p in profiles) p['id'].toString(): p,
+    };
+    return {'staff': staffList, 'profiles': profileMap};
+  }
+
   Widget _buildHospitalGrid() {
     return FutureBuilder(
-      future: supabase.from('hospitals').select('id, name, location, avatar_url, rating'),
+      future: _fetchHospitalsCached(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) {
+          // Fixed height skeleton — prevents layout jump when real cards load
+          return SizedBox(
+            height: 340,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 40, 16, 0),
+              child: Wrap(
+                spacing: 15,
+                runSpacing: 45,
+                children: List.generate(4, (_) => SizedBox(
+                  width: (MediaQuery.of(context).size.width - 47) / 2,
+                  child: const DoctorCardSkeleton(),
+                )),
+              ),
+            ),
+          );
+        }
         final hospitals = snapshot.data as List;
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 40, 16, 0),
@@ -349,7 +415,10 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                   onTap: () {
                     _voiceService.stop();
                     setState(() => selectedHospital = h);
-                    _voiceService.speakWithSavedLanguage("Hospital ${h['name']} selected.");
+                    // Only announce if the user has explicitly turned speaker ON
+                    if (_speakerOn) {
+                      _voiceService.speakWithSavedLanguage("Hospital ${h['name']} selected.");
+                    }
                   },
                   child: _buildSquareBaseCard(
                     title: h['name'] ?? 'Hospital',
@@ -368,14 +437,73 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     );
   }
 
+  // ── Earliest available slot helpers ──────────────────────────────────────
+
+  /// Returns a human label like "Today 9 AM", "Tomorrow 2 PM", "Wed 10 AM"
+  /// Checks up to 7 days ahead. Returns null if nothing found.
+  Future<String?> _fetchEarliestSlot(String doctorId) =>
+      fetchEarliestSlot(supabase, doctorId);
+
+  /// Small green "Next available" chip — uses existing card space, not bulky
+  Widget _buildNextSlotChip(String doctorId) {
+    return FutureBuilder<String?>(
+      future: _fetchEarliestSlot(doctorId),
+      builder: (context, snap) {
+        if (!snap.hasData || snap.data == null) return const SizedBox.shrink();
+        return Container(
+          margin: const EdgeInsets.only(top: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.access_time_rounded, size: 9, color: Color(0xFF10B981)),
+              const SizedBox(width: 3),
+              Text(
+                snap.data!,
+                style: const TextStyle(
+                  fontSize: 9,
+                  color: Color(0xFF10B981),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildStaffGrid({required String role}) {
     final hospitalId = selectedHospital!['id'].toString();
-    return FutureBuilder(
-      future: supabase.from('staff').select('*').eq('hospital_id', hospitalId).ilike('role', '%$role%').limit(4),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _fetchStaffWithProfiles(hospitalId, role),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final staffList = snapshot.data as List?;
-        if (staffList == null || staffList.isEmpty) return _buildEmptyState("No ${role}s found.");
+        if (!snapshot.hasData) {
+          return SizedBox(
+            height: 380,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 45, 16, 0),
+              child: Wrap(
+                spacing: 15,
+                runSpacing: 50,
+                alignment: WrapAlignment.center,
+                children: List.generate(4, (_) => SizedBox(
+                  width: (MediaQuery.of(context).size.width - 47) / 2,
+                  child: const DoctorCardSkeleton(),
+                )),
+              ),
+            ),
+          );
+        }
+        final staffList = snapshot.data!['staff'] as List;
+        final profileMap = Map<String, dynamic>.from(
+            snapshot.data!['profiles'] as Map);
+        if (staffList.isEmpty) return _buildEmptyState("No ${role}s found.");
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 45, 16, 0),
@@ -384,44 +512,45 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             runSpacing: 50,
             alignment: WrapAlignment.center,
             children: staffList.map((s) {
-              return FutureBuilder(
-                future: supabase.from('profiles').select('full_name, avatar_url').eq('id', s['id']).maybeSingle(),
-                builder: (context, profileSnapshot) {
-                  final profile = profileSnapshot.data;
-                  final String name = profile?['full_name'] ?? s['name'] ?? 'Medical Staff';
-                  final String? img = profile?['avatar_url'] ?? s['avatar_url'];
-
-                  return SizedBox(
-                    width: (MediaQuery.of(context).size.width - 47) / 2,
-                    child: _buildSquareBaseCard(
-                      title: name,
-                      subtitle: s['speciality'] ?? s['role'] ?? role,
-                      imageUrl: img,
-                      rating: (s['rating'] ?? 4.5).toDouble(),
-                      firstFee: s['first_consultation_fee'],
-                      followUpFee: s['followup_consultation_fee'],
-                      onTap: () {
-                        _voiceService.stop();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ConsultationDescription(
-                              doctorData: {
-                                ...s,
-                                'name': name,
-                                'avatar_url': img,
-                                'hospitalName': selectedHospital!['name'],
-                                'firstPrice': (s['first_consultation_fee'] ?? 0).toDouble(),
-                                'followUpPrice': (s['followup_consultation_fee'] ?? 0).toDouble(),
-                                'rating': (s['rating'] ?? 4.5).toDouble(),
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
+              final profile =
+                  profileMap[s['id'].toString()] as Map? ?? {};
+              final String name =
+                  profile['full_name'] ?? s['name'] ?? 'Medical Staff';
+              final String? img =
+                  profile['avatar_url'] ?? s['avatar_url'];
+              return SizedBox(
+                width: (MediaQuery.of(context).size.width - 47) / 2,
+                child: _buildSquareBaseCard(
+                  doctorId: s['id'].toString(),
+                  title: name,
+                  subtitle: s['speciality'] ?? s['role'] ?? role,
+                  imageUrl: img,
+                  rating: (s['rating'] ?? 4.5).toDouble(),
+                  firstFee: s['first_consultation_fee'],
+                  followUpFee: s['followup_consultation_fee'],
+                  onTap: () {
+                    _voiceService.stop();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ConsultationDescription(
+                          doctorData: {
+                            ...s,
+                            'name': name,
+                            'avatar_url': img,
+                            'hospitalName': selectedHospital!['name'],
+                            'firstPrice':
+                                (s['first_consultation_fee'] ?? 0).toDouble(),
+                            'followUpPrice':
+                                (s['followup_consultation_fee'] ?? 0)
+                                    .toDouble(),
+                            'rating': (s['rating'] ?? 4.5).toDouble(),
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
               );
             }).toList(),
           ),
@@ -439,6 +568,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     dynamic followUpFee,
     bool isSelected = false,
     bool isHospital = false,
+    String? doctorId,         // ← new: used to show earliest available slot
     VoidCallback? onTap,
   }) {
     return GestureDetector(
@@ -463,6 +593,9 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                   const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
                   Text(rating.toString(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 ]),
+                // Earliest available slot chip — compact, uses spare space
+                if (!isHospital && doctorId != null)
+                  _buildNextSlotChip(doctorId),
                 if (!isHospital) ...[
                   const Divider(height: 16),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
@@ -488,7 +621,10 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                           fit: BoxFit.cover,
                           width: 72,
                           height: 72,
-                          errorBuilder: (context, error, stackTrace) => Text(title[0], style: const TextStyle(fontSize: 20)),
+                          loadingBuilder: (_, child, progress) =>
+                              progress == null ? child : const ShimmerBox(width: 72, height: 72, borderRadius: 36),
+                          errorBuilder: (context, error, stackTrace) =>
+                              Text(title[0], style: const TextStyle(fontSize: 20)),
                         )
                       : Text(title[0], style: const TextStyle(fontSize: 20)),
                 ),

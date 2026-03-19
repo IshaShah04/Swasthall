@@ -1,11 +1,11 @@
 {
-    "name": "Health Department Management",
-    "short_name": "HealthDept",
+    "name": "Swasthall",
+    "short_name": "Swasthall",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#ffffff",
+    "background_color": "#F8FAFC",
     "theme_color": "#6366F1",
-    "description": "Universal Healthcare Queue and Record Management System.",
+    "description": "Smart Hospital Management & Telemedicine Platform.",
     "orientation": "any",
     "prefer_related_applications": false,
     "icons": [

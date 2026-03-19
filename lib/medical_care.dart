@@ -1,13 +1,11 @@
 import 'dart:convert';
-import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart'; 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alarm/alarm.dart';
 
 import 'config/env_config.dart';
@@ -80,7 +78,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
-        withData: true, 
+        withData: true,
       );
       if (result != null && result.files.single.bytes != null) {
         fileBytes = result.files.single.bytes;
@@ -95,48 +93,35 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
   Future<void> _analyzeWithCloudVision(Uint8List bytes) async {
     setState(() => _isAnalyzing = true);
     try {
-      String? hash;
-      try {
-        hash = md5.convert(bytes).toString();
-      } catch (_) {}
-
-      if (hash != null) {
-        final prefs = await SharedPreferences.getInstance();
-        final cached = prefs.getString('vision_cache_$hash');
-        if (cached != null && cached.isNotEmpty) {
-          final data = jsonDecode(cached);
-          if (data['hasText'] == true) {
-            _processWithGemini(data['text']);
-            return;
-          }
-        }
+      final session = supabase.auth.currentSession;
+      if (session == null) {
+        _showSnackBar("Please log in to use prescription scanning.");
+        return;
       }
 
       final base64Image = base64Encode(bytes);
+      final edgeUrl = '${EnvConfig.supabaseUrl}/functions/v1/vision-proxy';
+
       final response = await http.post(
-        Uri.parse("https://vision.googleapis.com/v1/images:annotate?key=${EnvConfig.googleVisionApiKey}"),
-        body: jsonEncode({
-          "requests": [
-            {
-              "image": {"content": base64Image},
-              "features": [{"type": "DOCUMENT_TEXT_DETECTION"}],
-            }
-          ],
-        }),
-      );
+        Uri.parse(edgeUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+        body: jsonEncode({'imageBase64': base64Image}),
+      ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['responses'] != null && data['responses'][0]['fullTextAnnotation'] != null) {
-          final String text = data['responses'][0]['fullTextAnnotation']['text'];
-          if (hash != null) {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('vision_cache_$hash', jsonEncode({'hasText': true, 'text': text}));
-          }
-          _processWithGemini(text);
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        final text = data?['text'] as String?;
+
+        if (text != null && text.isNotEmpty) {
+          _processWithGemini(text, session.accessToken);
         } else {
           _showSnackBar("No text found in image.");
         }
+      } else {
+        _showSnackBar("Vision analysis failed (${response.statusCode}).");
       }
     } catch (e) {
       _showSnackBar("Analysis Error: $e");
@@ -145,59 +130,61 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
     }
   }
 
-  Future<void> _processWithGemini(String text) async {
-  final localMatch = await _searchLocalDatabase(text);
-  
-  try {
-    final response = await http.post(
-      Uri.parse("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${EnvConfig.geminiApiKey}"),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        "contents": [{
-          "parts": [{
-            "text": "Analyze this prescription text: '$text'. Extract the medicine name and the most likely intended hour for a reminder (24h format). Return ONLY valid JSON: {'med': 'name', 'h': 20, 'm': 0}"
-          }]
-        }]
-      }),
-    );
+  Future<void> _processWithGemini(String text, String accessToken) async {
+    final localMatch = await _searchLocalDatabase(text);
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      String rawText = data['candidates'][0]['content']['parts'][0]['text'];
-      
-      // Better way to find the JSON inside the response
-      final jsonStart = rawText.indexOf('{');
-      final jsonEnd = rawText.lastIndexOf('}') + 1;
-      final cleanJson = rawText.substring(jsonStart, jsonEnd);
-      
-      final result = jsonDecode(cleanJson);
+    try {
+      final edgeUrl =
+          '${EnvConfig.supabaseUrl}/functions/v1/gemini-ocr-proxy';
 
-      setState(() {
-        _currentMed = localMatch != null 
-            ? "${localMatch['brand_name']} (${localMatch['dosage'] ?? 'TBD'})"
-            : result['med'];
-        _selectedTime = TimeOfDay(hour: result['h'] ?? 8, minute: result['m'] ?? 0);
-      });
+      final response = await http.post(
+        Uri.parse(edgeUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: jsonEncode({'prescriptionText': text}),
+      ).timeout(const Duration(seconds: 20));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+        if (data == null) return;
+
+        final med = data['med'] as String?;
+        final h = (data['h'] as num?)?.toInt() ?? 8;
+        final m = (data['m'] as num?)?.toInt() ?? 0;
+
+        if (mounted) {
+          setState(() {
+            _currentMed = localMatch != null
+                ? "${localMatch['brand_name']} (${localMatch['dosage'] ?? 'TBD'})"
+                : (med ?? text.split('\n').first);
+            _selectedTime = TimeOfDay(hour: h.clamp(0, 23), minute: m.clamp(0, 59));
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Gemini OCR Error: $e");
+      if (mounted) {
+        setState(() {
+          _currentMed = localMatch != null
+              ? "${localMatch['brand_name']}"
+              : text.split('\n').first;
+        });
+      }
     }
-  } catch (e) {
-    debugPrint("Gemini Error: $e");
-    setState(() {
-      _currentMed = localMatch != null 
-          ? "${localMatch['brand_name']}" 
-          : text.split('\n').first;
-    });
   }
-}
 
   Future<Map<String, dynamic>?> _searchLocalDatabase(String scannedText) async {
     try {
-      final String response = await rootBundle.loadString('assets/data/nepal_medicines.json');
+      final String response =
+          await rootBundle.loadString('assets/data/nepal_medicines.json');
       final List<dynamic> data = jsonDecode(response);
       final text = scannedText.toLowerCase();
 
       for (var med in data) {
-        String brandName = (med['brand_name'] ?? "").toString().toLowerCase();
-        if (brandName.isNotEmpty && text.contains(brandName)) return med;
+        final brandName = (med['brand_name'] ?? "").toString().toLowerCase();
+        if (brandName.isNotEmpty && text.contains(brandName)) return med as Map<String, dynamic>;
       }
     } catch (e) {
       debugPrint("JSON Load Error: $e");
@@ -246,7 +233,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
     }
   }
 
-  // ---------------- UI BUILDERS (VIBRANT STYLING) ----------------
+  // ---------------- UI BUILDERS ----------------
 
   @override
   Widget build(BuildContext context) {
@@ -349,19 +336,25 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
     );
   }
 
+  Stream<List<Map<String, dynamic>>>? _consultationsStream;
+
   Widget _buildRealTimeConsultationGrid() {
+    _consultationsStream ??= supabase
+        .from('bookings')
+        .stream(primaryKey: ['id'])
+        .eq('patient_id', widget.patientId)
+        .order('created_at', ascending: false);
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: supabase
-          .from('bookings')
-          .stream(primaryKey: ['id'])
-          .eq('patient_id', widget.patientId)
-          .order('created_at', ascending: false),
+      stream: _consultationsStream,
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
         final bookings = snapshot.data!;
         final seen = <String>{};
-        final uniqueDoctors = bookings.where((b) => seen.add(b['staff_id'].toString())).toList();
+        // Null-safe: guard against null staff_id
+        final uniqueDoctors = bookings
+            .where((b) => b['staff_id'] != null && seen.add(b['staff_id'].toString()))
+            .toList();
 
         if (uniqueDoctors.isEmpty) {
           return const Padding(

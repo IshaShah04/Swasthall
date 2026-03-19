@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'main.dart' show switchToCompletedTab;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'queue_tab.dart';
 import 'completed_tab.dart';
@@ -47,6 +48,15 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
       initialIndex: widget.forceUploadMode ? 1 : 0,
     );
     _initializeProfessionalData();
+
+    // After doctor's call ends, ZEGO fires onCallEnd in main.dart which
+    // toggles switchToCompletedTab. We listen here to switch to tab 1.
+    switchToCompletedTab.addListener(_onCallEnded);
+  }
+
+  void _onCallEnded() {
+    if (!mounted) return;
+    _tabController.animateTo(1);
   }
 
   bool _isTechnician() => widget.userRole.toLowerCase() == "technician";
@@ -139,6 +149,7 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
 
   @override
   void dispose() {
+    switchToCompletedTab.removeListener(_onCallEnded);
     _tabController.dispose();
     _refreshNotifier.dispose();
     super.dispose();

@@ -57,50 +57,62 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
   }
 
   Future<void> _pickAndUploadImage() async {
-    final picker = ImagePicker();
-    final messenger = ScaffoldMessenger.of(context);
-    
-    // Pick image - works on all platforms
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
-    if (image == null) return;
+  final picker = ImagePicker();
+  final messenger = ScaffoldMessenger.of(context);
 
-    setState(() => _isUploading = true);
+  final XFile? image =
+      await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+  if (image == null) return;
 
-    try {
-      // UNIVERSAL FIX: Use readAsBytes instead of File() to support Web
-      final imageBytes = await image.readAsBytes();
-      final String userId = _localUserData['id'] ?? _supabase.auth.currentUser!.id;
-      final String fileExt = image.path.split('.').last.toLowerCase();
-      final String path = 'avatars/avatar_$userId.$fileExt';
+  if (!mounted) return;
+  setState(() => _isUploading = true);
 
-      // Use uploadBinary for cross-platform compatibility
-      await _supabase.storage.from('avatars').uploadBinary(
-            path,
-            imageBytes,
-            fileOptions: FileOptions(
-              contentType: 'image/$fileExt',
-              upsert: true,
-            ),
-          );
+  try {
+    final imageBytes = await image.readAsBytes();
+    final String userId =
+        _localUserData['id'] ?? _supabase.auth.currentUser!.id;
+    final String fileExt = image.path.split('.').last.toLowerCase();
 
-      final String imageUrl = _supabase.storage.from('avatars').getPublicUrl(path);
+    // Must match SQL policy: {user_id}/avatar.ext
+    final String path = '$userId/avatar.$fileExt';
 
-      // Update profile table
-      await _supabase.from('profiles').update({'avatar_url': imageUrl}).eq('id', userId);
+    await _supabase.storage.from('avatars').uploadBinary(
+          path,
+          imageBytes,
+          fileOptions: FileOptions(
+            contentType: 'image/$fileExt',
+            upsert: true,
+          ),
+        );
 
-      if (!mounted) return;
-      setState(() => _localUserData['avatar_url'] = imageUrl);
-      widget.onRefresh();
-      messenger.showSnackBar(const SnackBar(content: Text("Profile picture updated!")));
-    } catch (e) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(
-            content: Text("Upload failed: $e"), backgroundColor: Colors.red));
-      }
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
+    final String imageUrl = _supabase.storage.from('avatars').getPublicUrl(path);
+    final String cacheBusterUrl =
+        '$imageUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+
+    await _supabase
+        .from('profiles')
+        .update({'avatar_url': cacheBusterUrl}).eq('id', userId);
+
+    if (!mounted) return;
+    setState(() => _localUserData['avatar_url'] = cacheBusterUrl);
+    widget.onRefresh();
+
+    messenger.showSnackBar(
+      const SnackBar(content: Text("Profile picture updated!")),
+    );
+  } catch (e) {
+    if (mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Upload failed: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
+  } finally {
+    if (mounted) setState(() => _isUploading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
