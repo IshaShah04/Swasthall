@@ -51,6 +51,8 @@ android/*.jks
 android/*.keystore
 *.jks
 *.keystore
+android/.gradle/
+android/local.properties
 
 # ── iOS secrets — NEVER commit ────────────────────────────────────────────
 ios/Runner/GoogleService-Info.plist
