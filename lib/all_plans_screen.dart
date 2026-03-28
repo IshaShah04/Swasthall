@@ -136,6 +136,8 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                           loadingBuilder: (_, child, progress) =>
                               progress == null ? child : const ShimmerBox(width: 64, height: 64),
                           errorBuilder: (c, e, s) => Container(
+                            height: 64,
+                            width: 64,
                             color: AppColors.indigoTint(context),
                             child: const Icon(Icons.shield, color: Color(0xFF6366F1)),
                           ),

@@ -79,27 +79,27 @@ class EmergencyScreen extends StatelessWidget {
                 ]),
                 _buildEmergencySection("Specialized Care Units", [
                   _emergencyItem("ICU (Intensive Care)", Icons.monitor_heart,
-                      emergencyRed, ctx: context),
+                      emergencyRed, ctx: context, nonActionable: true),
                   _emergencyItem(
-                      "Isolation Rooms", Icons.shield_outlined, emergencyRed, ctx: context),
+                      "Isolation Rooms", Icons.shield_outlined, emergencyRed, ctx: context, nonActionable: true),
                 ]),
                 _buildEmergencySection("Diagnostic Support", [
                   _emergencyItem(
-                      "POC Diagnostics", Icons.biotech_outlined, emergencyRed, ctx: context),
+                      "POC Diagnostics", Icons.biotech_outlined, emergencyRed, ctx: context, nonActionable: true),
                   _emergencyItem(
-                      "Imaging", Icons.grid_view_rounded, emergencyRed, ctx: context),
+                      "Imaging", Icons.grid_view_rounded, emergencyRed, ctx: context, nonActionable: true),
                 ]),
                 _buildEmergencySection("Emergency Procedures", [
                   _emergencyItem("Surgical Procedures", Icons.content_cut,
-                      emergencyRed, ctx: context), // Fixed: replaced .colorize
-                  _emergencyItem("Dialysis Services", Icons.loop, emergencyRed, ctx: context),
+                      emergencyRed, ctx: context, nonActionable: true),
+                  _emergencyItem("Dialysis Services", Icons.loop, emergencyRed, ctx: context, nonActionable: true),
                 ]),
                 _buildEmergencySection("Specialty Support", [
-                  _emergencyItem("Cardiology", Icons.favorite, emergencyRed, ctx: context),
+                  _emergencyItem("Cardiology", Icons.favorite, emergencyRed, ctx: context, nonActionable: true),
                   _emergencyItem("Orthopedics", Icons.medication_liquid,
-                      Colors.redAccent, ctx: context), // Fixed: replaced .bone
+                      Colors.redAccent, ctx: context, nonActionable: true),
                   _emergencyItem(
-                      "Neurology", Icons.psychology, Colors.redAccent, ctx: context),
+                      "Neurology", Icons.psychology, Colors.redAccent, ctx: context, nonActionable: true),
                 ]),
               ],
             ),
@@ -137,21 +137,30 @@ class EmergencyScreen extends StatelessWidget {
   }
 
   Widget _emergencyItem(String label, IconData icon, Color color,
-      {String? phone, BuildContext? ctx}) {
+      {String? phone, BuildContext? ctx, bool nonActionable = false}) {
+    final borderColor =
+        nonActionable ? const Color(0xFFE5E7EB) : const Color(0xFFF3F4F6);
+    final labelStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: nonActionable ? const Color(0xFF9CA3AF) : const Color(0xFF4B5563),
+    );
     final tile = Container(
       width: 150,
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
         color: ctx != null ? AppColors.cardBg(ctx) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          )
-        ],
+        border: Border.all(color: borderColor),
+        boxShadow: nonActionable
+            ? null
+            : [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                )
+              ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -159,10 +168,12 @@ class EmergencyScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
+              color: color.withValues(alpha: nonActionable ? 0.06 : 0.10),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 30),
+            child: Icon(icon,
+                color: color.withValues(alpha: nonActionable ? 0.65 : 1.0),
+                size: 30),
           ),
           const SizedBox(height: 12),
           Padding(
@@ -170,17 +181,14 @@ class EmergencyScreen extends StatelessWidget {
             child: Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF4B5563)),
+              style: labelStyle,
             ),
           ),
         ],
       ),
     );
 
-    if (phone != null && ctx != null) {
+    if (phone != null && ctx != null && !nonActionable) {
       return GestureDetector(
         onTap: () => _call(ctx, phone),
         child: tile,
