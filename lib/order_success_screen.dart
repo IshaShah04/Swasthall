@@ -567,7 +567,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: AppColors.cardBg(context),
+        color: Colors.white, // QR container always light so barcode is scannable
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: Colors.indigo.withValues(alpha: 0.05)),
       ),
@@ -579,7 +579,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
               fontSize: 12,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w800,
-              color: AppColors.textMuted(context),
+              color: Colors.black54, // Fixed: always dark on white QR card
             ),
           ),
           const SizedBox(height: 25),
@@ -588,13 +588,13 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
             data: id,
             width: 150,
             height: 150,
-            color: AppColors.textSecondary(context),
+            color: Colors.black, // Fixed: always dark for scannable QR
           ),
           const SizedBox(height: 20),
           Text(
             "Fast check-in via QR at reception",
-            style: TextStyle(
-              color: AppColors.textSecondary(context),
+            style: const TextStyle(
+              color: Colors.black87,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),

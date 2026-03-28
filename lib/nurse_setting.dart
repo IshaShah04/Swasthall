@@ -442,10 +442,11 @@ class _NurseSettingState extends State<NurseSetting> {
   Widget _actionBtn(String txt, Color col, VoidCallback onP) => ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: col,
+          foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
         onPressed: onP,
-        child: Text(txt, style: TextStyle(color: AppColors.cardBg(context))),
+        child: Text(txt),
       );
 
   Widget _editableTile(String label, String value, String col, IconData icon) => ListTile(

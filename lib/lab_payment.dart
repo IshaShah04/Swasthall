@@ -121,6 +121,10 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
           ? Map<String, dynamic>.from(insertedRows.first as Map)
           : <String, dynamic>{};
 
+      if (response['id'] == null) {
+        throw Exception('Appointment not created — please try again.');
+      }
+
       if (!mounted) return;
       Navigator.of(context).pop(); // close loading
 

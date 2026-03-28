@@ -79,27 +79,27 @@ class EmergencyScreen extends StatelessWidget {
                 ]),
                 _buildEmergencySection("Specialized Care Units", [
                   _emergencyItem("ICU (Intensive Care)", Icons.monitor_heart,
-                      emergencyRed),
+                      emergencyRed, ctx: context),
                   _emergencyItem(
-                      "Isolation Rooms", Icons.shield_outlined, emergencyRed),
+                      "Isolation Rooms", Icons.shield_outlined, emergencyRed, ctx: context),
                 ]),
                 _buildEmergencySection("Diagnostic Support", [
                   _emergencyItem(
-                      "POC Diagnostics", Icons.biotech_outlined, emergencyRed),
+                      "POC Diagnostics", Icons.biotech_outlined, emergencyRed, ctx: context),
                   _emergencyItem(
-                      "Imaging", Icons.grid_view_rounded, emergencyRed),
+                      "Imaging", Icons.grid_view_rounded, emergencyRed, ctx: context),
                 ]),
                 _buildEmergencySection("Emergency Procedures", [
                   _emergencyItem("Surgical Procedures", Icons.content_cut,
-                      emergencyRed), // Fixed: replaced .colorize
-                  _emergencyItem("Dialysis Services", Icons.loop, emergencyRed),
+                      emergencyRed, ctx: context), // Fixed: replaced .colorize
+                  _emergencyItem("Dialysis Services", Icons.loop, emergencyRed, ctx: context),
                 ]),
                 _buildEmergencySection("Specialty Support", [
-                  _emergencyItem("Cardiology", Icons.favorite, emergencyRed),
+                  _emergencyItem("Cardiology", Icons.favorite, emergencyRed, ctx: context),
                   _emergencyItem("Orthopedics", Icons.medication_liquid,
-                      Colors.redAccent), // Fixed: replaced .bone
+                      Colors.redAccent, ctx: context), // Fixed: replaced .bone
                   _emergencyItem(
-                      "Neurology", Icons.psychology, Colors.redAccent),
+                      "Neurology", Icons.psychology, Colors.redAccent, ctx: context),
                 ]),
               ],
             ),

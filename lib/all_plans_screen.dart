@@ -122,21 +122,31 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
         child: Row(
           children: [
             Hero(
-              tag: 'plan_icon_${plan['id']}',
+              tag: 'plan_icon_${plan["id"]}',
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  plan['icon_url'],
-                  height: 64,
-                  width: 64,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (_, child, progress) =>
-                      progress == null ? child : const ShimmerBox(width: 64, height: 64),
-                  errorBuilder: (c, e, s) => Container(
-                    color: AppColors.indigoTint(context),
-                    child: const Icon(Icons.shield, color: Color(0xFF6366F1)),
-                  ),
-                ),
+                child: () {
+                  final iconUrl = plan['icon_url']?.toString();
+                  return (iconUrl != null && iconUrl.isNotEmpty)
+                      ? Image.network(
+                          iconUrl,
+                          height: 64,
+                          width: 64,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (_, child, progress) =>
+                              progress == null ? child : const ShimmerBox(width: 64, height: 64),
+                          errorBuilder: (c, e, s) => Container(
+                            color: AppColors.indigoTint(context),
+                            child: const Icon(Icons.shield, color: Color(0xFF6366F1)),
+                          ),
+                        )
+                      : Container(
+                          height: 64,
+                          width: 64,
+                          color: AppColors.indigoTint(context),
+                          child: const Icon(Icons.shield, color: Color(0xFF6366F1)),
+                        );
+                }(),
               ),
             ),
             const SizedBox(width: 16),

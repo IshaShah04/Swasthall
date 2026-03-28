@@ -135,7 +135,7 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
                                 Text(
                                   planName,
                                   style: TextStyle(
-                                    color: AppColors.cardBg(context),
+                                    color: Colors.white,
                                     fontSize: 26,
                                     fontWeight: FontWeight.w900,
                                     height: 1.2,
@@ -330,8 +330,8 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: AppColors.cardBg(context),
+        style: const TextStyle(
+          color: Colors.white,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.3,
@@ -426,7 +426,7 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
                   Text(
                     "-$discount%",
                     style: TextStyle(
-                      color: AppColors.cardBg(context),
+                      color: Colors.white,
                       fontWeight: FontWeight.w900,
                       fontSize: 18,
                     ),

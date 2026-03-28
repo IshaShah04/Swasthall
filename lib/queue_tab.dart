@@ -372,19 +372,10 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
     activeCallBookingId = rawBookingId;
     activeCallIsNurse = asNurse;
 
-    // Also signal via Realtime so web patients can receive the call.
-    // Mobile patients get Zego push; web patients get this Realtime signal.
     final me = _supabase.auth.currentUser;
-    if (me != null) {
-      unawaited(RealtimeCallService().initiateCall(
-        callId:     normalizedRoomId,
-        callerId:   me.id,
-        callerName: me.userMetadata?['full_name']?.toString() ?? 'Doctor',
-        calleeId:   patientAuthUid,
-        bookingId:  rawBookingId,
-      ));
-    }
 
+    // FIXED (CodeRabbit): Start Zego invite first — only signal Realtime
+    // after send() succeeds so we don't create ghost calls if Zego fails.
     try {
       await ZegoUIKitPrebuiltCallInvitationService().send(
         invitees: [ZegoCallUser(patientZegoUid, patientName)],
@@ -399,6 +390,18 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
       await _updateStatus(rawBookingId, 'confirmed');
       _showError("Call failed: $e");
       return;
+    }
+
+    // Zego succeeded — now signal via Realtime for web patients.
+    // Mobile patients already get Zego push; web patients get this signal.
+    if (me != null) {
+      unawaited(RealtimeCallService().initiateCall(
+        callId:     normalizedRoomId,
+        callerId:   me.id,
+        callerName: me.userMetadata?['full_name']?.toString() ?? 'Doctor',
+        calleeId:   patientAuthUid,
+        bookingId:  rawBookingId,
+      ));
     }
 
     // ── FCM notification push for killed-app wake-up ──────────────────────

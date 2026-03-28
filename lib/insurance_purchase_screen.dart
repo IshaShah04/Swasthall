@@ -172,15 +172,16 @@ class _InsurancePurchaseScreenState
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _indigo,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     elevation: 0,
                   ),
-                  child: Text(
+                  child: const Text(
                     'Done',
                     style: TextStyle(
-                        color: AppColors.cardBg(context),
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 16),
                   ),
@@ -504,8 +505,8 @@ class _InsurancePurchaseScreenState
             ? SizedBox(
                 height: 22,
                 width: 22,
-                child: CircularProgressIndicator(
-                    color: AppColors.cardBg(context), strokeWidth: 2),
+                child: const CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
               )
             : Text(
                 _feeLoading
@@ -513,8 +514,8 @@ class _InsurancePurchaseScreenState
                     : _selectedMethod == 'cod'
                         ? 'Confirm & Pay at Hospital'
                         : 'Pay Rs. ${_totalPayable.toStringAsFixed(0)}',
-                style: TextStyle(
-                    color: AppColors.cardBg(context),
+                style: const TextStyle(
+                    color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 16),
               ),

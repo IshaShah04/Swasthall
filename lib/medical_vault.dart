@@ -223,8 +223,8 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   void _rebuildRecordsStream() {
     if (_selectedCategory == null) return;
     setState(() {
-      // Supabase stream() supports only one .eq() — filter by patient at DB level,
-      // provider_role is filtered client-side in the StreamBuilder (line ~666).
+      // Supabase stream() supports only one .eq() filter in this version.
+      // Filter by patient_id at DB level; category filtered client-side in StreamBuilder.
       _recordsStream = _supabaseClient
           .from('medical_records')
           .stream(primaryKey: ['id'])

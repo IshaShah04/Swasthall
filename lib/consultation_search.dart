@@ -323,7 +323,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
                 tooltip: _isListening ? 'Tap to stop' : 'Search by voice',
                 icon: Icon(
                   _isListening ? Icons.mic : Icons.mic_none,
-                  color: AppColors.cardBg(context),
+                  color: Colors.white,
                   size: 20,
                 ),
                 onPressed: _toggleListening,

@@ -58,7 +58,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
         setState(() {
           _currentUserId = user.id;
           _patientName = userData['full_name'] ?? "Patient";
-          _isPatient = userData['role'].toString().toLowerCase() == 'patient';
+          _isPatient = (userData['role']?.toString().toLowerCase() ?? '') == 'patient';
           _isLoading = false;
         });
 

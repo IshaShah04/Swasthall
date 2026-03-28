@@ -78,7 +78,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
               backgroundColor: _indigo,
               onPressed: _openBroadcastSheet,
               tooltip: 'Send notification to all patients',
-              child: Icon(Icons.add, color: AppColors.cardBg(context)),
+              child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
       body: StreamBuilder<List<Map<String, dynamic>>>(

@@ -27,8 +27,8 @@ class GlobalSearchBar extends StatelessWidget {
       ),
       child: TextField(
         controller: controller,
-        readOnly: true,
-        onTap: onTap, // BUG-19: wire onTap so parent can open search delegate
+        readOnly: onTap != null, // read-only only when used as tap trigger
+        onTap: onTap,
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: TextStyle(color: const Color(0xFF64748B), fontSize: 14),

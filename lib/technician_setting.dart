@@ -172,7 +172,7 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
             child: CircleAvatar(
               backgroundColor: themeColor,
               radius: 18,
-              child: Icon(Icons.camera_alt, size: 14, color: AppColors.cardBg(context)),
+              child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
             ),
           ),
         ],
@@ -254,9 +254,9 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: themeColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              style: ElevatedButton.styleFrom(backgroundColor: themeColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
               onPressed: () => _saveAvailability(start, end),
-              child: Text("Save Slots", style: TextStyle(color: AppColors.cardBg(context))),
+              child: const Text("Save Slots", style: TextStyle(color: Colors.white)),
             )
           ],
         ),
@@ -336,7 +336,7 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Cancel")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: themeColor),
+            style: ElevatedButton.styleFrom(backgroundColor: themeColor, foregroundColor: Colors.white),
             onPressed: () async {
               final newValue = controller.text.trim();
               try {
@@ -351,7 +351,7 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
                 debugPrint("Error updating $label: $e");
               }
             },
-            child: Text("Save Changes", style: TextStyle(color: AppColors.cardBg(context))),
+            child: const Text("Save Changes", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

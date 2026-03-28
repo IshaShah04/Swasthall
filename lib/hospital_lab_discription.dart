@@ -241,7 +241,7 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
       child: Column(
         children: [
           Text(label, style: const TextStyle(color: Colors.white70, fontSize: 10)),
-          Text(value, style: TextStyle(color: AppColors.cardBg(context), fontWeight: FontWeight.bold, fontSize: 18)),
+          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
         ],
       ),
     );
