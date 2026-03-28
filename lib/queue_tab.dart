@@ -6,8 +6,9 @@ import 'supabase_handler.dart';
 import 'main.dart';
 import 'services/realtime_call_service.dart';
 import 'services/queue_widget_service.dart';
-import 'video_call_page.dart';
 import 'shared_widgets.dart';
+import 'theme_colors.dart';
+import 'web_video_call_page.dart';
 
 class QueueTab extends StatefulWidget {
   final String userRole;
@@ -55,7 +56,10 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
   void didUpdateWidget(covariant QueueTab oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.filterId != widget.filterId) {
-      setState(() => _initBookingsStream());
+      // _initBookingsStream() assigns to _bookingsStream — call it first,
+      // then trigger a single rebuild so the StreamBuilder picks up the new stream.
+      _initBookingsStream();
+      setState(() {});
     }
   }
 
@@ -315,6 +319,23 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
         return;
       }
 
+      // ── FCM push so phone wakes up even when app is killed/backgrounded ──
+      // Supabase Realtime only delivers to open WebSocket connections.
+      // FCM push bypasses that — it wakes the phone like a WhatsApp call.
+      // notify-incoming-call reads the patient's fcm_token from profiles
+      // and sends a high-priority FCM data message via FCM V1 API.
+      unawaited(_supabase.functions.invoke(
+        'notify-incoming-call',
+        body: {
+          'callee_id':    patientAuthUid,
+          'caller_id':    me.id,
+          'caller_name':  myName,
+          'channel_name': normalizedRoomId,
+          'booking_id':   rawBookingId,
+          'source':       'zego',  // tells phone: ZEGO handles call UI, just wake app
+        },
+      ));
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -333,15 +354,14 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => VideoCallPage(
-            callID: normalizedRoomId,
-            userID: resolvedProviderZegoUid,
-            userName: myName,
-            patientID: patientAuthUid,
-            patientName: patientName,
+          builder: (_) => WebVideoCallPage(
+            callID:           normalizedRoomId,
+            userID:           resolvedProviderZegoUid,
+            userName:         myName,
+            patientID:        patientAuthUid,
+            patientName:      patientName,
             professionalRole: asNurse ? 'nurse' : 'doctor',
-            appointmentData: appt,
-            bookingId: rawBookingId,
+            bookingId:        rawBookingId,
           ),
         ),
       );
@@ -351,6 +371,19 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
     // ── MOBILE: existing Zego invitation path ─────────────────────────────
     activeCallBookingId = rawBookingId;
     activeCallIsNurse = asNurse;
+
+    // Also signal via Realtime so web patients can receive the call.
+    // Mobile patients get Zego push; web patients get this Realtime signal.
+    final me = _supabase.auth.currentUser;
+    if (me != null) {
+      unawaited(RealtimeCallService().initiateCall(
+        callId:     normalizedRoomId,
+        callerId:   me.id,
+        callerName: me.userMetadata?['full_name']?.toString() ?? 'Doctor',
+        calleeId:   patientAuthUid,
+        bookingId:  rawBookingId,
+      ));
+    }
 
     try {
       await ZegoUIKitPrebuiltCallInvitationService().send(
@@ -366,6 +399,26 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
       await _updateStatus(rawBookingId, 'confirmed');
       _showError("Call failed: $e");
       return;
+    }
+
+    // ── FCM notification push for killed-app wake-up ──────────────────────
+    // ZEGO sends a data-only FCM message which Android 16 (Samsung) blocks
+    // when the app is in stopped state. Our notify-incoming-call edge function
+    // sends a notification-payload FCM message which Android always delivers.
+    // This is what makes ringing work on killed app — same as web→phone path.
+    if (me != null) {
+      final myName = me.userMetadata?['full_name']?.toString() ?? 'Doctor';
+      unawaited(_supabase.functions.invoke(
+        'notify-incoming-call',
+        body: {
+          'callee_id':    patientAuthUid,
+          'caller_id':    me.id,
+          'caller_name':  myName,
+          'channel_name': normalizedRoomId,
+          'booking_id':   rawBookingId,
+          'source':       'zego',  // tells phone: ZEGO handles call UI, just wake app
+        },
+      ));
     }
 
     if (!mounted) return;
@@ -500,15 +553,15 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
           hintText: "Search patient name...",
           prefixIcon: const Icon(Icons.search_rounded, size: 20),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.inputFill(context),
           contentPadding: const EdgeInsets.symmetric(vertical: 0),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide(color: Colors.grey.shade200),
+            borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide(color: Colors.grey.shade200),
+            borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
@@ -536,17 +589,17 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isLive
               ? (_isTechnician() ? _labAmber : _brandIndigo)
-              : (nurseSeen ? Colors.green.shade200 : Colors.grey.shade100),
+              : (nurseSeen ? Colors.green.shade200 : AppColors.surfaceBg(context)),
           width: isLive ? 2 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: AppColors.shadow(context),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -655,7 +708,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
           if (nurseSeen) _buildDoneBadge(),
           Material(
             color: nurseSeen
-                ? Colors.grey.shade100
+                ? AppColors.surfaceBg(context)
                 : _nurseTeal.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
             child: InkWell(
@@ -758,7 +811,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
             label,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey.shade600,
+              color: const Color(0xFF475569),
               fontWeight: FontWeight.w500,
             ),
             overflow: TextOverflow.ellipsis,
@@ -790,7 +843,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
                 ? Icons.biotech_outlined
                 : Icons.auto_awesome_motion_rounded,
             size: 60,
-            color: Colors.grey.shade200,
+            color: const Color(0xFFE2E8F0),
           ),
           const SizedBox(height: 16),
           Text(
@@ -799,7 +852,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
                     ? "No Active Queue"
                     : "No matches for '$_searchQuery'"),
             style: TextStyle(
-              color: Colors.grey.shade400,
+              color: const Color(0xFF94A3B8),
               fontWeight: FontWeight.bold,
               fontSize: 16,
             ),

@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'supabase_handler.dart';
+import 'theme_colors.dart';
 
 const String _medicalBucket = 'medical_vault';
 
@@ -60,9 +61,9 @@ class FileViewPage extends StatelessWidget {
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: Text(title,
-            style: const TextStyle(fontSize: 16, color: Colors.white)),
+            style: TextStyle(fontSize: 16, color: AppColors.cardBg(context))),
         backgroundColor: const Color(0xFF008080),
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: AppColors.cardBg(context)),
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
@@ -84,7 +85,7 @@ class FileViewPage extends StatelessWidget {
                   url,
                   loadingBuilder: (context, child, progress) => progress == null
                       ? child
-                      : const CircularProgressIndicator(color: Colors.white),
+                      : CircularProgressIndicator(color: AppColors.cardBg(context)),
                   errorBuilder: (context, error, stackTrace) => const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -219,8 +220,8 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
                 onPressed: () => _showUploadOptions(context, widget.patientId,
                     preselectedProviderRole: _selectedCategoryId),
                 backgroundColor: roleColor,
-                icon: const Icon(Icons.cloud_upload_rounded, color: Colors.white),
-                label: const Text("Upload",
+                icon: Icon(Icons.cloud_upload_rounded, color: Colors.white),
+                label: Text("Upload",
                     style: TextStyle(
                         color: Colors.white, fontWeight: FontWeight.bold)),
               )
@@ -241,7 +242,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
                 width: 50,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.3),
+                  color: AppColors.textMuted(context).withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
@@ -318,7 +319,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
               _buildVitalOverview(widget.patientId),
               TabBar(
                 labelColor: roleColor,
-                unselectedLabelColor: Colors.grey,
+                unselectedLabelColor: AppColors.textMuted(context),
                 indicatorColor: roleColor,
                 tabs: const [
                   Tab(text: "Records"),
@@ -362,9 +363,9 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
           borderRadius: BorderRadius.circular(16),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.cardBg(context),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade100),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -377,7 +378,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
                 const SizedBox(height: 6),
                 Text("Tap to open",
                     style:
-                        TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                        TextStyle(fontSize: 11, color: const Color(0xFF64748B))),
               ],
             ),
           ),
@@ -427,7 +428,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
     // 2) choose source
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (optContext) => SafeArea(
@@ -599,7 +600,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
-        side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
+        side: BorderSide(color: AppColors.textMuted(context).withValues(alpha: 0.1)),
       ),
       child: ListTile(
         leading: Container(
@@ -644,7 +645,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
                 }
               },
             ),
-            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            Icon(Icons.chevron_right_rounded, color: AppColors.textMuted(context)),
           ],
         ),
         onTap: () async {
@@ -682,18 +683,18 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
         child: Column(
           children: [
             Icon(Icons.layers_clear_outlined,
-                size: 48, color: Colors.grey.withValues(alpha: 0.5)),
+                size: 48, color: AppColors.textMuted(context).withValues(alpha: 0.5)),
             const SizedBox(height: 12),
-            const Text("No records in this folder",
-                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            Text("No records in this folder",
+                style: TextStyle(color: AppColors.textMuted(context), fontWeight: FontWeight.bold)),
             if (isProfessional) ...[
               const SizedBox(height: 6),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 32),
                 child: Text(
                   "Upload a new record above to add one.\nOlder records uploaded without provider info may not be visible.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                  style: TextStyle(color: AppColors.textMuted(context), fontSize: 12),
                 ),
               ),
             ],
@@ -755,7 +756,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
         return Container(
           margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.cardBg(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE0E7FF)),
             boxShadow: [
@@ -777,7 +778,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEEF2FF),
+                        color: AppColors.indigoTint(context),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.monitor_heart_rounded,
@@ -824,7 +825,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
                             interval: 40,
                             getTitlesWidget: (value, _) => Text(
                               value.toInt().toString(),
-                              style: TextStyle(fontSize: 9, color: Colors.grey.shade400),
+                              style: TextStyle(fontSize: 9, color: const Color(0xFF94A3B8)),
                             ),
                           ),
                         ),
@@ -843,7 +844,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
                             final label = s.bar.color == _bpColor ? 'BP' : 'Sugar';
                             return LineTooltipItem(
                               '$label  ${s.y.toStringAsFixed(0)}',
-                              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                              TextStyle(color: AppColors.cardBg(context), fontWeight: FontWeight.bold, fontSize: 11),
                             );
                           }).toList(),
                         ),
@@ -912,9 +913,9 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
           return const Center(child: CircularProgressIndicator());
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(
+          return Center(
               child: Text("No vitals recorded",
-                  style: TextStyle(color: Colors.grey)));
+                  style: TextStyle(color: AppColors.textMuted(context))));
         }
 
         return ListView.builder(
@@ -932,7 +933,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
               margin: const EdgeInsets.only(bottom: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
+                side: BorderSide(color: AppColors.textMuted(context).withValues(alpha: 0.1)),
               ),
               child: ListTile(
                 leading: Icon(

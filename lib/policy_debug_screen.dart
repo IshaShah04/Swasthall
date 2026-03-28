@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme_colors.dart';
 
 class PolicyDebugScreen extends StatefulWidget {
   const PolicyDebugScreen({super.key});
@@ -553,7 +554,7 @@ class _PolicyDebugScreenState extends State<PolicyDebugScreen>
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.schema_outlined, size: 56, color: Colors.grey[300]),
         const SizedBox(height: 16),
-        const Text('Tap Run to scan your database schema', style: TextStyle(color: Colors.grey)),
+        Text('Tap Run to scan your database schema', style: TextStyle(color: AppColors.textMuted(context))),
         const SizedBox(height: 16),
         ElevatedButton.icon(
           onPressed: _runSchemaAudit,
@@ -713,7 +714,7 @@ class _AuditTile extends StatelessWidget {
           ]),
           subtitle: audit.accessible
             ? Text('${audit.allDbColumns.length} DB cols · ${audit.usedColumns.length} used in app',
-                style: const TextStyle(fontSize: 10, color: Colors.grey))
+                style: TextStyle(fontSize: 10, color: AppColors.textMuted(context)))
             : Text(audit.error ?? 'Not accessible',
                 style: const TextStyle(fontSize: 10, color: Colors.red)),
           children: [

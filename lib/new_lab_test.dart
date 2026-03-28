@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme_colors.dart';
 
 // Conditional import for mobile-only File class
 import 'dart:io' as io show File;
@@ -209,16 +210,16 @@ class _NewLabScreenState extends State<NewLabScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: Text(
             _isEditMode ? "Edit Lab Test" : "Add New Lab Test",
-            style: const TextStyle(
-                color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+            style: TextStyle(
+                color: AppColors.textPrimary(context), fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary(context)),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -234,7 +235,7 @@ class _NewLabScreenState extends State<NewLabScreen> {
                       _isEditMode
                           ? "Updating details..."
                           : "Processing upload...",
-                      style: TextStyle(color: Colors.grey[600])),
+                      style: TextStyle(color: AppColors.textSecondary(context))),
                 ],
               ),
             )
@@ -285,7 +286,7 @@ class _NewLabScreenState extends State<NewLabScreen> {
                               "Instructions will be auto-translated to Nepali & Hindi on save.",
                               style: TextStyle(
                                   fontSize: 11,
-                                  color: Colors.grey.shade600),
+                                  color: const Color(0xFF475569)),
                             ),
                           ),
                         ],
@@ -389,11 +390,11 @@ class _NewLabScreenState extends State<NewLabScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: AppColors.shadow(context),
               blurRadius: 10)
         ],
       ),
@@ -410,7 +411,7 @@ class _NewLabScreenState extends State<NewLabScreen> {
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.inputFill(context),
         ),
         validator: (value) =>
             value == null || value.isEmpty ? "Required" : null,
@@ -461,7 +462,7 @@ class _NewLabScreenState extends State<NewLabScreen> {
         },
         child: Text(
             _isEditMode ? "Update Lab Test" : "Create Lab Test",
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 18,
                 color: Colors.white,
                 fontWeight: FontWeight.bold)),

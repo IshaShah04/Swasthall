@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'theme_colors.dart';
 
 class NurseSetting extends StatefulWidget {
   final Map<String, dynamic>? userData;
@@ -160,10 +161,10 @@ class _NurseSettingState extends State<NurseSetting> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)
+          BoxShadow(color: AppColors.shadow(context), blurRadius: 10)
         ],
       ),
       child: Column(
@@ -188,7 +189,7 @@ class _NurseSettingState extends State<NurseSetting> {
                   backgroundColor: brandBlue,
                   radius: 16,
                   child: IconButton(
-                    icon: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                    icon: Icon(Icons.camera_alt, size: 16, color: Colors.white),
                     onPressed: _isUploading ? null : _pickAndUploadImage,
                   ),
                 )
@@ -237,7 +238,7 @@ class _NurseSettingState extends State<NurseSetting> {
         contentPadding: EdgeInsets.zero,
         leading: CircleAvatar(
           backgroundColor: brandBlue,
-          child: const Icon(Icons.medical_services_outlined, color: Colors.white, size: 20),
+          child: Icon(Icons.medical_services_outlined, color: Colors.white, size: 20),
         ),
         title: Text(name ?? "Loading Doctor...",
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
@@ -330,7 +331,7 @@ class _NurseSettingState extends State<NurseSetting> {
               margin: const EdgeInsets.only(bottom: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.shade200),
+                side: BorderSide(color: const Color(0xFFE2E8F0)),
               ),
               child: ListTile(
                 leading: Icon(
@@ -355,7 +356,7 @@ class _NurseSettingState extends State<NurseSetting> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: brandBlue.withValues(alpha: 0.1)),
       ),
@@ -433,7 +434,7 @@ class _NurseSettingState extends State<NurseSetting> {
         onTap: onTap,
         child: Column(children: [
           Icon(icon, size: 20, color: brandBlue),
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          Text(label, style: TextStyle(fontSize: 10, color: AppColors.textMuted(context))),
           Text(val, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))
         ]),
       );
@@ -444,12 +445,12 @@ class _NurseSettingState extends State<NurseSetting> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
         onPressed: onP,
-        child: Text(txt, style: const TextStyle(color: Colors.white)),
+        child: Text(txt, style: TextStyle(color: AppColors.cardBg(context))),
       );
 
   Widget _editableTile(String label, String value, String col, IconData icon) => ListTile(
         leading: Icon(icon, color: brandBlue),
-        title: Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        title: Text(label, style: TextStyle(fontSize: 10, color: AppColors.textMuted(context))),
         subtitle: Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
         trailing: const Icon(Icons.edit, size: 16),
         onTap: () => _showEditDialog(label, col, value),
@@ -458,7 +459,7 @@ class _NurseSettingState extends State<NurseSetting> {
   Widget _emptyState(String msg) => Center(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Text(msg, style: const TextStyle(color: Colors.grey)),
+          child: Text(msg, style: TextStyle(color: AppColors.textMuted(context))),
         ),
       );
 
@@ -482,7 +483,7 @@ class _NurseSettingState extends State<NurseSetting> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Delete All", style: TextStyle(color: Colors.white)),
+            child: Text("Delete All", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

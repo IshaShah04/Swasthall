@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'supabase_handler.dart';
 import 'shared_widgets.dart';
 import 'services/queue_widget_service.dart';
+import 'theme_colors.dart';
 
 class PhysicalQueuePage extends StatefulWidget {
   final String userRole;
@@ -124,18 +125,18 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF9FAFB),
+        backgroundColor: AppColors.scaffoldBg(context),
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: AppColors.cardBg(context),
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
+            icon: Icon(Icons.arrow_back_ios, color: AppColors.textPrimary(context), size: 20),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text(
+          title: Text(
             "Doctor Professional Suite",
             style: TextStyle(
-              color: Colors.black,
+              color: AppColors.textPrimary(context),
               fontWeight: FontWeight.bold,
               fontSize: 18,
             ),
@@ -143,7 +144,7 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
           bottom: TabBar(
             indicatorColor: brandIndigo,
             labelColor: brandIndigo,
-            unselectedLabelColor: Colors.grey,
+            unselectedLabelColor: AppColors.textMuted(context),
             labelStyle: const TextStyle(fontWeight: FontWeight.bold),
             tabs: const [
               Tab(text: "Live Queue"),
@@ -235,9 +236,9 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade100),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -272,7 +273,7 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
                   const SizedBox(height: 2),
                   Text(
                     patient['phone_number'] ?? "No contact info",
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                    style: TextStyle(color: const Color(0xFF64748B), fontSize: 13),
                   ),
                 ],
               ),
@@ -311,7 +312,7 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
 
   Widget _buildQueueIndicator(int num, bool isLive, String status) {
     final Color bgColor =
-        isLive ? brandIndigo.withValues(alpha: 0.1) : Colors.grey.shade100;
+        isLive ? brandIndigo.withValues(alpha: 0.1) : AppColors.surfaceBg(context);
     final Color txtColor = isLive ? brandIndigo : Colors.grey.shade400;
 
     return Container(
@@ -386,17 +387,17 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
         onChanged: (val) => setState(() => _searchQuery = val),
         decoration: InputDecoration(
           hintText: "Search patient name...",
-          prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
+          prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted(context)),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.inputFill(context),
           contentPadding: EdgeInsets.zero,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide(color: Colors.grey.shade200),
+            borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide(color: Colors.grey.shade200),
+            borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
@@ -417,13 +418,13 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
                 ? Icons.assignment_turned_in_rounded
                 : Icons.history_rounded,
             size: 60,
-            color: Colors.grey.shade200,
+            color: const Color(0xFFE2E8F0),
           ),
           const SizedBox(height: 16),
           Text(
             isActiveTab ? "No Active Queue" : "No Records Found",
             style: TextStyle(
-              color: Colors.grey.shade400,
+              color: const Color(0xFF94A3B8),
               fontSize: 16,
               fontWeight: FontWeight.bold,
             ),

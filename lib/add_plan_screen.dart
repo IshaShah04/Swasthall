@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
+import 'theme_colors.dart';
 
 class AddPlanScreen extends StatefulWidget {
   const AddPlanScreen({super.key});
@@ -126,12 +127,12 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
     const Color brandBlue = Color(0xFF6366F1);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       appBar: AppBar(
-        title: const Text("Create New Plan", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+        title: Text("Create New Plan", style: TextStyle(color: AppColors.textPrimary(context), fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       body: _isSaving
           ? const Center(
@@ -185,7 +186,7 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
                             elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                         onPressed: _savePlan,
-                        child: const Text("Save & Publish Plan",
+                        child: Text("Save & Publish Plan",
                             style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                       ),
                     )
@@ -217,7 +218,7 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
           setState(() => _selectedType = newSelection.first);
         },
         style: ButtonStyle(
-          side: WidgetStateProperty.all(BorderSide(color: Colors.grey.shade200)),
+          side: WidgetStateProperty.all(BorderSide(color: const Color(0xFFE2E8F0))),
           backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
             if (states.contains(WidgetState.selected)) return brandBlue;
             return Colors.grey.shade50;
@@ -246,7 +247,7 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
         children: [
           CircleAvatar(
             radius: 50,
-            backgroundColor: Colors.grey[100],
+            backgroundColor: AppColors.surfaceBg(context),
             backgroundImage: imageProvider,
             child: imageProvider == null
                 ? Icon(Icons.add_a_photo_outlined, size: 32, color: brandBlue)
@@ -259,7 +260,7 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
               child: CircleAvatar(
                   radius: 15,
                   backgroundColor: brandBlue,
-                  child: const Icon(Icons.edit, size: 14, color: Colors.white)),
+                  child: Icon(Icons.edit, size: 14, color: Colors.white)),
             )
         ],
       ),
@@ -281,12 +282,12 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
-          hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
+          hintStyle: TextStyle(fontSize: 12, color: AppColors.textMuted(context)),
           prefixIcon: Icon(icon, color: const Color(0xFF6366F1)),
           filled: true,
-          fillColor: Colors.grey[50],
+          fillColor: AppColors.inputFill(context),
           enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+              borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFFE2E8F0))),
           focusedBorder:
               OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF6366F1))),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

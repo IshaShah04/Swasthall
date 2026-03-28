@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:swasthall/services/booking_fee_service.dart';
+import 'theme_colors.dart';
 
 class InsurancePurchaseScreen extends StatefulWidget {
   final Map<String, dynamic> plan;
@@ -158,16 +159,16 @@ class _InsurancePurchaseScreenState
               Text(
                 'Your request for $_planName has been submitted. The hospital will review and notify you within 24 hours.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                style: TextStyle(color: AppColors.textSecondary(context), fontSize: 14),
               ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).pop();
-                    Navigator.of(context).pop();
+                    // Pop dialog then go home safely regardless of stack depth
+                    Navigator.of(context).pop(); // close dialog
+                    Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _indigo,
@@ -176,10 +177,10 @@ class _InsurancePurchaseScreenState
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     elevation: 0,
                   ),
-                  child: const Text(
+                  child: Text(
                     'Done',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.cardBg(context),
                         fontWeight: FontWeight.bold,
                         fontSize: 16),
                   ),
@@ -195,16 +196,16 @@ class _InsurancePurchaseScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Purchase Plan',
           style: TextStyle(
-              color: Colors.black, fontWeight: FontWeight.bold),
+              color: AppColors.textPrimary(context), fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -236,11 +237,11 @@ class _InsurancePurchaseScreenState
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: AppColors.shadow(context),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -278,8 +279,8 @@ class _InsurancePurchaseScreenState
                         const SizedBox(width: 4),
                         Text(
                           _hospitalName,
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 12),
+                          style: TextStyle(
+                              color: AppColors.textMuted(context), fontSize: 12),
                         ),
                       ],
                     ),
@@ -292,12 +293,12 @@ class _InsurancePurchaseScreenState
           // Benefits
           if (benefits.isNotEmpty) ...[
             const Divider(height: 28),
-            const Text(
+            Text(
               'Included Benefits',
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey),
+                  color: AppColors.textMuted(context)),
             ),
             const SizedBox(height: 10),
             ...benefits.take(4).map((b) => Padding(
@@ -409,7 +410,7 @@ class _InsurancePurchaseScreenState
             if (sub != null)
               Text(sub,
                   style: TextStyle(
-                      fontSize: 11, color: Colors.grey[400])),
+                      fontSize: 11, color: AppColors.textMuted(context))),
           ],
         ),
         Text(
@@ -434,10 +435,10 @@ class _InsurancePurchaseScreenState
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? _indigo : Colors.grey.shade200,
+            color: isSelected ? _indigo : AppColors.surfaceBg(context),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -477,12 +478,12 @@ class _InsurancePurchaseScreenState
       padding: EdgeInsets.fromLTRB(
           20, 16, 20, MediaQuery.of(context).padding.bottom + 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius:
             const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: AppColors.shadow(context),
             blurRadius: 10,
             offset: const Offset(0, -4),
           ),
@@ -500,11 +501,11 @@ class _InsurancePurchaseScreenState
           elevation: 0,
         ),
         child: _isProcessing
-            ? const SizedBox(
+            ? SizedBox(
                 height: 22,
                 width: 22,
                 child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
+                    color: AppColors.cardBg(context), strokeWidth: 2),
               )
             : Text(
                 _feeLoading
@@ -512,8 +513,8 @@ class _InsurancePurchaseScreenState
                     : _selectedMethod == 'cod'
                         ? 'Confirm & Pay at Hospital'
                         : 'Pay Rs. ${_totalPayable.toStringAsFixed(0)}',
-                style: const TextStyle(
-                    color: Colors.white,
+                style: TextStyle(
+                    color: AppColors.cardBg(context),
                     fontWeight: FontWeight.bold,
                     fontSize: 16),
               ),

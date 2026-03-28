@@ -7,6 +7,7 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'lab_appointment.dart';
+import 'theme_colors.dart';
 
 class OrderSuccessScreen extends StatefulWidget {
   final String itemLabel;
@@ -221,7 +222,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.check_circle_rounded,
                       color: Colors.white,
                       size: 85,
@@ -229,7 +230,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
                     const SizedBox(height: 12),
                     Text(
                       isLab ? "Booking Confirmed" : "Order Successful",
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: 26,
                         fontWeight: FontWeight.bold,
@@ -248,8 +249,8 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
                       ),
                       child: Text(
                         "REF ID: $appointmentId",
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppColors.cardBg(context),
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -403,7 +404,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
               backgroundColor: Colors.redAccent,
               elevation: 0,
             ),
-            child: const Text(
+            child: Text(
               "Cancel Appointment",
               style: TextStyle(color: Colors.white),
             ),
@@ -418,11 +419,11 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: AppColors.shadow(context),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -439,7 +440,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
             widget.extraDetails?['status'] ?? 'Paid',
             isStatus: true,
           ),
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 15),
             child: Divider(),
           ),
@@ -449,7 +450,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
               Text(
                 "Total Amount",
                 style: TextStyle(
-                  color: Colors.grey[600],
+                  color: AppColors.textSecondary(context),
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -523,7 +524,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
           Text(
             label,
             style: TextStyle(
-              color: Colors.grey[500],
+              color: AppColors.textMuted(context),
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
@@ -566,7 +567,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: Colors.indigo.withValues(alpha: 0.05)),
       ),
@@ -578,7 +579,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
               fontSize: 12,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w800,
-              color: Colors.grey[400],
+              color: AppColors.textMuted(context),
             ),
           ),
           const SizedBox(height: 25),
@@ -587,13 +588,13 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
             data: id,
             width: 150,
             height: 150,
-            color: Colors.black87,
+            color: AppColors.textSecondary(context),
           ),
           const SizedBox(height: 20),
           Text(
             "Fast check-in via QR at reception",
             style: TextStyle(
-              color: Colors.grey[600],
+              color: AppColors.textSecondary(context),
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -616,7 +617,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
           ),
           elevation: 0,
         ),
-        child: const Text(
+        child: Text(
           "Return to Dashboard",
           style: TextStyle(
             color: Colors.white,

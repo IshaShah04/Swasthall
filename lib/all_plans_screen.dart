@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'plan_details_screen.dart'; // Ensure this matches your filename
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
 
 class AllPlansScreen extends StatefulWidget {
   const AllPlansScreen({super.key});
@@ -27,23 +28,23 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
     const Color brandBlue = Color(0xFF6366F1);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: const Text(
           "Health Plans & Insurance",
           style:
               TextStyle(color: Color(0xFF1F2937), fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         centerTitle: false,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       body: Column(
         children: [
           // 1. Search Bar Area
           Container(
-            color: Colors.white,
+            color: AppColors.cardBg(context),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: TextField(
               onChanged: (val) =>
@@ -52,7 +53,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                 hintText: "Search by plan or hospital name...",
                 prefixIcon: const Icon(Icons.search_rounded, color: brandBlue),
                 filled: true,
-                fillColor: const Color(0xFFF3F4F6),
+                fillColor: AppColors.inputFill(context),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -107,9 +108,9 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: AppColors.dividerColor(context)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
@@ -132,7 +133,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                   loadingBuilder: (_, child, progress) =>
                       progress == null ? child : const ShimmerBox(width: 64, height: 64),
                   errorBuilder: (c, e, s) => Container(
-                    color: const Color(0xFFEEF2FF),
+                    color: AppColors.indigoTint(context),
                     child: const Icon(Icons.shield, color: Color(0xFF6366F1)),
                   ),
                 ),
@@ -153,7 +154,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                     plan['description'] ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                    style: TextStyle(color: AppColors.textMuted(context), fontSize: 13),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -167,7 +168,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            Icon(Icons.chevron_right_rounded, color: AppColors.textMuted(context)),
           ],
         ),
       ),
@@ -181,7 +182,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
         children: [
           Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          const Text("No plans found", style: TextStyle(color: Colors.grey)),
+          Text("No plans found", style: TextStyle(color: AppColors.textMuted(context))),
         ],
       ),
     );

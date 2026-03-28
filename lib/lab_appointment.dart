@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'supabase_handler.dart';
 import 'lab_payment.dart';
+import 'theme_colors.dart';
 
 class LabAppointmentScreen extends StatefulWidget {
   final Map<String, dynamic> labData;
@@ -142,18 +143,18 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
         title: Text(
           isRescheduling ? "Reschedule Appointment" : "Select Slot",
           style:
-              const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+              TextStyle(color: AppColors.textPrimary(context), fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            color: Colors.white,
+            color: AppColors.cardBg(context),
             padding: const EdgeInsets.only(bottom: 15),
             child: Column(
               children: [_buildDateHeader(), _buildHorizontalCalendar()],
@@ -209,7 +210,7 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Icon(Icons.bolt, color: Colors.white),
               SizedBox(width: 8),
@@ -226,7 +227,7 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
           Text(
             "Complete all selected tests in a single visit.",
             style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
+                color: AppColors.cardBg(context).withValues(alpha: 0.8), fontSize: 12),
           ),
           const SizedBox(height: 20),
           allPacked
@@ -242,14 +243,14 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.2),
+        color: AppColors.cardBg(context).withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Center(
+      child: Center(
         child: Text(
           "All common slots are fully booked",
           style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
+              color: AppColors.cardBg(context), fontWeight: FontWeight.w500, fontSize: 13),
         ),
       ),
     );
@@ -369,7 +370,7 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
                 color: isSelected ? primaryIndigo : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: isSelected ? primaryIndigo : Colors.grey[200]!),
+                    color: isSelected ? primaryIndigo : AppColors.surfaceBg(context)),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -386,7 +387,7 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
                   Text(
                     date.day.toString(),
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black,
+                      color: isSelected ? Colors.white : AppColors.textPrimary(context),
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
@@ -407,8 +408,8 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
         children: [
           Icon(Icons.event_busy_rounded, size: 60, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          const Text("No slots available for this date.",
-              style: TextStyle(color: Colors.grey)),
+          Text("No slots available for this date.",
+              style: TextStyle(color: AppColors.textMuted(context))),
         ],
       ),
     );
@@ -418,8 +419,8 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
     return Container(
       padding: EdgeInsets.fromLTRB(
           20, 20, 20, MediaQuery.of(context).padding.bottom + 20),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: ElevatedButton(
@@ -453,10 +454,10 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         child: _isUpdating
-            ? const CircularProgressIndicator(color: Colors.white)
+            ? CircularProgressIndicator(color: Colors.white)
             : Text(
                 isRescheduling ? "Update Appointment" : "Confirm & Proceed",
-                style: const TextStyle(
+                style: TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold),
               ),
       ),

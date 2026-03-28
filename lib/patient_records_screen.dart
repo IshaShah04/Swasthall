@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-import 'shared_widgets.dart'; // Ensure viewPatientHistory and FileViewPage are defined here
+import 'shared_widgets.dart';import 'theme_colors.dart';
+ // Ensure viewPatientHistory and FileViewPage are defined here
 
 class PatientRecordsScreen extends StatefulWidget {
   const PatientRecordsScreen({super.key});
@@ -55,11 +56,11 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Clinical History",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: AppColors.textPrimary(context), fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(110),
@@ -126,7 +127,7 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
                   ) 
                 : null,
               filled: true,
-              fillColor: const Color(0xFFF1F5F9),
+              fillColor: AppColors.inputFill(context),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -140,7 +141,7 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
                 backgroundColor: _selectedDateRange != null 
                     ? primaryColor.withValues(alpha: 0.1) 
                     : Colors.white,
-                side: BorderSide(color: Colors.grey.shade200),
+                side: BorderSide(color: const Color(0xFFE2E8F0)),
                 avatar: Icon(Icons.calendar_today, size: 14, color: primaryColor),
                 label: Text(
                   _selectedDateRange == null 
@@ -185,11 +186,11 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.cardBg(context),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04), 
+                    color: AppColors.shadow(context), 
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   )
@@ -286,7 +287,7 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: AppColors.surfaceBg(context),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
@@ -343,7 +344,7 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(primary: primaryColor, onPrimary: Colors.white, surface: Colors.white),
+            colorScheme: Theme.of(context).colorScheme.copyWith(primary: primaryColor),
           ),
           child: child!,
         );
@@ -379,7 +380,7 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
         children: [
           Icon(Icons.assignment_outlined, size: 64, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          const Text("No records found", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+          Text("No records found", style: TextStyle(color: AppColors.textMuted(context), fontWeight: FontWeight.w500)),
         ],
       ),
     );

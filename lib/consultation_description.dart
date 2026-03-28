@@ -5,6 +5,7 @@ import 'consultation_booking.dart';
 import 'patient_settings.dart'; 
 import 'services/voice_service.dart';
 import 'services/earliest_slot_service.dart';
+import 'theme_colors.dart';
 
 class ConsultationDescription extends StatefulWidget {
   final Map<String, dynamic> doctorData;
@@ -65,7 +66,9 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
           .from('profiles')
           .select('full_name, id')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
+
+      if (currentUserProfile == null) return;
 
       final response = await supabase.from('profiles').select('id');
       final bool isSharedDevice = response.length > 1;
@@ -87,7 +90,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
                   ),
@@ -95,7 +98,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                     children: [
                       CircleAvatar(
                         backgroundColor: primaryColor,
-                        child: const Icon(Icons.person, color: Colors.white),
+                        child: Icon(Icons.person, color: Colors.white),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -109,7 +112,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                             ),
                             Text(
                               "Profile ID: ${currentUserProfile['id'].toString().substring(0, 8)}",
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              style: TextStyle(fontSize: 12, color: AppColors.textMuted(context)),
                             ),
                           ],
                         ),
@@ -151,7 +154,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                       borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text("Yes, Proceed",
+                child: Text("Yes, Proceed",
                     style: TextStyle(color: Colors.white)),
               ),
             ],
@@ -187,7 +190,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
         .from('profiles')
         .select('full_name, license_number, bio')
         .eq('id', doctorId)
-        .single();
+        .maybeSingle();
 
     String nurseName = "None Assigned";
     
@@ -206,9 +209,9 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
     }
 
     return {
-      'full_name': docProfile['full_name'],
-      'license_number': docProfile['license_number'],
-      'bio': docProfile['bio'],
+      'full_name': docProfile?['full_name'] ?? widget.doctorData['full_name'],
+      'license_number': docProfile?['license_number'] ?? '',
+      'bio': docProfile?['bio'] ?? '',
       'nurse_name': nurseName,
     };
   }
@@ -218,7 +221,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
     final staticDoc = widget.doctorData;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       floatingActionButton: FutureBuilder<Map<String, dynamic>>(
         future: _detailsFuture,
         builder: (context, snapshot) {
@@ -230,7 +233,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
               snapshot.data?['license_number'] ?? "",
               snapshot.data?['bio'] ?? "",
             ),
-            child: const Icon(Icons.volume_up, color: Colors.white),
+            child: Icon(Icons.volume_up, color: Colors.white),
           );
         },
       ),
@@ -253,7 +256,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                 expandedHeight: 250,
                 pinned: true,
                 leading: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  icon: Icon(Icons.arrow_back, color: Colors.white),
                   onPressed: () {
                     _voiceService.stop(); // Stop voice when back button pressed
                     Navigator.pop(context);
@@ -269,7 +272,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                         loadingBuilder: (_, child, progress) =>
                             progress == null ? child : const ShimmerBox(width: double.infinity, height: 300),
                         errorBuilder: (context, error, stackTrace) => Container(
-                            color: Colors.grey.shade200,
+                            color: const Color(0xFFE2E8F0),
                             child: const Icon(Icons.person, size: 80)),
                       ),
                       Container(
@@ -306,8 +309,8 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                                         fontSize: 24,
                                         fontWeight: FontWeight.bold)),
                                 Text("License No: $license",
-                                    style: const TextStyle(
-                                        color: Colors.grey,
+                                    style: TextStyle(
+                                        color: AppColors.textMuted(context),
                                         fontWeight: FontWeight.w500)),
                               ],
                             ),
@@ -333,7 +336,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
                       const SizedBox(height: 8),
                       Text(bio,
                           style: TextStyle(
-                              color: Colors.grey.shade700, height: 1.5)),
+                              color: const Color(0xFF334155), height: 1.5)),
                       const SizedBox(height: 30),
                       _buildPricingSection(
                           "First Time Consultation",
@@ -390,7 +393,7 @@ class _ConsultationDescriptionState extends State<ConsultationDescription> {
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
+                color: AppColors.greenTint(context),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
               ),

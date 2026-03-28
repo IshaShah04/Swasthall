@@ -6,6 +6,8 @@ import 'services/secure_logout.dart';
 import 'supabase_handler.dart';
 import 'staff_management_section.dart';
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
+import 'widgets/theme_toggle.dart';
 
 class HospitalProfileScreen extends StatefulWidget {
   const HospitalProfileScreen({super.key});
@@ -296,11 +298,11 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       appBar: AppBar(
         title: const Text("Administration",
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
@@ -323,6 +325,9 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildProfileSection(),
+              const SizedBox(height: 24),
+              // ── Appearance ─────────────────────────────────
+              const AppearanceToggle(),
               const SizedBox(height: 24),
               _buildSectionTitle("Hospital Identity"),
               _buildTextField("Hospital Name", "Clinic Name", _nameController),
@@ -384,14 +389,14 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
           _webImageBytes != null
               ? CircleAvatar(
                   radius: 50,
-                  backgroundColor: Colors.grey.shade100,
+                  backgroundColor: AppColors.surfaceBg(context),
                   backgroundImage: MemoryImage(_webImageBytes!),
                 )
               : SafeAvatar(
                   url: _avatarUrl,
                   radius: 50,
                   fallbackIcon: Icons.business,
-                  backgroundColor: Colors.grey.shade100,
+                  backgroundColor: AppColors.surfaceBg(context),
                 ),
           Positioned(
             bottom: 0,
@@ -401,7 +406,7 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
               child: CircleAvatar(
                 backgroundColor: brandColor,
                 radius: 18,
-                child: const Icon(Icons.camera_alt,
+                child: Icon(Icons.camera_alt,
                     color: Colors.white, size: 18),
               ),
             ),
@@ -431,14 +436,14 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
           labelText: label,
           hintText: hint,
           filled: true,
-          fillColor: const Color(0xFFF8FAFC),
+          fillColor: AppColors.inputFill(context),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade300),
+            borderSide: BorderSide(color: const Color(0xFFCBD5E1)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade200),
+            borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
           ),
         ),
       ),
@@ -453,7 +458,7 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: const Color(0xFFE2E8F0)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -474,7 +479,7 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
                     onChanged: (v) => _pairingList[index]['doctor_email'] = v,
                   ),
                 ),
-                const Icon(Icons.link, color: Colors.grey, size: 16),
+                Icon(Icons.link, color: AppColors.textMuted(context), size: 16),
                 Flexible(
                   child: TextFormField(
                     key: ValueKey('nurse_email_$index'),
@@ -509,10 +514,10 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
           elevation: 0,
         ),
         child: _isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 height: 20,
                 width: 20,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                child: CircularProgressIndicator(color: AppColors.cardBg(context), strokeWidth: 2),
               )
             : Text(
                 label,

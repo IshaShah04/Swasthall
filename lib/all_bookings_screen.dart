@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'theme_colors.dart';
 
 class AllBookingsScreen extends StatefulWidget {
   const AllBookingsScreen({super.key});
@@ -95,19 +96,18 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
-        title: const Text("Hospital Lab Manager",
+        title: Text("Hospital Lab Manager",
             style: TextStyle(
-                color: Colors.black,
+                color: AppColors.textPrimary(context),
                 fontWeight: FontWeight.bold,
                 fontSize: 18)),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0.5,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: Colors.black, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.textPrimary(context), size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -161,13 +161,13 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
           hintText: "Search patient name...",
           prefixIcon: const Icon(Icons.search, color: Color(0xFF6366F1)),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.inputFill(context),
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none),
           enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
-              borderSide: BorderSide(color: Colors.grey[200]!)),
+              borderSide: BorderSide(color: AppColors.border(context))),
         ),
       ),
     );
@@ -211,8 +211,8 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(value,
-                style: const TextStyle(
-                    color: Colors.white,
+                style: TextStyle(
+                    color: AppColors.cardBg(context),
                     fontWeight: FontWeight.bold,
                     fontSize: 18)),
             Text(label,
@@ -228,11 +228,11 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: AppColors.shadow(context),
               blurRadius: 10,
               offset: const Offset(0, 4))
         ],
@@ -256,12 +256,12 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold, fontSize: 16)),
                             Text(booking['test_names'] ?? "Lab Test",
-                                style: const TextStyle(
-                                    fontSize: 13, color: Colors.black87)),
+                                style: TextStyle(
+                                    fontSize: 13, color: AppColors.textSecondary(context))),
                             Text(
                                 "${booking['appointment_date']} | ${booking['appointment_time']}",
                                 style: TextStyle(
-                                    color: Colors.grey[500], fontSize: 12)),
+                                    color: AppColors.textMuted(context), fontSize: 12)),
                             const SizedBox(height: 8),
                             _buildStatusBadge(status),
                           ],
@@ -307,8 +307,8 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
           Icon(Icons.assignment_late_outlined,
               size: 80, color: Colors.grey[300]),
           const SizedBox(height: 10),
-          const Text("No appointments found",
-              style: TextStyle(color: Colors.grey)),
+          Text("No appointments found",
+              style: TextStyle(color: AppColors.textMuted(context))),
         ],
       ),
     );
@@ -355,7 +355,7 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12))),
-                child: const Text("Confirm & Print",
+                child: Text("Confirm & Print",
                     style: TextStyle(color: Colors.white)),
               ),
             ),

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'medical_care.dart';
 import 'medical_vault.dart';
 import 'services/voice_service.dart';
+import 'theme_colors.dart';
 
 class MedicalHistoryScreen extends StatefulWidget {
   // Fixed: patientId is passed in constructor, but usually accessed via widget.patientId
@@ -46,7 +47,12 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
           .from('profiles')
           .select('full_name, role')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
+
+      if (userData == null) {
+        if (mounted) setState(() { _currentUserId = user.id; _isLoading = false; });
+        return;
+      }
 
       if (mounted) {
         setState(() {
@@ -110,7 +116,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         automaticallyImplyLeading: true, // Set to true if you want a back button
         title: Column(
@@ -120,7 +126,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
                 style: TextStyle(
                     fontWeight: FontWeight.w900, fontSize: 22, color: Color(0xFF1E293B))),
             Text("Patient: $_patientName",
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                style: TextStyle(fontSize: 12, color: const Color(0xFF64748B))),
           ],
         ),
         actions: [
@@ -137,7 +143,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(15),
             ),
             child: TabBar(
@@ -147,7 +153,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
                 color: primaryColor,
               ),
               labelColor: Colors.white,
-              unselectedLabelColor: Colors.grey,
+              unselectedLabelColor: AppColors.textMuted(context),
               indicatorSize: TabBarIndicatorSize.tab,
               dividerColor: Colors.transparent,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -187,10 +193,10 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
               const Text("Access Restricted",
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 "This dashboard is for patients. Your account is registered as a different role.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(color: AppColors.textMuted(context)),
               ),
             ],
           ),

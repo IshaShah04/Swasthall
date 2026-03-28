@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'theme_colors.dart';
 
 class TechnicianSetting extends StatefulWidget {
   final Map<String, dynamic>? userData;
@@ -139,11 +140,11 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
               Icons.assignment_outlined,
               isLongText: true),
           const SizedBox(height: 40),
-          const Text(
+          Text(
             "Profile information is visible to medical staff and patients.",
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: Colors.grey, fontSize: 11, fontStyle: FontStyle.italic),
+                color: AppColors.textMuted(context), fontSize: 11, fontStyle: FontStyle.italic),
           ),
         ],
       ),
@@ -171,7 +172,7 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
             child: CircleAvatar(
               backgroundColor: themeColor,
               radius: 18,
-              child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
+              child: Icon(Icons.camera_alt, size: 14, color: AppColors.cardBg(context)),
             ),
           ),
         ],
@@ -194,26 +195,26 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: AppColors.shadow(context),
               blurRadius: 10,
               offset: const Offset(0, 4))
         ],
       ),
       child: ListTile(
         leading: Icon(Icons.access_time_filled, color: themeColor),
-        title: const Text("Working Hours",
+        title: Text("Working Hours",
             style: TextStyle(
-                fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
+                fontSize: 11, color: AppColors.textMuted(context), fontWeight: FontWeight.bold)),
         subtitle: Text(timeDisplay,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87)),
-        trailing: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+                color: AppColors.textSecondary(context))),
+        trailing: Icon(Icons.edit_outlined, size: 18, color: AppColors.textMuted(context)),
         onTap: _showTimeSlotDialog,
       ),
     );
@@ -255,7 +256,7 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: themeColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
               onPressed: () => _saveAvailability(start, end),
-              child: const Text("Save Slots", style: TextStyle(color: Colors.white)),
+              child: Text("Save Slots", style: TextStyle(color: AppColors.cardBg(context))),
             )
           ],
         ),
@@ -296,22 +297,22 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))
+          BoxShadow(color: AppColors.shadow(context), blurRadius: 10, offset: const Offset(0, 4))
         ],
       ),
       child: ListTile(
         leading: Icon(icon, color: themeColor),
-        title: Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
+        title: Text(label, style: TextStyle(fontSize: 11, color: AppColors.textMuted(context), fontWeight: FontWeight.bold)),
         subtitle: Text(
           (value != null && value.isNotEmpty) ? value : "Not added yet",
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textSecondary(context)),
           maxLines: isLongText ? 4 : 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+        trailing: Icon(Icons.edit_outlined, size: 18, color: AppColors.textMuted(context)),
         onTap: () => _showEditDialog(label, column, value ?? "", isLongText),
       ),
     );
@@ -329,7 +330,7 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
           maxLines: isMultiline ? 5 : 1,
           decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.grey.shade50,
+              fillColor: AppColors.inputFill(context),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
         ),
         actions: [
@@ -350,7 +351,7 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
                 debugPrint("Error updating $label: $e");
               }
             },
-            child: const Text("Save Changes", style: TextStyle(color: Colors.white)),
+            child: Text("Save Changes", style: TextStyle(color: AppColors.cardBg(context))),
           ),
         ],
       ),

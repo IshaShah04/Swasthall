@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme_colors.dart';
 
 class LabTestDetailScreen extends StatefulWidget {
   final Map<String, dynamic> test;
@@ -40,13 +41,13 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
     final String dontInstructions = widget.test['dont_instructions']?.toString() ?? "No instructions provided.";
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       appBar: AppBar(
-        title: Text(testName, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+        title: Text(testName, style: TextStyle(color: AppColors.textPrimary(context), fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _bookingStream,
@@ -107,7 +108,7 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(location, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+                                Text(location, style: TextStyle(color: AppColors.textSecondary(context), fontSize: 14)),
                                 Text("\$$price", style: const TextStyle(color: Color(0xFF6366F1), fontSize: 28, fontWeight: FontWeight.bold)),
                               ],
                             ),
@@ -137,7 +138,7 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
                           hintText: "Search patient by name...",
                           prefixIcon: const Icon(Icons.search),
                           filled: true,
-                          fillColor: Colors.grey[50],
+                          fillColor: AppColors.inputFill(context),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                         ),
                       ),
@@ -188,7 +189,7 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
         child: Image.network(
           url,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 40),
+          errorBuilder: (_, __, ___) => Icon(Icons.broken_image_outlined, color: AppColors.textMuted(context), size: 40),
         ),
       ),
     );
@@ -227,7 +228,7 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
         children: [
           Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(content, style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.black87)),
+          Text(content, style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.textSecondary(context))),
         ],
       ),
     );
@@ -240,7 +241,7 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
       child: Column(
         children: [
           Text(label, style: const TextStyle(color: Colors.white70, fontSize: 10)),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+          Text(value, style: TextStyle(color: AppColors.cardBg(context), fontWeight: FontWeight.bold, fontSize: 18)),
         ],
       ),
     );
@@ -250,7 +251,7 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
     return Column(
       children: [
         Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        Text(label, style: TextStyle(color: AppColors.textMuted(context), fontSize: 12)),
       ],
     );
   }

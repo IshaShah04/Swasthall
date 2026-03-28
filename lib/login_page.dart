@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'registration_page.dart';
 import 'navigation_wrapper.dart';
 import 'services/account_service.dart';
+import 'theme_colors.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -167,7 +168,7 @@ class _LoginPageState extends State<LoginPage>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Enter your registered email address and we will send you a reset link.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              Text('Enter your registered email address and we will send you a reset link.', style: TextStyle(fontSize: 13, color: AppColors.textMuted(context))),
               const SizedBox(height: 16),
               TextField(
                 controller: dialogEmailController,
@@ -179,7 +180,7 @@ class _LoginPageState extends State<LoginPage>
                   filled: true,
                   fillColor: _bgColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFFE2E8F0))),
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brandColor, width: 2)),
                 ),
               ),
@@ -188,7 +189,7 @@ class _LoginPageState extends State<LoginPage>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: Text('Cancel', style: TextStyle(color: AppColors.textMuted(context))),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
@@ -260,7 +261,7 @@ class _LoginPageState extends State<LoginPage>
                 Container(
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.cardBg(context),
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
@@ -331,11 +332,11 @@ class _LoginPageState extends State<LoginPage>
                             ),
                           ),
                           child: _isLoading
-                              ? const SizedBox(
+                              ? SizedBox(
                                   height: 24,
                                   width: 24,
                                   child: CircularProgressIndicator(
-                                    color: Colors.white,
+                                    color: AppColors.cardBg(context),
                                     strokeWidth: 2,
                                   ),
                                 )
@@ -361,7 +362,7 @@ class _LoginPageState extends State<LoginPage>
                   children: [
                     Text(
                       "Don't have an account? ",
-                      style: TextStyle(color: Colors.grey[700]),
+                      style: TextStyle(color: AppColors.textSecondary(context)),
                     ),
                     GestureDetector(
                       onTap: () {
@@ -433,12 +434,12 @@ class _LoginPageState extends State<LoginPage>
                     child: Align(
                       alignment: Alignment.topCenter,
                       heightFactor: _sAnim.value,
-                      child: const Text(
+                      child: Text(
                         "S",
                         style: TextStyle(
                           fontSize: 80,
                           fontWeight: FontWeight.w900,
-                          color: Colors.white,
+                          color: AppColors.cardBg(context),
                           height: 1.0,
                         ),
                       ),
@@ -449,7 +450,7 @@ class _LoginPageState extends State<LoginPage>
                     size: const Size(90, 90),
                     painter: _LoginHeartbeatPainter(
                       progress: _heartbeatAnim.value,
-                      color: Colors.white.withValues(alpha: 0.9),
+                      color: AppColors.cardBg(context).withValues(alpha: 0.9),
                       strokeWidth: 2.2,
                     ),
                   ),
@@ -571,7 +572,7 @@ class _LoginPageState extends State<LoginPage>
             ? IconButton(
                 icon: Icon(
                   _passwordVisible ? Icons.visibility : Icons.visibility_off,
-                  color: Colors.grey,
+                  color: AppColors.textMuted(context),
                   size: 20,
                 ),
                 onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
@@ -585,7 +586,7 @@ class _LoginPageState extends State<LoginPage>
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade200),
+          borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

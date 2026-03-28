@@ -9,6 +9,7 @@ import 'supabase_handler.dart';
 import 'services/voice_service.dart';
 import 'main.dart';
 import 'widgets/app_transitions.dart';
+import 'theme_colors.dart';
 
 class BookingSuccessScreen extends StatefulWidget {
   final Map<String, dynamic> doctorData;
@@ -36,6 +37,12 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   final _supabase = Supabase.instance.client;
 
   StreamSubscription? _queueSubscription;
+
+  // BUG-20 FIX: Enriched doctor data fetched from DB.
+  // The doctorData passed by the caller may only have id + basic fields.
+  // We always re-fetch the full profile to show accurate name, specialty, avatar.
+  Map<String, dynamic> _enrichedDoctor = {};
+  bool _isDoctorLoading = true;
 
   bool _isIncomingCall = false;
   Timer? _inviteAutoExpireTimer;
@@ -69,12 +76,62 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       return;
     }
 
+    _fetchDoctorData(); // BUG-20 FIX: always re-fetch full doctor details from DB
     _initNotifications();
     _initVoiceAndAnnounce();
     _bindIncomingInviteNotifier();
     _setupQueueListener();
   }
 
+
+  // ───────────────────────────────────────────────────────────────────────
+  // DB fetch — always get fresh doctor data (BUG-20 fix)
+  // ───────────────────────────────────────────────────────────────────────
+
+  Future<void> _fetchDoctorData() async {
+    final doctorId = widget.doctorData['id']?.toString();
+    if (doctorId == null || doctorId.isEmpty) {
+      setState(() { _enrichedDoctor = Map.from(widget.doctorData); _isDoctorLoading = false; });
+      return;
+    }
+
+    try {
+      // Fetch staff row for name + speciality
+      final staffRow = await _supabase
+          .from('staff')
+          .select('id, full_name, speciality, email, hospital_id, hospital_name')
+          .eq('id', doctorId)
+          .maybeSingle();
+
+      // Fetch profile row for avatar and license
+      final profileRow = await _supabase
+          .from('profiles')
+          .select('full_name, avatar_url, license_number, bio')
+          .eq('id', doctorId)
+          .maybeSingle();
+
+      // Merge: staff fields take priority for medical details,
+      // profiles for avatar and display name fallback
+      final merged = <String, dynamic>{
+        ...widget.doctorData,              // base (has id at minimum)
+        if (staffRow != null) ...staffRow, // overwrite with DB staff data
+        if (profileRow != null) ...{
+          'avatar_url':     profileRow['avatar_url'],
+          'bio':            profileRow['bio'],
+          'license_number': profileRow['license_number'],
+          // Only use profile name if staff name is missing
+          if ((staffRow?['full_name'] ?? '').toString().isEmpty)
+            'full_name': profileRow['full_name'],
+        },
+      };
+
+      if (mounted) setState(() { _enrichedDoctor = merged; _isDoctorLoading = false; });
+    } catch (e) {
+      debugPrint('BookingSuccess: doctor fetch error: \$e');
+      // Fallback: use whatever was passed in
+      if (mounted) setState(() { _enrichedDoctor = Map.from(widget.doctorData); _isDoctorLoading = false; });
+    }
+  }
 
   // ───────────────────────────────────────────────────────────────────────
   // Incoming call binding
@@ -276,7 +333,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   // ───────────────────────────────────────────────────────────────────────
 
   void _setupQueueListener() {
-    final staffId = widget.doctorData['id'];
+    final staffId = _enrichedDoctor['id'] ?? widget.doctorData['id'];
     if (staffId == null) return;
 
     try {
@@ -329,7 +386,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     final String dateStr =
         DateFormat('EEEE, MMMM d').format(widget.appointmentDate);
     final String announcement =
-        "Appointment booked with ${widget.doctorData['full_name'] ?? 'your doctor'} "
+        "Appointment booked with ${_enrichedDoctor['full_name'] ?? widget.doctorData['full_name'] ?? 'your doctor'} "
         "for $dateStr. Your queue number is $_safeQueueNumber. "
         "We will notify you when your turn is approaching.";
     _voiceService.speakWithSavedLanguage(announcement);
@@ -376,7 +433,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: const Color(0xFFF1F5F9),
+          backgroundColor: AppColors.scaffoldBg(context),
           appBar: _buildAppBar(),
           body: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -407,13 +464,13 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       elevation: 0,
       leading: IconButton(
         onPressed: _goBack,
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.grey),
+        icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textMuted(context)),
       ),
       automaticallyImplyLeading: false,
       actions: [
         IconButton(
           onPressed: _goHome,
-          icon: const Icon(Icons.close, color: Colors.grey),
+          icon: Icon(Icons.close, color: AppColors.textMuted(context)),
         ),
       ],
     );
@@ -447,23 +504,23 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isUrgent ? const Color(0xFFFFF1F2) : Colors.white,
+        color: isUrgent ? AppColors.redTint(context) : AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: AppColors.shadow(context),
             blurRadius: 10,
           ),
         ],
       ),
       child: Column(
         children: [
-          const Text(
+          Text(
             "LIVE QUEUE STATUS",
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: Colors.grey,
+              color: AppColors.textMuted(context),
               letterSpacing: 1.2,
             ),
           ),
@@ -472,7 +529,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _queueInfo("Your No.", _safeQueueNumber.toString(), const Color(0xFF6366F1)),
-              const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 16),
+              Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textMuted(context), size: 16),
               _queueInfo("Serving", _currentlyServing.toString(), Colors.orange),
             ],
           ),
@@ -500,7 +557,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   Widget _queueInfo(String label, String value, Color color) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(label, style: TextStyle(fontSize: 12, color: AppColors.textMuted(context))),
         Text(
           value,
           style: TextStyle(
@@ -517,7 +574,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Column(
@@ -551,8 +608,21 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   }
 
   Widget _buildDoctorHeader() {
-    final String doctorName = widget.doctorData['full_name'] ?? "Doctor";
-    final String initial = doctorName.isNotEmpty ? doctorName[0].toUpperCase() : "D";
+    if (_isDoctorLoading) {
+      return Container(
+        height: 90,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF6366F1).withValues(alpha: 0.05),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6366F1))),
+      );
+    }
+    final String doctorName = _enrichedDoctor['full_name'] ?? widget.doctorData['full_name'] ?? 'Doctor';
+    final String speciality = _enrichedDoctor['speciality'] ?? widget.doctorData['speciality'] ?? 'Specialist';
+    final String? avatarUrl = _enrichedDoctor['avatar_url']?.toString();
+    final String initial = doctorName.isNotEmpty ? doctorName[0].toUpperCase() : 'D';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -565,10 +635,11 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
           CircleAvatar(
             radius: 30,
             backgroundColor: const Color(0xFF6366F1),
-            child: Text(
-              initial,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
+            backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                ? NetworkImage(avatarUrl) : null,
+            child: (avatarUrl == null || avatarUrl.isEmpty)
+                ? Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                : null,
           ),
           const SizedBox(width: 15),
           Expanded(
@@ -580,7 +651,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  widget.doctorData['speciality'] ?? 'Specialist',
+                  speciality,
                   style: const TextStyle(color: Color(0xFF6366F1), fontSize: 13),
                 ),
               ],
@@ -594,9 +665,9 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   Widget _infoRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: Colors.grey),
+        Icon(icon, size: 18, color: AppColors.textMuted(context)),
         const SizedBox(width: 10),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+        Text(label, style: TextStyle(color: AppColors.textMuted(context), fontSize: 14)),
         const Spacer(),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
       ],
@@ -645,7 +716,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(15),
           side: bg == Colors.white
-              ? BorderSide(color: Colors.grey.shade300)
+              ? BorderSide(color: const Color(0xFFCBD5E1))
               : BorderSide.none,
         ),
       ),
@@ -654,7 +725,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
 
   Widget _buildIncomingCallUI() {
     return Material(
-      color: const Color(0xFF0F172A),
+      color: AppColors.textPrimary(context),
       child: SafeArea(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -666,16 +737,16 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
                   style: TextStyle(color: Colors.white60, letterSpacing: 2),
                 ),
                 const SizedBox(height: 30),
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 45,
-                  backgroundColor: Color(0xFF6366F1),
-                  child: Icon(Icons.person, size: 40, color: Colors.white),
+                  backgroundColor: const Color(0xFF6366F1),
+                  child: const Icon(Icons.person, size: 40, color: Colors.white),
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  widget.doctorData['full_name'] ?? "Doctor",
-                  style: const TextStyle(
-                    color: Colors.white,
+                  _enrichedDoctor['full_name'] ?? widget.doctorData['full_name'] ?? 'Doctor',
+                  style: TextStyle(
+                    color: AppColors.cardBg(context),
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
@@ -710,11 +781,11 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
           child: CircleAvatar(
             radius: 35,
             backgroundColor: col,
-            child: Icon(icon, color: Colors.white),
+            child: Icon(icon, color: AppColors.cardBg(context)),
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white)),
+        Text(label, style: TextStyle(color: AppColors.cardBg(context))),
       ],
     );
   }

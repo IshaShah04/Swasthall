@@ -18,6 +18,7 @@ import 'consultation_screen.dart';
 import 'professional_lab.dart';
 import 'patient_records_screen.dart';
 import 'professional_insights.dart';
+import 'theme_colors.dart';
 
 class NavigationWrapper extends StatefulWidget {
   final String userRole;
@@ -107,11 +108,11 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
       body: IndexedStack(index: _selectedIndex, children: pages),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           boxShadow: [
             BoxShadow(
               // Fixed the syntax error and parenthesis here
-              color: Colors.black.withValues(alpha: 0.05),
+              color: AppColors.shadow(context),
               blurRadius: 20,
               offset: const Offset(0, -5),
             ),
@@ -130,7 +131,7 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
               });
             },
             type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.white,
+            backgroundColor: AppColors.cardBg(context),
             selectedItemColor: brandColor,
             unselectedItemColor: unselectedColor,
             showUnselectedLabels: true,

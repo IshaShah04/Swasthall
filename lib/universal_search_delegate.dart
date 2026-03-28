@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'theme_colors.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ class UniversalSearchDelegate extends SearchDelegate {
     return ListView.builder(
       itemCount: history.length,
       itemBuilder: (context, index) => ListTile(
-        leading: const Icon(Icons.history, color: Colors.grey),
+        leading: Icon(Icons.history, color: AppColors.textMuted(context)),
         title: Text(history[index],
             style: const TextStyle(fontSize: 15)),
         onTap: () {
@@ -176,18 +177,18 @@ class UniversalSearchDelegate extends SearchDelegate {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.search_off_rounded,
-                size: 64, color: Colors.grey.shade300),
+                size: 64, color: const Color(0xFFCBD5E1)),
             const SizedBox(height: 16),
             Text(
               'No results for "$q"',
               style: TextStyle(
-                  fontSize: 15, color: Colors.grey.shade500),
+                  fontSize: 15, color: const Color(0xFF64748B)),
             ),
             const SizedBox(height: 8),
             Text(
               'Try different spelling or use the mic 🎤',
               style: TextStyle(
-                  fontSize: 12, color: Colors.grey.shade400),
+                  fontSize: 12, color: const Color(0xFF94A3B8)),
             ),
           ],
         ),
@@ -219,7 +220,7 @@ class UniversalSearchDelegate extends SearchDelegate {
           subtitle: subtitle.isNotEmpty
               ? Text(subtitle,
                   style: TextStyle(
-                      fontSize: 12, color: Colors.grey.shade600))
+                      fontSize: 12, color: const Color(0xFF475569)))
               : null,
           onTap: () => close(context, displayName),
         );
@@ -368,8 +369,8 @@ class _HighlightText extends StatelessWidget {
 
     return RichText(
       text: TextSpan(
-        style: const TextStyle(
-            color: Colors.black87,
+        style: TextStyle(
+            color: AppColors.textSecondary(context),
             fontSize: 15,
             fontWeight: FontWeight.w500),
         children: [

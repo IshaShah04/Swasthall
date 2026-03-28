@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'plan_details_screen.dart'; 
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
 
 class CoverageScreen extends StatefulWidget {
   const CoverageScreen({super.key});
@@ -104,14 +105,14 @@ class _CoverageScreenState extends State<CoverageScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: AppColors.scaffoldBg(context),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       body: Column(
         children: [
           Padding(
@@ -131,9 +132,9 @@ class _CoverageScreenState extends State<CoverageScreen> {
                         letterSpacing: -0.5,
                       ),
                     ),
-                    const CircleAvatar(
-                      backgroundColor: Color(0xFFF1F5F9),
-                      child: Icon(Icons.history_rounded, color: Colors.grey),
+                    CircleAvatar(
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      child: Icon(Icons.history_rounded, color: AppColors.textMuted(context)),
                     ),
                   ],
                 ),
@@ -230,12 +231,12 @@ class _CoverageScreenState extends State<CoverageScreen> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF1F5F9)),
+          border: Border.all(color: AppColors.surfaceBg(context)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: AppColors.shadow(context),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -274,7 +275,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
             ),
             Text(
               plan['category'] ?? "General",
-              style: const TextStyle(color: Colors.grey, fontSize: 10),
+              style: TextStyle(color: AppColors.textMuted(context), fontSize: 10),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -306,7 +307,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-        Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(subtitle, style: TextStyle(fontSize: 12, color: AppColors.textMuted(context))),
       ],
     );
   }
@@ -316,18 +317,18 @@ class _CoverageScreenState extends State<CoverageScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: AppColors.scaffoldBg(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        border: Border.all(color: AppColors.surfaceBg(context)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.grey[400], size: 40),
+          Icon(icon, color: AppColors.textMuted(context), size: 40),
           const SizedBox(height: 12),
           Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 4),
-          Text(sub, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(sub, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: AppColors.textMuted(context))),
         ],
       ),
     );
@@ -338,9 +339,9 @@ class _CoverageScreenState extends State<CoverageScreen> {
       controller: _searchController,
       decoration: InputDecoration(
         hintText: "Search for plans...",
-        prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
+        prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted(context)),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: AppColors.inputFill(context),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
           borderSide: BorderSide.none,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'shared_widgets.dart';
+import 'theme_colors.dart';
 
 class DoctorDetailScreen extends StatefulWidget {
   final Map<String, dynamic> staff;
@@ -43,11 +44,11 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: const Text("Staff Details", style: TextStyle(fontSize: 18)),
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         foregroundColor: Colors.black,
         actions: [
           Padding(
@@ -92,8 +93,8 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 1)],
       ),
@@ -104,12 +105,12 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
             tag: widget.staff['id'] ?? 'avatar',
             child: CircleAvatar(
               radius: 50,
-              backgroundColor: Colors.grey.shade100,
+              backgroundColor: AppColors.surfaceBg(context),
               backgroundImage: widget.staff['avatar_url'] != null
                   ? NetworkImage(widget.staff['avatar_url'])
                   : null,
               child: widget.staff['avatar_url'] == null
-                  ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                  ? Icon(Icons.person, size: 50, color: AppColors.textMuted(context))
                   : null,
             ),
           ),
@@ -146,7 +147,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                                 "Asst: ${snapshot.data!['name']}",
                                 style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey.shade700,
+                                    color: const Color(0xFF334155),
                                     fontWeight: FontWeight.w500),
                               ),
                             ],
@@ -191,9 +192,9 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Column(
           children: [
@@ -222,7 +223,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          Text(label, style: TextStyle(color: AppColors.textMuted(context), fontSize: 13)),
           Flexible(
             child: Text(value,
                 textAlign: TextAlign.end,
@@ -271,7 +272,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                     const SizedBox(height: 4),
                     Text(
                       "#$currentlyServing",
-                      style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
+                      style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
                     ),
                   ],
                 ),
@@ -287,7 +288,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                     const SizedBox(height: 4),
                     Text(
                       "${widget.staff['daily_bookings'] ?? 0}",
-                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: AppColors.cardBg(context), fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -372,7 +373,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
       elevation: isLive ? 4 : 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
-        side: BorderSide(color: isLive ? brandColor : Colors.grey.shade200, width: isLive ? 2 : 1),
+        side: BorderSide(color: isLive ? brandColor : AppColors.border(context), width: isLive ? 2 : 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -398,12 +399,12 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(4)),
-                          child: const Text("LIVE", style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                          child: Text("LIVE", style: TextStyle(color: AppColors.cardBg(context), fontSize: 8, fontWeight: FontWeight.bold)),
                         )
                       ]
                     ],
                   ),
-                  Text("Time: ${booking['appointment_time'] ?? 'Not set'}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  Text("Time: ${booking['appointment_time'] ?? 'Not set'}", style: TextStyle(fontSize: 11, color: AppColors.textMuted(context))),
                 ],
               ),
             ),
@@ -455,8 +456,8 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-      child: const Center(child: Text("No bookings for today.", style: TextStyle(color: Colors.grey))),
+      decoration: BoxDecoration(color: AppColors.cardBg(context), borderRadius: BorderRadius.circular(15)),
+      child: Center(child: Text("No bookings for today.", style: TextStyle(color: AppColors.textMuted(context)))),
     );
   }
 

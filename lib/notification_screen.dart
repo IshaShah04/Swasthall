@@ -8,6 +8,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme_colors.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class NotificationScreen extends StatefulWidget {
@@ -52,9 +53,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
         title: const Text(
@@ -77,7 +78,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
               backgroundColor: _indigo,
               onPressed: _openBroadcastSheet,
               tooltip: 'Send notification to all patients',
-              child: const Icon(Icons.add, color: Colors.white),
+              child: Icon(Icons.add, color: AppColors.cardBg(context)),
             )
           : null,
       body: StreamBuilder<List<Map<String, dynamic>>>(
@@ -95,16 +96,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.notifications_none_outlined,
-                      size: 64, color: Colors.grey.shade300),
+                      size: 64, color: const Color(0xFFCBD5E1)),
                   const SizedBox(height: 16),
                   Text('No notifications yet',
                       style: TextStyle(
                           fontSize: 16,
-                          color: Colors.grey.shade500,
+                          color: const Color(0xFF64748B),
                           fontWeight: FontWeight.w500)),
                   const SizedBox(height: 6),
                   Text('You\'ll see booking updates and announcements here',
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade400)),
+                      style: TextStyle(fontSize: 13, color: const Color(0xFF94A3B8))),
                 ],
               ),
             );
@@ -151,7 +152,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -238,7 +239,7 @@ class _NotifTile extends StatelessWidget {
                                 ? FontWeight.w700
                                 : FontWeight.w600,
                             fontSize: 14,
-                            color: const Color(0xFF1F2937),
+                            color: AppColors.textPrimary(context),
                           ),
                         ),
                       ),
@@ -256,7 +257,7 @@ class _NotifTile extends StatelessWidget {
                     notif['body'] ?? '',
                     style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey.shade600,
+                        color: const Color(0xFF475569),
                         height: 1.4),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
@@ -266,7 +267,7 @@ class _NotifTile extends StatelessWidget {
                     Text(
                       timeago.format(createdAt),
                       style: TextStyle(
-                          fontSize: 11, color: Colors.grey.shade400),
+                          fontSize: 11, color: const Color(0xFF94A3B8)),
                     ),
                   ],
                 ],
@@ -379,7 +380,7 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: const Color(0xFFCBD5E1),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -390,14 +391,14 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
               Text('All ${_supabase.auth.currentUser?.email ?? ''} patients will receive this',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                  style: TextStyle(fontSize: 12, color: const Color(0xFF64748B))),
               const SizedBox(height: 20),
 
               // Templates
-              const Text('Quick templates',
+              Text('Quick templates',
                   style: TextStyle(fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey)),
+                      color: AppColors.textMuted(context))),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -481,17 +482,17 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                     elevation: 0,
                   ),
                   icon: _isSending
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.send_rounded,
-                          color: Colors.white, size: 18),
+                              color: AppColors.cardBg(context), strokeWidth: 2))
+                      : Icon(Icons.send_rounded,
+                          color: AppColors.cardBg(context), size: 18),
                   label: Text(
                     _isSending ? 'Sending...' : 'Send to all patients',
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: AppColors.cardBg(context),
                         fontWeight: FontWeight.bold,
                         fontSize: 15),
                   ),

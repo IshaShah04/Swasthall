@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'order_success_screen.dart';
 import 'package:swasthall/services/booking_fee_service.dart';
+import 'theme_colors.dart';
 
 class LabPaymentScreen extends StatefulWidget {
   final Map<String, dynamic> labData;
@@ -85,9 +86,9 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
           .from('profiles')
           .select('full_name')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
-      final String patientName = profileData['full_name'] ?? 'User';
+      final String patientName = profileData?['full_name'] ?? 'User';
       final String professionalId = widget.labData['id'].toString();
       final String testNames = widget.selectedTests
           .map((e) => e['test_name'] ?? e['name'] ?? 'Test')
@@ -97,7 +98,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
 
       // Store base amount in total_amount (without convenience fee)
       // Convenience fee tracked via platform_transactions trigger
-      final response = await supabase
+      final insertedRows = await supabase
           .from('lab_appointments')
           .insert({
             'professional_id': professionalId,
@@ -114,8 +115,11 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
             'payment_method':   _selectedMethod,
             'status':           'scheduled',
           })
-          .select()
-          .single();
+          .select();
+      // BUG-05b: safe first-row extraction (no .single() crash)
+      final response = (insertedRows.isNotEmpty)
+          ? Map<String, dynamic>.from(insertedRows.first as Map)
+          : <String, dynamic>{};
 
       if (!mounted) return;
       Navigator.of(context).pop(); // close loading
@@ -159,14 +163,14 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
     return Scaffold(
       backgroundColor: bgLight,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Checkout',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: AppColors.textPrimary(context), fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -215,11 +219,11 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
       margin: const EdgeInsets.all(20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: AppColors.shadow(context),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -250,7 +254,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
               ),
             ],
           ),
-          const Padding(
+          Padding(
               padding: EdgeInsets.symmetric(vertical: 15),
               child: Divider(height: 1)),
 
@@ -265,7 +269,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
                     child: Text(
                       test['test_name'] ?? test['name'] ?? 'Test',
                       style:
-                          TextStyle(color: Colors.grey[800], fontSize: 14),
+                          TextStyle(color: AppColors.textSecondary(context), fontSize: 14),
                     ),
                   ),
                   Text(
@@ -286,7 +290,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
             children: [
               Text('Schedule',
                   style: TextStyle(
-                      color: Colors.grey[600],
+                      color: AppColors.textSecondary(context),
                       fontSize: 13,
                       fontWeight: FontWeight.w500)),
               Text(
@@ -362,13 +366,13 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
           children: [
             Text(label,
                 style: TextStyle(
-                    color: Colors.grey[700],
+                    color: AppColors.textSecondary(context),
                     fontSize: 13,
                     fontWeight: FontWeight.w500)),
             if (sub != null)
               Text(sub,
                   style: TextStyle(
-                      fontSize: 11, color: Colors.grey[400])),
+                      fontSize: 11, color: AppColors.textMuted(context))),
           ],
         ),
         Text(value,
@@ -392,7 +396,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
@@ -434,12 +438,12 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
       padding: EdgeInsets.fromLTRB(
           20, 15, 20, MediaQuery.of(context).padding.bottom + 15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius:
             const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: AppColors.shadow(context),
             blurRadius: 10,
             offset: const Offset(0, -5),
           ),
@@ -455,7 +459,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
           elevation: 0,
         ),
         child: _isProcessing
-            ? const SizedBox(
+            ? SizedBox(
                 height: 22,
                 width: 22,
                 child: CircularProgressIndicator(
@@ -467,7 +471,7 @@ class _LabPaymentScreenState extends State<LabPaymentScreen> {
                     : _feeLoading
                         ? 'Calculating...'
                         : 'Pay Rs. ${_totalPayable.toStringAsFixed(0)}',
-                style: const TextStyle(
+                style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.bold),

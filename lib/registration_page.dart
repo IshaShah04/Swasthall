@@ -11,6 +11,7 @@ import 'registration_constants.dart';
 import 'registration_legal_widgets.dart';
 import 'registration_shared_widgets.dart';
 import 'supabase_handler.dart';
+import 'theme_colors.dart';
 
 class RegistrationPage extends StatefulWidget {
   const RegistrationPage({super.key});
@@ -307,18 +308,18 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 elevation: canRegister ? 4 : 0,
               ),
               child: _isLoading
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 22,
                       height: 22,
                       child: CircularProgressIndicator(
-                        color: Colors.white,
+                        color: AppColors.cardBg(context),
                         strokeWidth: 2.5,
                       ),
                     )
-                  : const Text(
+                  : Text(
                       "CREATE MY ACCOUNT",
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.cardBg(context),
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                         letterSpacing: 0.5,
@@ -333,7 +334,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             child: Text(
               "Accept all 3 legal agreements above to enable registration",
               style: TextStyle(
-                color: Colors.grey.shade400,
+                color: const Color(0xFF94A3B8),
                 fontSize: 11,
                 fontStyle: FontStyle.italic,
               ),
@@ -353,9 +354,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
             : "License / Registration Number";
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         iconTheme: const IconThemeData(color: RegistrationTheme.brand),
       ),
@@ -374,9 +375,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 "Join Swasthall — Nepal's Healthcare Platform",
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                style: TextStyle(color: AppColors.textMuted(context), fontSize: 13),
               ),
               const SizedBox(height: 28),
 

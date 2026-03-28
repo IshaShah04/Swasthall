@@ -6,6 +6,7 @@ import 'package:zego_uikit/zego_uikit.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 
 import 'config/env_config.dart';
+import 'theme_colors.dart';
 
 class PatientVideoCallPage extends StatefulWidget {
   final String callID;
@@ -168,8 +169,8 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
                 right: 24,
                 top: 24,
               ),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: AppColors.cardBg(context),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               ),
               child: Column(
@@ -190,7 +191,7 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEEF2FF),
+                      color: AppColors.indigoTint(context),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -211,7 +212,7 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
                   const SizedBox(height: 6),
                   Text(
                     "with ${widget.professionalName}",
-                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                    style: TextStyle(color: AppColors.textMuted(context), fontSize: 13),
                   ),
                   const SizedBox(height: 20),
 
@@ -245,9 +246,9 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
                     maxLines: 2,
                     decoration: InputDecoration(
                       hintText: "Leave a comment (optional)",
-                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                      hintStyle: TextStyle(color: AppColors.textMuted(context), fontSize: 13),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: AppColors.inputFill(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide.none,
@@ -277,7 +278,7 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
                         elevation: 0,
                       ),
                       child: isSubmitting
-                          ? const SizedBox(
+                          ? SizedBox(
                               height: 20,
                               width: 20,
                               child: CircularProgressIndicator(
@@ -285,7 +286,7 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
                                 strokeWidth: 2,
                               ),
                             )
-                          : const Text(
+                          : Text(
                               "Submit & End",
                               style: TextStyle(
                                 color: Colors.white,
@@ -302,7 +303,7 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
                     onPressed: isSubmitting ? null : () async => skipAndEnd(),
                     child: Text(
                       "Skip rating",
-                      style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                      style: TextStyle(color: AppColors.textMuted(context), fontSize: 13),
                     ),
                   ),
                 ],

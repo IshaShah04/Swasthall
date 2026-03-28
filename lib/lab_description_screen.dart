@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'widgets/safe_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'lab_appointment.dart';
-import 'services/voice_service.dart'; // 1. Import VoiceService
+import 'services/voice_service.dart';import 'theme_colors.dart';
+ // 1. Import VoiceService
 
 class LabDescriptionScreen extends StatefulWidget {
   final Map<String, dynamic> labData;
@@ -219,7 +220,7 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
                         TextStyle(fontWeight: FontWeight.bold, color: color)),
                 Text(desc,
                     style:
-                        const TextStyle(fontSize: 13, color: Colors.black87)),
+                        TextStyle(fontSize: 13, color: AppColors.textSecondary(context))),
               ],
             ),
           )
@@ -231,7 +232,7 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       body: CustomScrollView(
         slivers: [
           _buildSliverAppBar(),
@@ -244,17 +245,17 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
                 onChanged: (value) => _runFilter(value),
                 decoration: InputDecoration(
                   hintText: "Search for tests (e.g. Blood, Sugar)",
-                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                  prefixIcon: Icon(Icons.search, color: AppColors.textMuted(context)),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppColors.inputFill(context),
                   contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide(color: Colors.grey.shade200),
+                    borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide(color: Colors.grey.shade200),
+                    borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(15),
@@ -316,7 +317,7 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
               fit: BoxFit.cover,
               loadingBuilder: (_, child, progress) =>
                   progress == null ? child : const ShimmerBox(width: double.infinity, height: 300),
-              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 40),
+              errorBuilder: (_, __, ___) => Icon(Icons.broken_image_outlined, color: AppColors.textMuted(context), size: 40),
             ),
             Container(
               decoration: const BoxDecoration(
@@ -359,19 +360,19 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.location_on_rounded,
-                  size: 16, color: Colors.grey),
+              Icon(Icons.location_on_rounded,
+                  size: 16, color: AppColors.textMuted(context)),
               const SizedBox(width: 4),
               Expanded(
                   child: Text(widget.labData['location'] ?? "Unknown Location",
-                      style: const TextStyle(color: Colors.grey))),
+                      style: TextStyle(color: AppColors.textMuted(context)))),
             ],
           ),
           const SizedBox(height: 16),
           const Text("Description",
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           Text(widget.labData['description'] ?? "No description available.",
-              style: TextStyle(color: Colors.grey.shade700, height: 1.4)),
+              style: TextStyle(color: const Color(0xFF334155), height: 1.4)),
           const Divider(height: 40),
           const Text("Select Required Tests",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -398,11 +399,11 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
               isSelected ? primaryIndigo.withValues(alpha: 0.08) : Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-              color: isSelected ? primaryIndigo : Colors.grey.shade200,
+              color: isSelected ? primaryIndigo : AppColors.surfaceBg(context),
               width: 2),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
+                color: AppColors.shadow(context),
                 blurRadius: 10,
                 offset: const Offset(0, 4))
           ],
@@ -442,8 +443,8 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
               right: 8,
               child: InkWell(
                 onTap: () => _showInstructions(test),
-                child: const Icon(Icons.info_outline_rounded,
-                    color: Colors.grey, size: 22),
+                child: Icon(Icons.info_outline_rounded,
+                    color: AppColors.textMuted(context), size: 22),
               ),
             ),
             if (isSelected)
@@ -462,11 +463,11 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 30),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
+              color: AppColors.shadow(context),
               blurRadius: 20,
               offset: const Offset(0, -5))
         ],
@@ -480,8 +481,8 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text("${_selectedTests.length} tests selected",
-                      style: const TextStyle(
-                          color: Colors.grey, fontWeight: FontWeight.w600)),
+                      style: TextStyle(
+                          color: AppColors.textMuted(context), fontWeight: FontWeight.w600)),
                   Text("Rs. ${_totalPrice.toStringAsFixed(0)}",
                       style: TextStyle(
                           fontSize: 26,

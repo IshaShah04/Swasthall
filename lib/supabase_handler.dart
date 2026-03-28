@@ -13,10 +13,22 @@ class SupabaseHandler {
   // PRIVATE BUCKET REGISTRY
   // These buckets are set to PRIVATE in Supabase dashboard.
   // Files are stored by PATH only — signed URLs are generated on demand.
-  // Public buckets (avatars, lab-assets, doctor-images etc.) use getPublicUrl.
+  // Public buckets (avatars, lab-images, doctor-images) use getPublicUrl.
+  //
+  // Any bucket NOT listed here is treated as public and will return a
+  // permanent public URL. Add new private buckets here immediately when
+  // created in the Supabase dashboard, otherwise getFileDisplayUrl()
+  // returns a public URL that 403s for private files.
   // ─────────────────────────────────────────────────────────────────────────
 
-  static const _privateBuckets = {'medical_vault', 'insurance_vault'};
+  static const _privateBuckets = {
+    'medical_vault',
+    'insurance_vault',
+    'lab-assets',
+    'licenses',
+    'receipts',
+    'provider-docs',
+  };
 
   bool _isPrivate(String bucketName) => _privateBuckets.contains(bucketName);
 
@@ -299,11 +311,13 @@ class SupabaseHandler {
 
   Future<Map<String, dynamic>?> getActiveBooking(String patientId) async {
     try {
+      // Query using OR — newer bookings set patient_id, some older rows only
+      // have user_id. Both columns hold the same Supabase auth uid.
       final List<Map<String, dynamic>> data = await client
           .from('bookings')
           .select(
-              'id, patient_id, staff_id, status, appointment_time, appointment_date, created_at')
-          .eq('patient_id', patientId)
+              'id, patient_id, user_id, staff_id, status, appointment_time, appointment_date, created_at')
+          .or('patient_id.eq.$patientId,user_id.eq.$patientId')
           .filter('status', 'in', '("consulting", "nurse_calling", "calling")')
           .order('created_at', ascending: false)
           .limit(1);

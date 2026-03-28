@@ -12,6 +12,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/secure_logout.dart';
+import 'theme_colors.dart';
 
 class VerificationPendingScreen extends StatelessWidget {
   final String role;
@@ -64,7 +65,7 @@ class VerificationPendingScreen extends StatelessWidget {
                 width: 96,
                 height: 96,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEEF2FF),
+                  color: AppColors.indigoTint(context),
                   shape: BoxShape.circle,
                   border: Border.all(color: _indigo.withValues(alpha: 0.2), width: 2),
                 ),
@@ -104,9 +105,9 @@ class VerificationPendingScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.cardBg(context),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: AppColors.dividerColor(context)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,10 +133,10 @@ class VerificationPendingScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                  label: const Text('Check Verification Status',
+                  icon: Icon(Icons.refresh_rounded, color: AppColors.cardBg(context)),
+                  label: Text('Check Verification Status',
                       style: TextStyle(
-                          color: Colors.white,
+                          color: AppColors.cardBg(context),
                           fontWeight: FontWeight.bold,
                           fontSize: 15)),
                   style: ElevatedButton.styleFrom(

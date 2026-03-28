@@ -5,10 +5,9 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
 import 'package:alarm/alarm.dart';
 
-import 'config/env_config.dart';
+import 'theme_colors.dart';
 
 class MedicalCareTab extends StatefulWidget {
   final String patientId;
@@ -29,7 +28,79 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
   String _currentMed = "No medication detected";
   TimeOfDay _selectedTime = const TimeOfDay(hour: 8, minute: 0);
 
-  // ---------------- OCR & AI LOGIC ----------------
+  // ── Prescription scan results ─────────────────────────────────────────────
+  // Populated after a successful scan. Each map has:
+  //   name, generic, dosage, frequency, duration, instructions (from Gemini)
+  //   plus _interaction_alerts: List of interaction maps added locally
+  List<Map<String, dynamic>> _scannedMedicines = [];
+  List<_InteractionAlert> _interactionAlerts = [];
+  String? _prescriptionNotes;
+  bool _showScanResults = false;
+
+  // ── Bundled interaction data (loaded once) ────────────────────────────────
+  List<Map<String, dynamic>> _interactions = [];
+  bool _interactionsLoaded = false;
+
+  // ── Nepal brand alias map (BUG-23 fix: Napa→paracetamol, Flexon→ibuprofen) ─
+  List<Map<String, dynamic>> _brandAliases = [];
+  bool _brandAliasesLoaded = false;
+
+  // ── Nepal medicines index (for generic name lookup) ────────────────────────
+  List<Map<String, dynamic>> _medicinesIndex = [];
+  bool _medicinesIndexLoaded = false;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LOAD BUNDLED DATA
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _ensureDataLoaded() async {
+    if (!_interactionsLoaded) {
+      try {
+        final raw = await rootBundle
+            .loadString('assets/data/drug_interactions.json');
+        final list = jsonDecode(raw) as List<dynamic>;
+        _interactions =
+            list.map((e) => Map<String, dynamic>.from(e)).toList();
+        _interactionsLoaded = true;
+      } catch (e) {
+        debugPrint('drug_interactions.json load error: $e');
+        _interactions = [];
+        _interactionsLoaded = true;
+      }
+    }
+
+    if (!_brandAliasesLoaded) {
+      try {
+        final raw = await rootBundle.loadString('assets/data/nepal_brand_aliases.json');
+        final list = jsonDecode(raw) as List<dynamic>;
+        _brandAliases = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        _brandAliasesLoaded = true;
+      } catch (e) {
+        debugPrint('nepal_brand_aliases.json load error: $e');
+        _brandAliases = [];
+        _brandAliasesLoaded = true;
+      }
+    }
+
+    if (!_medicinesIndexLoaded) {
+      try {
+        final raw =
+            await rootBundle.loadString('assets/data/nepal_medicinesDI.json');
+        final list = jsonDecode(raw) as List<dynamic>;
+        _medicinesIndex =
+            list.map((e) => Map<String, dynamic>.from(e)).toList();
+        _medicinesIndexLoaded = true;
+      } catch (e) {
+        debugPrint('nepal_medicinesDI.json load error: $e');
+        _medicinesIndex = [];
+        _medicinesIndexLoaded = true;
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PICK IMAGE
+  // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _pickSource() async {
     showModalBottomSheet(
@@ -69,11 +140,9 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
     if (isCamera) {
       final photo = await ImagePicker().pickImage(
         source: ImageSource.camera,
-        imageQuality: 80,
+        imageQuality: 85,
       );
-      if (photo != null) {
-        fileBytes = await photo.readAsBytes();
-      }
+      if (photo != null) fileBytes = await photo.readAsBytes();
     } else {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
@@ -86,111 +155,250 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
     }
 
     if (fileBytes != null) {
-      _analyzeWithCloudVision(fileBytes);
+      await _scanPrescription(fileBytes);
     }
   }
 
-  Future<void> _analyzeWithCloudVision(Uint8List bytes) async {
-    setState(() => _isAnalyzing = true);
-    try {
-      final session = supabase.auth.currentSession;
-      if (session == null) {
-        _showSnackBar("Please log in to use prescription scanning.");
-        return;
-      }
+  // ─────────────────────────────────────────────────────────────────────────
+  // SCAN PRESCRIPTION — single Gemini Vision call
+  //
+  // Sends ONLY the image bytes to Gemini via our edge function.
+  // No patient name, ID, or personal data is included in the API call.
+  // The edge function prompt explicitly instructs Gemini to ignore patient
+  // identifiers and return only clinical medication data.
+  // ─────────────────────────────────────────────────────────────────────────
 
-      final base64Image = base64Encode(bytes);
-      final edgeUrl = '${EnvConfig.supabaseUrl}/functions/v1/vision-proxy';
+  Future<void> _scanPrescription(Uint8List bytes) async {
+  setState(() {
+    _isAnalyzing = true;
+    _showScanResults = false;
+    _scannedMedicines = [];
+    _interactionAlerts = [];
+  });
 
-      final response = await http.post(
-        Uri.parse(edgeUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${session.accessToken}',
-        },
-        body: jsonEncode({'imageBase64': base64Image}),
-      ).timeout(const Duration(seconds: 20));
+  await _ensureDataLoaded();
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>?;
-        final text = data?['text'] as String?;
+  try {
+    // Check session exists — functions.invoke() handles token attachment
+    // automatically. Do NOT call refreshSession() manually here: if the
+    // token is expired the Supabase client refreshes it internally, and a
+    // manual refresh before invoke() can create a race condition that sends
+    // a stale JWT, causing "Invalid JWT" 401 errors from the gateway.
+    final session = supabase.auth.currentSession;
+    if (session == null) {
+      _showSnackBar("Please log in to use prescription scanning.");
+      return;
+    }
 
-        if (text != null && text.isNotEmpty) {
-          _processWithGemini(text, session.accessToken);
-        } else {
-          _showSnackBar("No text found in image.");
+    final base64Image = base64Encode(bytes);
+
+    final response = await supabase.functions.invoke(
+      'gemini-prescription-proxy',
+      body: {
+        'imageBase64': base64Image,
+      },
+    );
+
+    if (!mounted) return;
+
+    if (response.status == 200 && response.data != null) {
+      final data = Map<String, dynamic>.from(response.data as Map);
+      _handleScanResult(data);
+    } else {
+      debugPrint(
+        'Prescription scan failed: ${response.status} ${response.data}',
+      );
+      _showSnackBar(
+        "Could not read prescription (${response.status}). Please try again.",
+      );
+    }
+  } catch (e) {
+    debugPrint("Prescription scan error: $e");
+    _showSnackBar("Scan error. Check your connection and try again.");
+  } finally {
+    if (mounted) setState(() => _isAnalyzing = false);
+  }
+}
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROCESS SCAN RESULT
+  // ─────────────────────────────────────────────────────────────────────────
+
+  void _handleScanResult(Map<String, dynamic> data) {
+    final rawMeds = data['medicines'] as List<dynamic>? ?? [];
+    final medicines = rawMeds
+        .map((m) => Map<String, dynamic>.from(m as Map))
+        .toList();
+
+    if (medicines.isEmpty) {
+      _showSnackBar(
+          "No medicines detected. Try a clearer photo in good lighting.");
+      return;
+    }
+
+    // Set reminder time from Gemini's suggestion
+    final h = (data['reminder_hour'] as num?)?.toInt() ?? 8;
+    final m = (data['reminder_minute'] as num?)?.toInt() ?? 0;
+
+    // Use first medicine for the reminder bar
+    final firstMed = medicines.first;
+    final firstName = firstMed['name']?.toString() ?? 'Medication';
+    final firstDosage = firstMed['dosage']?.toString() ?? '';
+
+    // Enrich each medicine with generic name from our local index
+    final enriched = medicines.map((med) {
+      final localMatch = _lookupLocal(med['name']?.toString() ?? '');
+      return {
+        ...med,
+        '_local_generic': localMatch?['generic_name']?.toString() ??
+            med['generic']?.toString() ??
+            '',
+      };
+    }).toList();
+
+    // Run interaction check across all pairs
+    final alerts = _checkInteractions(enriched);
+
+    setState(() {
+      _currentMed =
+          firstDosage.isNotEmpty ? '$firstName $firstDosage' : firstName;
+      _selectedTime =
+          TimeOfDay(hour: h.clamp(0, 23), minute: m.clamp(0, 59));
+      _scannedMedicines = enriched;
+      _interactionAlerts = alerts;
+      _prescriptionNotes = data['notes']?.toString();
+      _showScanResults = true;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // INTERACTION CHECK
+  //
+  // Checks all pairwise combinations of scanned medicines against the
+  // bundled drug_interactions.json. Uses normalised name matching so
+  // "Napa", "napa tablet", and "paracetamol" all resolve to the same
+  // ingredient key.
+  //
+  // No network call — 100% offline, instant.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  List<_InteractionAlert> _checkInteractions(
+      List<Map<String, dynamic>> meds) {
+    final alerts = <_InteractionAlert>[];
+    if (meds.length < 2 || _interactions.isEmpty) return alerts;
+
+    // Build normalised ingredient list for each medicine
+    final ingredients = meds.map((med) {
+      final name = med['name']?.toString() ?? '';
+      final generic = med['_local_generic']?.toString() ??
+          med['generic']?.toString() ??
+          '';
+      return _normaliseIngredients(name, generic);
+    }).toList();
+
+    // Check every pair
+    for (int i = 0; i < meds.length; i++) {
+      for (int j = i + 1; j < meds.length; j++) {
+        final aKeys = ingredients[i];
+        final bKeys = ingredients[j];
+
+        for (final rule in _interactions) {
+          final ruleA = _normalise(rule['a']?.toString() ?? '');
+          final ruleB = _normalise(rule['b']?.toString() ?? '');
+
+          final matched = (aKeys.any((k) => k.contains(ruleA) || ruleA.contains(k)) &&
+                  bKeys.any((k) => k.contains(ruleB) || ruleB.contains(k))) ||
+              (bKeys.any((k) => k.contains(ruleA) || ruleA.contains(k)) &&
+                  aKeys.any((k) => k.contains(ruleB) || ruleB.contains(k)));
+
+          if (matched) {
+            alerts.add(_InteractionAlert(
+              drugA: meds[i]['name']?.toString() ?? 'Medicine ${i + 1}',
+              drugB: meds[j]['name']?.toString() ?? 'Medicine ${j + 1}',
+              severity: rule['severity']?.toString() ?? 'moderate',
+              effect: rule['effect']?.toString() ?? '',
+              mechanism: rule['mechanism']?.toString() ?? '',
+              action: rule['action']?.toString() ?? '',
+            ));
+            break; // one rule per pair is enough
+          }
         }
-      } else {
-        _showSnackBar("Vision analysis failed (${response.statusCode}).");
-      }
-    } catch (e) {
-      _showSnackBar("Analysis Error: $e");
-    } finally {
-      if (mounted) setState(() => _isAnalyzing = false);
-    }
-  }
-
-  Future<void> _processWithGemini(String text, String accessToken) async {
-    final localMatch = await _searchLocalDatabase(text);
-
-    try {
-      final edgeUrl =
-          '${EnvConfig.supabaseUrl}/functions/v1/gemini-ocr-proxy';
-
-      final response = await http.post(
-        Uri.parse(edgeUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
-        },
-        body: jsonEncode({'prescriptionText': text}),
-      ).timeout(const Duration(seconds: 20));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>?;
-        if (data == null) return;
-
-        final med = data['med'] as String?;
-        final h = (data['h'] as num?)?.toInt() ?? 8;
-        final m = (data['m'] as num?)?.toInt() ?? 0;
-
-        if (mounted) {
-          setState(() {
-            _currentMed = localMatch != null
-                ? "${localMatch['brand_name']} (${localMatch['dosage'] ?? 'TBD'})"
-                : (med ?? text.split('\n').first);
-            _selectedTime = TimeOfDay(hour: h.clamp(0, 23), minute: m.clamp(0, 59));
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint("Gemini OCR Error: $e");
-      if (mounted) {
-        setState(() {
-          _currentMed = localMatch != null
-              ? "${localMatch['brand_name']}"
-              : text.split('\n').first;
-        });
       }
     }
+
+    // Sort: contraindicated → major → moderate → minor
+    const order = {
+      'contraindicated': 0,
+      'major': 1,
+      'moderate': 2,
+      'minor': 3
+    };
+    alerts.sort((a, b) =>
+        (order[a.severity] ?? 9).compareTo(order[b.severity] ?? 9));
+
+    return alerts;
   }
 
-  Future<Map<String, dynamic>?> _searchLocalDatabase(String scannedText) async {
-    try {
-      final String response =
-          await rootBundle.loadString('assets/data/nepal_medicines.json');
-      final List<dynamic> data = jsonDecode(response);
-      final text = scannedText.toLowerCase();
+  String _normalise(String text) => text
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]'), '')
+      .trim();
 
-      for (var med in data) {
-        final brandName = (med['brand_name'] ?? "").toString().toLowerCase();
-        if (brandName.isNotEmpty && text.contains(brandName)) return med as Map<String, dynamic>;
+  /// Returns a set of normalised keyword tokens for a medicine.
+  /// Includes the brand name, generic name, and sub-words so that
+  /// e.g. "amoxicillin clavulanate" matches the "amoxicillin" rule.
+  Set<String> _normaliseIngredients(String name, String generic) {
+    final keys = <String>{};
+    void add(String s) {
+      final n = _normalise(s);
+      if (n.length > 2) keys.add(n);
+    }
+
+    add(name);
+    add(generic);
+    // Also tokenise multi-word generics so "paracetamol ibuprofen" → both
+    for (final part in generic.split(RegExp(r'[\s+/&,]'))) {
+      add(part);
+    }
+    for (final part in name.split(RegExp(r'[\s+/&,]'))) {
+      add(part);
+    }
+    return keys;
+  }
+
+  // BUG-23 fix: check brand alias map first (fast curated), then medicines index
+  Map<String, dynamic>? _lookupLocal(String name) {
+    if (name.isEmpty) return null;
+    final n = name.toLowerCase().trim();
+
+    // Step 1: brand alias map (Napa→paracetamol, Flexon→ibuprofen, etc.)
+    for (final alias in _brandAliases) {
+      final brandKey = (alias['brand_key'] ?? '').toString().toLowerCase();
+      final brandName = (alias['brand_name'] ?? '').toString().toLowerCase();
+      if (n == brandKey || n == brandName ||
+          n.contains(brandName) || brandName.contains(n)) {
+        return {
+          'brand_name': alias['brand_name'],
+          'generic_name': alias['canonical_key'] ?? alias['generic_text'] ?? '',
+        };
       }
-    } catch (e) {
-      debugPrint("JSON Load Error: $e");
+    }
+
+    // Step 2: medicines index fallback
+    if (_medicinesIndex.isEmpty) return null;
+    for (final med in _medicinesIndex) {
+      final brand = (med['brand_name'] ?? '').toString().toLowerCase();
+      if (brand.isNotEmpty && (n.contains(brand) || brand.contains(n))) {
+        return med;
+      }
     }
     return null;
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LEGACY — kept for backward compat with alarm bar, not used for scanning
+  // ─────────────────────────────────────────────────────────────────────────
+
 
   // ---------------- ALARM LOGIC ----------------
 
@@ -247,9 +455,9 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
           child: ElevatedButton.icon(
             onPressed: _isAnalyzing ? null : _pickSource,
             icon: _isAnalyzing
-                ? const SizedBox(
+                ? SizedBox(
                     width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.cardBg(context)),
                   )
                 : const Icon(Icons.document_scanner),
             label: Text(_isAnalyzing ? "ANALYZING..." : "SCAN NEW PRESCRIPTION"),
@@ -262,11 +470,325 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
           ),
         ),
         _buildMedicationCard(_currentMed, "Ongoing Course", "Remaining: 3 days", 0.75),
+
+        // ── Scan results ───────────────────────────────────────────────────
+        if (_showScanResults) ...[
+          const Divider(height: 32, indent: 20, endIndent: 20),
+          _buildSectionHeader(
+            "Prescription Analysis",
+            "${_scannedMedicines.length} medicine${_scannedMedicines.length == 1 ? '' : 's'} detected",
+          ),
+          ..._scannedMedicines.map(_buildScannedMedicineCard),
+
+          if (_prescriptionNotes != null && _prescriptionNotes!.isNotEmpty)
+            _buildNotesCard(_prescriptionNotes!),
+
+          if (_interactionAlerts.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildSectionHeader(
+              "⚠️ Interaction Check",
+              "${_interactionAlerts.length} potential interaction${_interactionAlerts.length == 1 ? '' : 's'} found",
+            ),
+            ..._interactionAlerts.map(_buildInteractionCard),
+            _buildInteractionDisclaimer(),
+          ] else if (_scannedMedicines.length > 1) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      color: Color(0xFF10B981), size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    "No known interactions detected between these medicines.",
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textMuted(context)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+
         const Divider(height: 40, indent: 20, endIndent: 20),
         _buildSectionHeader("Consultation History", "Doctors you have visited"),
-        _buildRealTimeConsultationGrid(),
+        _buildConsultationHistory(),
         const SizedBox(height: 30),
       ],
+    );
+  }
+
+  // ── Scanned medicine card ──────────────────────────────────────────────────
+  Widget _buildScannedMedicineCard(Map<String, dynamic> med) {
+    final name       = med['name']?.toString() ?? 'Unknown';
+    final generic    = med['_local_generic']?.toString().isNotEmpty == true
+        ? med['_local_generic'].toString()
+        : med['generic']?.toString() ?? '';
+    final dosage     = med['dosage']?.toString() ?? '';
+    final frequency  = med['frequency']?.toString() ?? '';
+    final duration   = med['duration']?.toString() ?? '';
+    final instructions = med['instructions']?.toString() ?? '';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(context),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42, height: 42,
+            decoration: BoxDecoration(
+              color: primaryColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.medication_rounded, color: primaryColor, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15)),
+                if (generic.isNotEmpty)
+                  Text(generic,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted(context))),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    if (dosage.isNotEmpty) _chip(dosage, primaryColor),
+                    if (frequency.isNotEmpty) _chip(frequency, const Color(0xFF0D9488)),
+                    if (duration.isNotEmpty) _chip(duration, const Color(0xFFF59E0B)),
+                    if (instructions.isNotEmpty) _chip(instructions, Colors.grey),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  // ── Prescription notes card ───────────────────────────────────────────────
+  Widget _buildNotesCard(String notes) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.notes_rounded, size: 18, color: Color(0xFF64748B)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(notes,
+                style: const TextStyle(
+                    fontSize: 13, color: Color(0xFF475569), height: 1.5)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Interaction alert card ────────────────────────────────────────────────
+  Widget _buildInteractionCard(_InteractionAlert alert) {
+    // Severity → colour mapping
+    Color severityColor;
+    IconData severityIcon;
+    String severityLabel;
+
+    switch (alert.severity) {
+      case 'contraindicated':
+        severityColor = const Color(0xFF7C3AED); // purple
+        severityIcon  = Icons.block_rounded;
+        severityLabel = 'CONTRAINDICATED';
+        break;
+      case 'major':
+        severityColor = const Color(0xFFEF4444); // red
+        severityIcon  = Icons.warning_rounded;
+        severityLabel = 'MAJOR';
+        break;
+      case 'minor':
+        severityColor = const Color(0xFF10B981); // green
+        severityIcon  = Icons.info_outline_rounded;
+        severityLabel = 'MINOR';
+        break;
+      default: // moderate
+        severityColor = const Color(0xFFF59E0B); // amber
+        severityIcon  = Icons.warning_amber_rounded;
+        severityLabel = 'MODERATE';
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(context),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: severityColor.withValues(alpha: 0.3), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: severityColor.withValues(alpha: 0.07),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              children: [
+                Icon(severityIcon, color: severityColor, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${alert.drugA}  ×  ${alert.drugB}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: severityColor),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: severityColor,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(severityLabel,
+                      style: const TextStyle(
+                          fontSize: 9,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5)),
+                ),
+              ],
+            ),
+          ),
+
+          // Body
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Clinical effect
+                _interactionRow(
+                    Icons.medical_information_outlined,
+                    'Effect',
+                    alert.effect,
+                    Colors.blueGrey),
+                const SizedBox(height: 10),
+                // Mechanism
+                if (alert.mechanism.isNotEmpty) ...[
+                  _interactionRow(
+                      Icons.biotech_outlined,
+                      'Why',
+                      alert.mechanism,
+                      Colors.indigo),
+                  const SizedBox(height: 10),
+                ],
+                // Action
+                _interactionRow(
+                    Icons.task_alt_rounded,
+                    'What to do',
+                    alert.action,
+                    severityColor),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _interactionRow(
+      IconData icon, String label, String text, Color color) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                    text: '$label: ',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: color)),
+                TextSpan(
+                    text: text,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textPrimary(context),
+                        height: 1.5)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInteractionDisclaimer() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline, size: 14, color: Color(0xFF64748B)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'This is a decision-support tool, not a substitute for professional advice. '
+                'Always consult your doctor or pharmacist before changing any medication.',
+                style: const TextStyle(
+                    fontSize: 11, color: Color(0xFF64748B), height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -275,11 +797,11 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: AppColors.shadow(context),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -329,88 +851,346 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
               shape: const StadiumBorder(),
               elevation: 0,
             ),
-            child: const Text("SET", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            child: Text("SET", style: TextStyle(color: AppColors.cardBg(context), fontSize: 11, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  Stream<List<Map<String, dynamic>>>? _consultationsStream;
+  // ── Consultation history ─────────────────────────────────────────────────
+  // Fetched once on first build. Uses a Future (not a Stream) because history
+  // is permanent — we don't need live updates for past appointments.
+  //
+  // Query: completed/confirmed bookings joined with the doctor's profile row
+  // so we get full_name, avatar_url, and speciality in a single call.
+  //
+  // We load doctor profiles in one batch after fetching bookings to avoid
+  // N+1 queries (one profiles fetch per booking).
 
-  Widget _buildRealTimeConsultationGrid() {
-    _consultationsStream ??= supabase
+  Future<List<Map<String, dynamic>>>? _historyFuture;
+
+  Future<List<Map<String, dynamic>>> _fetchConsultationHistory() async {
+    // Fetch all bookings that represent a real completed/confirmed visit.
+    // Status values that indicate the appointment actually happened:
+    //   completed  — full consultation done
+    //   confirmed  — nurse-triaged or physical appointment confirmed
+    //   consulting — currently in-progress (show as recent)
+    //
+    // Explicitly exclude: pending, cancelled, missed, calling, nurse_calling
+    // Those never completed, so they don't belong in history.
+    //
+    // Use OR on patient_id / user_id — older bookings may only have user_id.
+    final patientId = widget.patientId;
+
+    final bookings = await supabase
         .from('bookings')
-        .stream(primaryKey: ['id'])
-        .eq('patient_id', widget.patientId)
-        .order('created_at', ascending: false);
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _consultationsStream,
+        .select(
+          'id, provider_id, staff_id, doctor_email, type, status, '
+          'appointment_date, appointment_time, consultation_fee, amount',
+        )
+        .or('patient_id.eq.$patientId,user_id.eq.$patientId')
+        .inFilter('status', ['completed', 'confirmed', 'consulting'])
+        .order('appointment_date', ascending: false)
+        .limit(50);
+
+    if (bookings.isEmpty) return [];
+
+    // Collect unique doctor IDs (prefer provider_id, fall back to staff_id).
+    final doctorIds = bookings
+        .map((b) =>
+            (b['provider_id'] ?? b['staff_id'])?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    // Batch-fetch all doctor profiles in one query.
+    Map<String, Map<String, dynamic>> profilesById = {};
+    if (doctorIds.isNotEmpty) {
+      final profiles = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url, speciality')
+          .inFilter('id', doctorIds);
+
+      for (final p in profiles) {
+        profilesById[p['id'].toString()] = p;
+      }
+    }
+
+    // Merge profile data into each booking row.
+    return bookings.map<Map<String, dynamic>>((b) {
+      final doctorId =
+          (b['provider_id'] ?? b['staff_id'])?.toString() ?? '';
+      final profile = profilesById[doctorId] ?? {};
+      return {
+        ...b,
+        '_doctor_name':      profile['full_name']   ?? b['doctor_email'] ?? 'Doctor',
+        '_doctor_avatar':    profile['avatar_url'],
+        '_doctor_specialty': profile['speciality'],
+      };
+    }).toList();
+  }
+
+  Widget _buildConsultationHistory() {
+    _historyFuture ??= _fetchConsultationHistory();
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _historyFuture,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-        final bookings = snapshot.data!;
-        final seen = <String>{};
-        // Null-safe: guard against null staff_id
-        final uniqueDoctors = bookings
-            .where((b) => b['staff_id'] != null && seen.add(b['staff_id'].toString()))
-            .toList();
-
-        if (uniqueDoctors.isEmpty) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
-            padding: EdgeInsets.all(20),
-            child: Text("No past visits found.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator()),
           );
         }
 
-        return GridView.builder(
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text(
+              'Could not load history.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textMuted(context)),
+            ),
+          );
+        }
+
+        final appointments = snapshot.data ?? [];
+
+        if (appointments.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            child: Column(
+              children: [
+                Icon(Icons.history_rounded, size: 48, color: AppColors.textMuted(context)),
+                const SizedBox(height: 12),
+                Text(
+                  'No consultations yet.',
+                  style: TextStyle(
+                    color: AppColors.textMuted(context),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Completed appointments will appear here.',
+                  style: TextStyle(
+                    color: AppColors.textMuted(context),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.separated(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: uniqueDoctors.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 0.85,
-          ),
-          itemBuilder: (context, index) => _buildDoctorCard(uniqueDoctors[index]),
+          itemCount: appointments.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (context, index) =>
+              _buildConsultationCard(appointments[index]),
         );
       },
     );
   }
 
-  Widget _buildDoctorCard(Map<String, dynamic> doc) {
+  Widget _buildConsultationCard(Map<String, dynamic> appt) {
+    final String doctorName  = appt['_doctor_name']      ?? 'Doctor';
+    final String? avatarUrl  = appt['_doctor_avatar']    as String?;
+    final String? specialty  = appt['_doctor_specialty'] as String?;
+    final String  type       = (appt['type'] ?? 'Consultation').toString();
+    final String  status     = (appt['status'] ?? '').toString();
+    final String? dateStr    = appt['appointment_date'] as String?;
+    final String? timeStr    = appt['appointment_time'] as String?;
+
+    // Format date — "Mon, 15 Mar 2026"
+    String formattedDate = 'Date not recorded';
+    if (dateStr != null) {
+      try {
+        final dt = DateTime.parse(dateStr);
+        final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        final months   = [
+          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ];
+        formattedDate =
+            '${weekdays[dt.weekday - 1]}, ${dt.day} ${months[dt.month - 1]} ${dt.year}';
+      } catch (_) {}
+    }
+
+    // Status badge styling
+    Color statusColor;
+    String statusLabel;
+    switch (status) {
+      case 'completed':
+        statusColor = const Color(0xFF10B981);
+        statusLabel = 'Completed';
+        break;
+      case 'consulting':
+        statusColor = const Color(0xFF6366F1);
+        statusLabel = 'In Progress';
+        break;
+      default:
+        statusColor = const Color(0xFFF59E0B);
+        statusLabel = 'Confirmed';
+    }
+
+    // Consultation fee — prefer consultation_fee, fall back to amount
+    final fee = appt['consultation_fee'] ?? appt['amount'];
+    final String feeText = (fee != null && (fee as num) > 0)
+        ? 'Rs. ${fee.toStringAsFixed(0)}'
+        : '';
+
     return Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade100),
+        color: AppColors.cardBg(context),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppColors.surfaceBg(context),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow(context),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
         children: [
+          // Doctor avatar
           CircleAvatar(
             radius: 28,
             backgroundColor: primaryColor.withValues(alpha: 0.1),
-            child: Icon(Icons.person, color: primaryColor),
+            backgroundImage:
+                (avatarUrl != null && avatarUrl.isNotEmpty)
+                    ? NetworkImage(avatarUrl)
+                    : null,
+            child: (avatarUrl == null || avatarUrl.isEmpty)
+                ? Icon(Icons.person_rounded, color: primaryColor, size: 26)
+                : null,
           ),
-          const SizedBox(height: 10),
-          Text(
-            doc['staff_name'] ?? "Doctor",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: primaryColor.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              doc['type'] ?? "Checkup",
-              style: TextStyle(fontSize: 10, color: primaryColor, fontWeight: FontWeight.w600),
+          const SizedBox(width: 14),
+
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Doctor name + status badge in same row
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        doctorName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: statusColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+
+                // Specialty
+                if (specialty != null && specialty.isNotEmpty)
+                  Text(
+                    specialty,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMuted(context),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+
+                const SizedBox(height: 6),
+
+                // Date + time row
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today_rounded,
+                        size: 12, color: AppColors.textMuted(context)),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        timeStr != null
+                            ? '$formattedDate · $timeStr'
+                            : formattedDate,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textMuted(context),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Type + fee row
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        type.toLowerCase() == 'video'
+                            ? '🎥 Video'
+                            : type.toLowerCase() == 'physical'
+                                ? '🏥 Physical'
+                                : type,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: primaryColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (feeText.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        feeText,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textMuted(context),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -425,7 +1205,7 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B))),
-          Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          Text(subtitle, style: TextStyle(color: AppColors.textMuted(context), fontSize: 13)),
         ],
       ),
     );
@@ -436,9 +1216,9 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade100),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
       ),
       child: Column(
         children: [
@@ -469,4 +1249,25 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
       );
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Data class for a detected drug interaction
+// ─────────────────────────────────────────────────────────────────────────────
+class _InteractionAlert {
+  final String drugA;
+  final String drugB;
+  final String severity;   // contraindicated | major | moderate | minor
+  final String effect;     // clinical effect description
+  final String mechanism;  // why it happens
+  final String action;     // what the patient/doctor should do
+
+  const _InteractionAlert({
+    required this.drugA,
+    required this.drugB,
+    required this.severity,
+    required this.effect,
+    required this.mechanism,
+    required this.action,
+  });
 }

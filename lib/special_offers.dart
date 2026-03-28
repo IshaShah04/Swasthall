@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'theme_colors.dart';
 
 class SpecialOffers extends StatelessWidget {
   const SpecialOffers({super.key});
@@ -63,8 +64,8 @@ class SpecialOffers extends StatelessWidget {
             decoration: BoxDecoration(
                 color: color, borderRadius: BorderRadius.circular(8)),
             child: Text(code,
-                style: const TextStyle(
-                    color: Colors.white,
+                style: TextStyle(
+                    color: AppColors.cardBg(context),
                     fontSize: 10,
                     fontWeight: FontWeight.bold)),
           ),

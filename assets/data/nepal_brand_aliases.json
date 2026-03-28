@@ -1,0 +1,326 @@
+[
+  {
+    "brand_name": "Napa",
+    "brand_key": "napa",
+    "canonical_key": "paracetamol",
+    "generic_text": "paracetamol"
+  },
+  {
+    "brand_name": "Flexon",
+    "brand_key": "flexon",
+    "canonical_key": "ibuprofen",
+    "generic_text": "ibuprofen"
+  },
+  {
+    "brand_name": "Azileb 250",
+    "brand_key": "azileb_250",
+    "canonical_key": "azithromycin",
+    "generic_text": "azithromycin"
+  },
+  {
+    "brand_name": "Win Z 200",
+    "brand_key": "win_z_200",
+    "canonical_key": "azithromycin",
+    "generic_text": "azithromycin"
+  },
+  {
+    "brand_name": "Win Z 250",
+    "brand_key": "win_z_250",
+    "canonical_key": "azithromycin",
+    "generic_text": "azithromycin"
+  },
+  {
+    "brand_name": "Zimax",
+    "brand_key": "zimax",
+    "canonical_key": "azithromycin",
+    "generic_text": "azithromycin"
+  },
+  {
+    "brand_name": "Amlostar",
+    "brand_key": "amlostar",
+    "canonical_key": "amlodipine",
+    "generic_text": "amlodipine"
+  },
+  {
+    "brand_name": "Amcab",
+    "brand_key": "amcab",
+    "canonical_key": "amlodipine",
+    "generic_text": "amlodipine"
+  },
+  {
+    "brand_name": "Amlod L",
+    "brand_key": "amlod_l",
+    "canonical_key": "amlodipine_slash_losartan",
+    "generic_text": "amlodipine + losartan"
+  },
+  {
+    "brand_name": "Amlobet",
+    "brand_key": "amlobet",
+    "canonical_key": "amlodipine_slash_atenolol",
+    "generic_text": "amlodipine + atenolol"
+  },
+  {
+    "brand_name": "Telmi A",
+    "brand_key": "telmi_a",
+    "canonical_key": "telmisartan_slash_amlodipine",
+    "generic_text": "telmisartan + amlodipine"
+  },
+  {
+    "brand_name": "Biomet 500 SR",
+    "brand_key": "biomet_500",
+    "canonical_key": "metformin",
+    "generic_text": "metformin hydrochloride"
+  },
+  {
+    "brand_name": "Metfor G1",
+    "brand_key": "metfor_g1",
+    "canonical_key": "metformin_slash_glimepiride",
+    "generic_text": "metformin + glimepiride"
+  },
+  {
+    "brand_name": "AROVIA M",
+    "brand_key": "arovia_m",
+    "canonical_key": "metformin_slash_sitagliptin",
+    "generic_text": "metformin + sitagliptin"
+  },
+  {
+    "brand_name": "Lintor M 1000",
+    "brand_key": "lintor_m_1000",
+    "canonical_key": "linagliptin_slash_metformin",
+    "generic_text": "linagliptin + metformin"
+  },
+  {
+    "brand_name": "Glycinorm",
+    "brand_key": "glycinorm",
+    "canonical_key": "gliclazide",
+    "generic_text": "gliclazide"
+  },
+  {
+    "brand_name": "Insutizer",
+    "brand_key": "insutizer",
+    "canonical_key": "pioglitazone",
+    "generic_text": "pioglitazone"
+  },
+  {
+    "brand_name": "Pantop",
+    "brand_key": "pantop",
+    "canonical_key": "pantoprazole",
+    "generic_text": "pantoprazole sodium sesquihydrate"
+  },
+  {
+    "brand_name": "Ulroz",
+    "brand_key": "ulroz",
+    "canonical_key": "pantoprazole",
+    "generic_text": "pantoprazole sodium sesquihydrate"
+  },
+  {
+    "brand_name": "Panocid DR",
+    "brand_key": "panocid",
+    "canonical_key": "pantoprazole",
+    "generic_text": "pantoprazole sodium sesquihydrate"
+  },
+  {
+    "brand_name": "Panorma",
+    "brand_key": "panorma",
+    "canonical_key": "pantoprazole",
+    "generic_text": "pantoprazole sodium sesquihydrate"
+  },
+  {
+    "brand_name": "Pantazole",
+    "brand_key": "pantazole",
+    "canonical_key": "pantoprazole",
+    "generic_text": "pantoprazole sodium sesquihydrate"
+  },
+  {
+    "brand_name": "Pantoloc",
+    "brand_key": "pantoloc",
+    "canonical_key": "pantoprazole",
+    "generic_text": "pantoprazole sodium sesquihydrate"
+  },
+  {
+    "brand_name": "Omcid",
+    "brand_key": "omcid",
+    "canonical_key": "omeprazole",
+    "generic_text": "omeprazole"
+  },
+  {
+    "brand_name": "DIPP",
+    "brand_key": "dipp",
+    "canonical_key": "omeprazole_slash_domperidone",
+    "generic_text": "omeprazole + domperidone"
+  },
+  {
+    "brand_name": "Indclav 625",
+    "brand_key": "indclav_625",
+    "canonical_key": "amoxicillin_slash_clavulanate",
+    "generic_text": "amoxicillin + clavulanic acid"
+  },
+  {
+    "brand_name": "Zefix 200",
+    "brand_key": "zefix_200",
+    "canonical_key": "cefixime",
+    "generic_text": "cefixime"
+  },
+  {
+    "brand_name": "AROFIX",
+    "brand_key": "arofix",
+    "canonical_key": "cefixime",
+    "generic_text": "cefixime"
+  },
+  {
+    "brand_name": "Cefiro",
+    "brand_key": "cefiro",
+    "canonical_key": "cefixime",
+    "generic_text": "cefixime"
+  },
+  {
+    "brand_name": "Bestocef",
+    "brand_key": "bestocef",
+    "canonical_key": "cefixime",
+    "generic_text": "cefixime"
+  },
+  {
+    "brand_name": "Infexim 100 DT",
+    "brand_key": "infexim_100",
+    "canonical_key": "cefixime",
+    "generic_text": "cefixime"
+  },
+  {
+    "brand_name": "Taxone P",
+    "brand_key": "taxone_p",
+    "canonical_key": "cefixime",
+    "generic_text": "cefixime"
+  },
+  {
+    "brand_name": "Fixim CV",
+    "brand_key": "fixim_cv",
+    "canonical_key": "cefixime_slash_clavulanic_acid",
+    "generic_text": "cefixime + clavulanic acid"
+  },
+  {
+    "brand_name": "Monocef 2",
+    "brand_key": "monocef_2",
+    "canonical_key": "ceftriaxone",
+    "generic_text": "ceftriaxone"
+  },
+  {
+    "brand_name": "Monocef 125",
+    "brand_key": "monocef_125",
+    "canonical_key": "ceftriaxone",
+    "generic_text": "ceftriaxone"
+  },
+  {
+    "brand_name": "Cipro 500",
+    "brand_key": "cipro_500",
+    "canonical_key": "ciprofloxacin",
+    "generic_text": "ciprofloxacin"
+  },
+  {
+    "brand_name": "Conflox",
+    "brand_key": "conflox",
+    "canonical_key": "ciprofloxacin",
+    "generic_text": "ciprofloxacin ear/eye preparation"
+  },
+  {
+    "brand_name": "Gdcip TZ",
+    "brand_key": "gdcip_tz",
+    "canonical_key": "ciprofloxacin_slash_tinidazole",
+    "generic_text": "ciprofloxacin + tinidazole"
+  },
+  {
+    "brand_name": "Zoxan D",
+    "brand_key": "zoxan_d",
+    "canonical_key": "ciprofloxacin_slash_dexamethasone",
+    "generic_text": "ciprofloxacin + dexamethasone eye drop"
+  },
+  {
+    "brand_name": "A Losart 50",
+    "brand_key": "a_losart_50",
+    "canonical_key": "losartan",
+    "generic_text": "losartan potassium"
+  },
+  {
+    "brand_name": "Losap H",
+    "brand_key": "losap_h",
+    "canonical_key": "losartan_slash_hydrochlorothiazide",
+    "generic_text": "losartan potassium + hydrochlorothiazide"
+  },
+  {
+    "brand_name": "Eltroxin",
+    "brand_key": "eltroxin",
+    "canonical_key": "levothyroxine",
+    "generic_text": "thyroxine/levothyroxine sodium"
+  },
+  {
+    "brand_name": "WARF",
+    "brand_key": "warf",
+    "canonical_key": "warfarin",
+    "generic_text": "warfarin sodium"
+  },
+  {
+    "brand_name": "XARELTO",
+    "brand_key": "xarelto",
+    "canonical_key": "rivaroxaban",
+    "generic_text": "rivaroxaban"
+  },
+  {
+    "brand_name": "Metin",
+    "brand_key": "metin",
+    "canonical_key": "metronidazole",
+    "generic_text": "metronidazole"
+  },
+  {
+    "brand_name": "Escalm",
+    "brand_key": "escalm",
+    "canonical_key": "escitalopram",
+    "generic_text": "escitalopram"
+  },
+  {
+    "brand_name": "Pran",
+    "brand_key": "pran",
+    "canonical_key": "propranolol",
+    "generic_text": "propranolol hydrochloride"
+  },
+  {
+    "brand_name": "Oleanz 5",
+    "brand_key": "oleanz_5",
+    "canonical_key": "olanzapine",
+    "generic_text": "olanzapine"
+  },
+  {
+    "brand_name": "Imutrex",
+    "brand_key": "imutrex",
+    "canonical_key": "methotrexate",
+    "generic_text": "methotrexate"
+  },
+  {
+    "brand_name": "Voveran 50",
+    "brand_key": "voveran_50",
+    "canonical_key": "diclofenac",
+    "generic_text": "diclofenac"
+  },
+  {
+    "brand_name": "Epileptin 100",
+    "brand_key": "epileptin_100",
+    "canonical_key": "phenytoin",
+    "generic_text": "phenytoin"
+  },
+  {
+    "brand_name": "Routin",
+    "brand_key": "routin",
+    "canonical_key": "rosuvastatin",
+    "generic_text": "rosuvastatin"
+  },
+  {
+    "brand_name": "Zyloric 100",
+    "brand_key": "zyloric_100",
+    "canonical_key": "allopurinol",
+    "generic_text": "allopurinol"
+  },
+  {
+    "brand_name": "Autrin",
+    "brand_key": "autrin",
+    "canonical_key": "ferrous_supplement",
+    "generic_text": "iron + vitamins/minerals"
+  }
+]

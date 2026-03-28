@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'widgets/safe_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme_colors.dart';
 
 class ProfessionalLabScreen extends StatefulWidget {
   const ProfessionalLabScreen({super.key});
@@ -26,9 +27,9 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         automaticallyImplyLeading: false,
         title: Row(
@@ -38,16 +39,16 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
                 height: 45,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: AppColors.surfaceBg(context),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.search, color: Colors.grey, size: 20),
+                    Icon(Icons.search, color: AppColors.textMuted(context), size: 20),
                     SizedBox(width: 8),
                     Text(
                       "Search lab tests...",
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                      style: TextStyle(color: AppColors.textMuted(context), fontSize: 14),
                     ),
                   ],
                 ),
@@ -60,7 +61,7 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
                 border: Border.all(color: Colors.black12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.tune, color: Colors.black87, size: 20),
+              child: Icon(Icons.tune, color: AppColors.textSecondary(context), size: 20),
             ),
           ],
         ),
@@ -118,12 +119,12 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        border: Border.all(color: AppColors.surfaceBg(context)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: AppColors.shadow(context),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

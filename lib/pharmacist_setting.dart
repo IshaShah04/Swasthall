@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
 // Note: dart:io is removed for Web compatibility
 
 class PharmacistSetting extends StatefulWidget {
@@ -122,10 +123,10 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10)
+          BoxShadow(color: AppColors.shadow(context), blurRadius: 10)
         ],
       ),
       child: Column(
@@ -143,10 +144,10 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
                   backgroundColor: themeColor.withValues(alpha: 0.1),
                 ),
                 if (_isUploading)
-                  const Positioned.fill(
+                  Positioned.fill(
                     child: CircleAvatar(
                       backgroundColor: Colors.black38,
-                      child: CircularProgressIndicator(color: Colors.white),
+                      child: const CircularProgressIndicator(color: Colors.white),
                     ),
                   ),
                 GestureDetector(
@@ -154,8 +155,8 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
                   child: CircleAvatar(
                     backgroundColor: themeColor,
                     radius: 16,
-                    child: const Icon(Icons.camera_alt,
-                        size: 16, color: Colors.white),
+                    child: Icon(Icons.camera_alt,
+                        size: 16, color: AppColors.cardBg(context)),
                   ),
                 )
               ],
@@ -180,7 +181,7 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: themeColor.withValues(alpha: 0.1)),
       ),
@@ -224,9 +225,9 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12))),
               onPressed: _saveMySlot,
-              child: const Text("Add Availability Slot",
+              child: Text("Add Availability Slot",
                   style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold)),
+                      color: AppColors.cardBg(context), fontWeight: FontWeight.bold)),
             ),
           )
         ],
@@ -269,9 +270,9 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.cardBg(context),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade100)),
+                  border: Border.all(color: const Color(0xFFF1F5F9))),
               child: ListTile(
                 leading: CircleAvatar(
                     backgroundColor: themeColor.withValues(alpha: 0.1),
@@ -357,7 +358,7 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
                       SnackBar(content: Text("Update failed: $e")));
                 }
               },
-              child: const Text("Save", style: TextStyle(color: Colors.white))),
+              child: Text("Save", style: TextStyle(color: AppColors.cardBg(context)))),
         ],
       ),
     );
@@ -367,10 +368,10 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
         Icon(icon, size: 20, color: Colors.blueGrey),
         const SizedBox(width: 8),
         Text(title,
-            style: const TextStyle(
+            style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
-                color: Colors.black87))
+                color: AppColors.textSecondary(context)))
       ]);
 
   Widget _editableTile(String label, String? val, String col, IconData icon,
@@ -379,14 +380,14 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
         contentPadding: EdgeInsets.zero,
         leading: Icon(icon, size: 22, color: themeColor.withValues(alpha: 0.6)),
         title: Text(label,
-            style: const TextStyle(
-                fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                fontSize: 11, color: AppColors.textMuted(context), fontWeight: FontWeight.bold)),
         subtitle: Text(val ?? "Not Set",
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.black)),
-        trailing: const Icon(Icons.edit, size: 16, color: Colors.grey),
+                color: AppColors.textPrimary(context))),
+        trailing: Icon(Icons.edit, size: 16, color: AppColors.textMuted(context)),
         onTap: () => _showEditDialog(label, col, val ?? "", isLongText),
       );
 
@@ -401,7 +402,7 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
               Icon(icon, size: 20, color: themeColor),
               const SizedBox(height: 4),
               Text(label,
-                  style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  style: TextStyle(fontSize: 10, color: AppColors.textMuted(context))),
               Text(val,
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 14))

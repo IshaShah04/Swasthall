@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'plan_details_screen.dart';
+import 'theme_colors.dart';
 
 class InsuranceSubscription extends StatefulWidget {
   const InsuranceSubscription({super.key});
@@ -75,12 +76,12 @@ class _InsuranceSubscriptionState extends State<InsuranceSubscription> {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade100),
+          border: Border.all(color: const Color(0xFFF1F5F9)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: AppColors.shadow(context),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -116,8 +117,8 @@ class _InsuranceSubscriptionState extends State<InsuranceSubscription> {
                   Text(plan['name'] ?? '',
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 16)),
-                  const Text('Suggested for you',
-                      style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text('Suggested for you',
+                      style: TextStyle(color: AppColors.textMuted(context), fontSize: 12)),
                 ],
               ),
             ),
@@ -136,7 +137,7 @@ class _InsuranceSubscriptionState extends State<InsuranceSubscription> {
         height: 50,
         width: 50,
         decoration: BoxDecoration(
-          color: const Color(0xFFEEF2FF),
+          color: AppColors.indigoTint(context),
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Icon(Icons.shield, color: Color(0xFF6366F1), size: 28),

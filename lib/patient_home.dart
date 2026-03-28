@@ -13,8 +13,7 @@ import 'consultation_search.dart';
 import 'ai_assistant_screen.dart';
 import 'notification_screen.dart';
 import 'widgets/safe_network_image.dart';
-// DEBUG ONLY — remove this import before production release
-import 'debug/policy_debug_screen.dart';
+import 'theme_colors.dart';
 
 class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({super.key});
@@ -93,11 +92,11 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
           .from('profiles')
           .select('avatar_url')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
       if (mounted) {
         setState(() {
-          _avatarUrl = data['avatar_url'];
+          _avatarUrl = data?['avatar_url'];
         });
       }
     } catch (e) {
@@ -114,10 +113,10 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-        title: const Text(
+        title: Text(
           'Voice Language',
           style: TextStyle(
-              fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+              fontWeight: FontWeight.bold, color: AppColors.textPrimary(context)),
           textAlign: TextAlign.center,
         ),
         content: Column(
@@ -178,43 +177,17 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     }
   }
 
-  // ── DEBUG ONLY ────────────────────────────────────────────────────────────
-  // Opens the policy debug screen. Only visible in debug builds.
-  // Long-press the avatar to open — invisible to end users.
-  void _openDebugScreen() {
-    if (!kDebugMode) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const PolicyDebugScreen()),
-    );
-  }
-  // ─────────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     const Color brandBlue = Color(0xFF6366F1);
     final user = Supabase.instance.client.auth.currentUser;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // DEBUG ONLY — remove this entire block before production release
-          if (kDebugMode)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: FloatingActionButton.small(
-                heroTag: 'debug_fab',
-                backgroundColor: Colors.red.shade600,
-                tooltip: 'Policy debug',
-                onPressed: _openDebugScreen,
-                child: const Icon(Icons.bug_report,
-                    color: Colors.white, size: 18),
-              ),
-            ),
-          // END DEBUG
           FloatingActionButton.extended(
             heroTag: 'ai_fab',
             onPressed: () {
@@ -229,8 +202,8 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
               );
             },
             backgroundColor: brandBlue,
-            icon: const Icon(Icons.auto_awesome, color: Colors.white),
-            label: const Text('AI Assistant',
+            icon: Icon(Icons.auto_awesome, color: Colors.white),
+            label: Text('AI Assistant',
                 style: TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -258,7 +231,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
               const SizedBox(height: 25),
               _StaggeredSection(delay: 0,   child: const _SectionHeader(title: 'Quick Categories')),
               const SizedBox(height: 16),
-              _StaggeredSection(delay: 80,  child: QuickCategories(brandBlue: brandBlue)),
+              _StaggeredSection(delay: 80,  child: QuickCategories(brandBlue: brandBlue, userRole: 'patient')),
               const SizedBox(height: 30),
               _StaggeredSection(delay: 160, child: const _SectionHeader(title: 'Special Offers')),
               const SizedBox(height: 16),
@@ -291,13 +264,12 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Long-press avatar to open debug screen in debug builds
+        // Tap avatar to open settings
         GestureDetector(
           onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
                   builder: (context) => const PatientSettings())),
-          onLongPress: kDebugMode ? _openDebugScreen : null,
           child: SafeAvatar(
             url: _avatarUrl,
             radius: 20,
@@ -356,7 +328,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: AppColors.shadow(context),
                 blurRadius: 15,
                 offset: const Offset(0, 5))
           ],
@@ -379,8 +351,8 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                 child: _isListening
                     ? const Icon(Icons.mic,
                         color: Colors.redAccent, key: ValueKey('mic_on'))
-                    : const Icon(Icons.search_rounded,
-                        color: Colors.grey, key: ValueKey('search')),
+                    : Icon(Icons.search_rounded,
+                        color: AppColors.textMuted(context), key: ValueKey('search')),
               ),
               suffixIcon: kIsWeb ? null : GestureDetector(
                 onTap: _toggleHomeListening,
@@ -399,7 +371,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                 ),
               ),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppColors.inputFill(context),
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
                   borderSide: BorderSide.none),
@@ -444,7 +416,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
+              backgroundColor: AppColors.cardBg(context),
               foregroundColor: brandBlue,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
@@ -485,7 +457,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
               builder: (_) => NotificationScreen(userRole: 'patient')));
             setState(() => _unreadCount = 0);
           },
-          icon: Icon(icon, size: 26, color: const Color(0xFF1F2937)),
+          icon: Icon(icon, size: 26, color: AppColors.textPrimary(context)),
         ),
         if (badgeCount != null)
           Positioned(
@@ -496,7 +468,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
               decoration: const BoxDecoration(
                   color: Colors.red, shape: BoxShape.circle),
               child: Text(badgeCount,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Colors.white,
                       fontSize: 8,
                       fontWeight: FontWeight.bold)),
@@ -518,10 +490,10 @@ class _SectionHeader extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(title,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF1F2937))),
+                color: AppColors.textPrimary(context))),
         if (onSeeAllTap != null)
           TextButton(
             onPressed: onSeeAllTap,

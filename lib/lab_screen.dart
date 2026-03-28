@@ -6,6 +6,7 @@ import 'lab_description_screen.dart';
 import 'global_search_bar.dart';
 import 'universal_search_delegate.dart';
 import 'services/voice_service.dart';
+import 'theme_colors.dart';
 
 class LabTestScreen extends StatefulWidget {
   final String? searchQuery;
@@ -192,7 +193,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
       margin: const EdgeInsets.only(right: 12, bottom: 8, top: 5),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
       ),
@@ -241,13 +242,13 @@ class _LabTestScreenState extends State<LabTestScreen> {
                   ),
                   Text(
                     "${booking['appointment_date']} | ${booking['appointment_time']}",
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted(context)),
                   ),
                 ],
               ),
             ),
           ),
-          const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
+          Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.textMuted(context)),
         ],
       ),
     );
@@ -258,11 +259,11 @@ class _LabTestScreenState extends State<LabTestScreen> {
     return Scaffold(
       backgroundColor: bgLight,
       appBar: AppBar(
-        title: const Text("Labs & Diagnostics",
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-        backgroundColor: Colors.white,
+        title: Text("Labs & Diagnostics",
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary(context))),
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       body: Column(
         children: [
@@ -314,7 +315,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
 
         final List<Map<String, dynamic>> allData = snapshot.data ?? [];
         final List<Map<String, dynamic>> hasTests =
-            allData.where((p) => (p['lab_tests'] as List).isNotEmpty).toList();
+            allData.where((p) => (p['lab_tests'] as List?)?.isNotEmpty == true).toList();
         final String cleanQuery = _currentSearchQuery.trim().toLowerCase();
         final filteredLabs = hasTests.where((lab) {
           if (cleanQuery.isEmpty) return true;
@@ -361,11 +362,11 @@ class _LabTestScreenState extends State<LabTestScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: AppColors.shadow(context),
             blurRadius: 15,
             offset: const Offset(0, 8),
           )
@@ -398,7 +399,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
                 child: GestureDetector(
                   onTap: () => _speakLabInfo(provider),
                   child: CircleAvatar(
-                    backgroundColor: Colors.white.withValues(alpha: 0.8),
+                    backgroundColor: AppColors.cardBg(context).withValues(alpha: 0.8),
                     child: Icon(
                       isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
                       color: isSpeaking ? Colors.redAccent : primaryIndigo,
@@ -451,7 +452,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text("View Profile",
+              child: Text("View Profile",
                   style: TextStyle(color: Colors.white)),
             ),
           ),

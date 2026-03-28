@@ -6,6 +6,7 @@ import 'services/ai_assistant_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/voice_service.dart';
 import 'consultation_description.dart';
+import 'theme_colors.dart';
 
 class AiAssistantScreen extends StatefulWidget {
   final String languageCode;
@@ -203,11 +204,11 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: Text(isNepali ? "देखभाल सहायक" : "Care Assistant"),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         foregroundColor: Colors.black,
       ),
@@ -241,11 +242,11 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: AppColors.shadow(context),
               blurRadius: 20,
               offset: const Offset(0, 10))
         ],
@@ -279,9 +280,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 .map((est) => _buildActionCard(est, specialty)),
           const SizedBox(height: 15),
           Text(_result?['disclaimer'] ?? "",
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 11,
-                  color: Colors.grey,
+                  color: AppColors.textMuted(context),
                   fontStyle: FontStyle.italic)),
         ],
       ),
@@ -356,7 +357,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                         Text(
                           displayLocation,
                           style: TextStyle(
-                              fontSize: 12, color: Colors.grey.shade600),
+                              fontSize: 12, color: const Color(0xFF475569)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -474,8 +475,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   Widget _buildInputArea() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 35),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(context),
         boxShadow: [
           BoxShadow(
               color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))
@@ -490,7 +491,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 backgroundColor:
                     _isListening ? Colors.redAccent : const Color(0xFFF1F5F9),
                 child: Icon(_isListening ? Icons.mic : Icons.mic_none,
-                    color: _isListening ? Colors.white : Colors.black54),
+                    color: _isListening ? Colors.white : AppColors.textSecondary(context)),
               ),
             ),
           if (!kIsWeb) const SizedBox(width: 12),
@@ -503,7 +504,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                     ? "यहाँ लक्षणहरू लेख्नुहोस्..."
                     : "Type symptoms here...",
                 filled: true,
-                fillColor: const Color(0xFFF1F5F9),
+                fillColor: AppColors.inputFill(context),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(30),
                     borderSide: BorderSide.none),

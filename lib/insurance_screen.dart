@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'add_plan_screen.dart'; // Import the new screen we will create
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
 
 class InsuranceScreen extends StatefulWidget {
   const InsuranceScreen({super.key});
@@ -23,11 +24,11 @@ class _InsuranceScreenState extends State<InsuranceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       // 3. Floating Action Button to Add New Plans
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF6366F1),
-        child: const Icon(Icons.add, color: Colors.white),
+        child: Icon(Icons.add, color: Colors.white),
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const AddPlanScreen()),
@@ -82,7 +83,7 @@ class _InsuranceScreenState extends State<InsuranceScreen> {
               hintText: "Search your plans...",
               prefixIcon: const Icon(Icons.search),
               filled: true,
-              fillColor: Colors.grey[50],
+              fillColor: AppColors.inputFill(context),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
             ),
           ),
@@ -107,7 +108,7 @@ class _InsuranceScreenState extends State<InsuranceScreen> {
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.cardBg(context),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFFF3F4F6)),
             boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
@@ -130,7 +131,7 @@ class _InsuranceScreenState extends State<InsuranceScreen> {
               Text(plan['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Text(plan['description'], maxLines: 2, overflow: TextOverflow.ellipsis, 
-                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  style: TextStyle(fontSize: 11, color: AppColors.textMuted(context))),
               const SizedBox(height: 8),
               Text("Rs. ${plan['price']}", 
                   style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),

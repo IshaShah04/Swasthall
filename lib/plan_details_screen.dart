@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'insurance_purchase_screen.dart';
+import 'theme_colors.dart';
 
 class PlanDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> plan;
@@ -73,7 +74,7 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
                           color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.arrow_back_ios_new_rounded,
+                        child: Icon(Icons.arrow_back_ios_new_rounded,
                             color: Colors.white, size: 18),
                       ),
                     ),
@@ -133,8 +134,8 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
                                 // on long plan names
                                 Text(
                                   planName,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: AppColors.cardBg(context),
                                     fontSize: 26,
                                     fontWeight: FontWeight.w900,
                                     height: 1.2,
@@ -193,7 +194,7 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
                             child: Text(
                               description,
                               style: TextStyle(
-                                color: Colors.grey[700],
+                                color: AppColors.textSecondary(context),
                                 height: 1.7,
                                 fontSize: 14.5,
                               ),
@@ -253,12 +254,12 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
       width: double.infinity,
       padding: padding ?? const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100, width: 1),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: AppColors.shadow(context),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -329,8 +330,8 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: AppColors.cardBg(context),
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.3,
@@ -390,10 +391,10 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
                     if (discount > 0)
                       Text(
                         "Rs. ${price.toStringAsFixed(0)}",
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           decoration: TextDecoration.lineThrough,
-                          color: Colors.grey,
+                          color: AppColors.textMuted(context),
                         ),
                       ),
                   ],
@@ -424,8 +425,8 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
                 children: [
                   Text(
                     "-$discount%",
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppColors.cardBg(context),
                       fontWeight: FontWeight.w900,
                       fontSize: 18,
                     ),
@@ -482,7 +483,7 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
           ),
         ),
         if (!isLast)
-          Divider(height: 1, color: Colors.grey.shade100, indent: 44),
+          Divider(height: 1, color: const Color(0xFFF1F5F9), indent: 44),
       ],
     );
   }
@@ -503,9 +504,9 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
             margin: EdgeInsets.only(right: isLast ? 0 : 10),
             padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.cardBg(context),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.grey.shade100, width: 1),
+              border: Border.all(color: const Color(0xFFF1F5F9), width: 1),
             ),
             child: Column(
               children: [
@@ -516,7 +517,7 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[600],
+                    color: AppColors.textSecondary(context),
                   ),
                 ),
               ],
@@ -539,11 +540,11 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: AppColors.shadow(context),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -558,11 +559,11 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   "Total Amount",
                   style: TextStyle(
                     fontSize: 11,
-                    color: Colors.grey,
+                    color: AppColors.textMuted(context),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -570,9 +571,9 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
                 if (discount > 0)
                   Text(
                     "Rs. ${price.toStringAsFixed(0)}",
-                    style: const TextStyle(
+                    style: TextStyle(
                       decoration: TextDecoration.lineThrough,
-                      color: Colors.grey,
+                      color: AppColors.textMuted(context),
                       fontSize: 12,
                     ),
                   ),

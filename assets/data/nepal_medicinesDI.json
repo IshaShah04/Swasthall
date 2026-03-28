@@ -1,0 +1,3389 @@
+[
+  {
+    "brand_name": "ABATACEPT",
+    "generic_name": "abatacept",
+    "aliases": []
+  },
+  {
+    "brand_name": "ACARBOSE",
+    "generic_name": "acarbose",
+    "aliases": []
+  },
+  {
+    "brand_name": "ACELECOFENAC",
+    "generic_name": "acelecofenac",
+    "aliases": []
+  },
+  {
+    "brand_name": "ACENOCOUMAROL",
+    "generic_name": "acenocoumarol",
+    "aliases": []
+  },
+  {
+    "brand_name": "ACETAZOLAMIDE",
+    "generic_name": "acetazolamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "ACETYL CYSTEINE",
+    "generic_name": "acetyl cysteine",
+    "aliases": []
+  },
+  {
+    "brand_name": "ACETYLCYSTEINE",
+    "generic_name": "acetylcysteine",
+    "aliases": []
+  },
+  {
+    "brand_name": "ACICLOVIR",
+    "generic_name": "aciclovir",
+    "aliases": []
+  },
+  {
+    "brand_name": "ACITRETIN",
+    "generic_name": "acitretin",
+    "aliases": []
+  },
+  {
+    "brand_name": "ACTINOMYCIN D (DACTINOMYCIN)",
+    "generic_name": "actinomycin d dactinomycin",
+    "aliases": [
+      "actinomycin d"
+    ]
+  },
+  {
+    "brand_name": "ACYCLOVIR",
+    "generic_name": "acyclovir",
+    "aliases": []
+  },
+  {
+    "brand_name": "ADALIMUMAB",
+    "generic_name": "adalimumab",
+    "aliases": []
+  },
+  {
+    "brand_name": "ADAPALENE",
+    "generic_name": "adapalene",
+    "aliases": []
+  },
+  {
+    "brand_name": "ADENOSINE",
+    "generic_name": "adenosine",
+    "aliases": []
+  },
+  {
+    "brand_name": "ADRENALINE/EPINEPHRINE",
+    "generic_name": "adrenaline / epinephrine",
+    "aliases": [
+      "adrenaline",
+      "epinephrine"
+    ]
+  },
+  {
+    "brand_name": "ALBENDAZOLE",
+    "generic_name": "albendazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "ALBUMIN",
+    "generic_name": "albumin",
+    "aliases": []
+  },
+  {
+    "brand_name": "ALENDRONATE",
+    "generic_name": "alendronate",
+    "aliases": []
+  },
+  {
+    "brand_name": "ALLOPURINOL",
+    "generic_name": "allopurinol",
+    "aliases": []
+  },
+  {
+    "brand_name": "ALMOND OIL",
+    "generic_name": "almond oil",
+    "aliases": []
+  },
+  {
+    "brand_name": "ALPRAZOLAM",
+    "generic_name": "alprazolam",
+    "aliases": []
+  },
+  {
+    "brand_name": "ALTEPLASE",
+    "generic_name": "alteplase",
+    "aliases": []
+  },
+  {
+    "brand_name": "ALUMINIUM CHLORIDE HEXAHYDRATE",
+    "generic_name": "aluminium chloride hexahydrate",
+    "aliases": [
+      "aluminum chloride hexahydrate"
+    ]
+  },
+  {
+    "brand_name": "ALUMINIUM HYDROXIDE",
+    "generic_name": "aluminium hydroxide",
+    "aliases": [
+      "aluminum hydroxide"
+    ]
+  },
+  {
+    "brand_name": "ALUMINIUM PHOSPHIDE POISONING",
+    "generic_name": "aluminium phosphide poisoning",
+    "aliases": [
+      "aluminum phosphide poisoning"
+    ]
+  },
+  {
+    "brand_name": "AMANTADINE",
+    "generic_name": "amantadine",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMIKACIN",
+    "generic_name": "amikacin",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMILORIDE HYDROCHLORIDE",
+    "generic_name": "amiloride hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMINOPHYLLINE",
+    "generic_name": "aminophylline",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMIODARONE",
+    "generic_name": "amiodarone",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMLODIPINE",
+    "generic_name": "amlodipine",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMOROLFINE",
+    "generic_name": "amorolfine",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMOXICILLIN",
+    "generic_name": "amoxicillin",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMOXICILLIN with CLAVULANATE",
+    "generic_name": "amoxicillin with clavulanate",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMPHOTERICIN B",
+    "generic_name": "amphotericin b",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMPICILLIN",
+    "generic_name": "ampicillin",
+    "aliases": []
+  },
+  {
+    "brand_name": "AMPICILLIN with SULBACTAM",
+    "generic_name": "ampicillin with sulbactam",
+    "aliases": []
+  },
+  {
+    "brand_name": "ANAKINRA",
+    "generic_name": "anakinra",
+    "aliases": []
+  },
+  {
+    "brand_name": "ANASTROZOLE",
+    "generic_name": "anastrozole",
+    "aliases": []
+  },
+  {
+    "brand_name": "ANTI-D IMMUNOGLOBULIN (HUMAN)",
+    "generic_name": "anti d immunoglobulin human",
+    "aliases": [
+      "anti d immunoglobulin"
+    ]
+  },
+  {
+    "brand_name": "ANTIRABIES HYPERIMMUNE SERUM",
+    "generic_name": "antirabies hyperimmune serum",
+    "aliases": []
+  },
+  {
+    "brand_name": "APIXABAN",
+    "generic_name": "apixaban",
+    "aliases": []
+  },
+  {
+    "brand_name": "ARSENIC TRIOXIDE",
+    "generic_name": "arsenic trioxide",
+    "aliases": []
+  },
+  {
+    "brand_name": "ARTEMETHER with LUMEFANTRINE",
+    "generic_name": "artemether with lumefantrine",
+    "aliases": []
+  },
+  {
+    "brand_name": "ARTESUNATE",
+    "generic_name": "artesunate",
+    "aliases": []
+  },
+  {
+    "brand_name": "ASPIRIN",
+    "generic_name": "aspirin",
+    "aliases": []
+  },
+  {
+    "brand_name": "ASPIRIN (SALICYLATE) POISONING",
+    "generic_name": "aspirin salicylate poisoning",
+    "aliases": [
+      "aspirin poisoning"
+    ]
+  },
+  {
+    "brand_name": "ATENOLOL",
+    "generic_name": "atenolol",
+    "aliases": []
+  },
+  {
+    "brand_name": "ATORVASTATIN",
+    "generic_name": "atorvastatin",
+    "aliases": []
+  },
+  {
+    "brand_name": "ATROPINE",
+    "generic_name": "atropine",
+    "aliases": []
+  },
+  {
+    "brand_name": "ATROPINE AND BELLADONNA POISONING",
+    "generic_name": "atropine and belladonna poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "ATROPINE SULPHATE",
+    "generic_name": "atropine sulphate",
+    "aliases": [
+      "atropine sulfate"
+    ]
+  },
+  {
+    "brand_name": "AZATHIOPRINE",
+    "generic_name": "azathioprine",
+    "aliases": []
+  },
+  {
+    "brand_name": "AZELAIC ACID",
+    "generic_name": "azelaic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "AZITHROMYCIN",
+    "generic_name": "azithromycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "BACAMPICILLIN",
+    "generic_name": "bacampicillin",
+    "aliases": []
+  },
+  {
+    "brand_name": "BACLOFEN",
+    "generic_name": "baclofen",
+    "aliases": []
+  },
+  {
+    "brand_name": "BAMBUTEROL",
+    "generic_name": "bambuterol",
+    "aliases": []
+  },
+  {
+    "brand_name": "BARBITURATE POISONING",
+    "generic_name": "barbiturate poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "BECLOMETHASONE",
+    "generic_name": "beclomethasone",
+    "aliases": []
+  },
+  {
+    "brand_name": "BECLOMETHASONE DIPROPIONATE",
+    "generic_name": "beclomethasone dipropionate",
+    "aliases": []
+  },
+  {
+    "brand_name": "BEDAQUILINE",
+    "generic_name": "bedaquiline",
+    "aliases": []
+  },
+  {
+    "brand_name": "BENZALKONIUM CHLORIDE + CHOLINE SALICYLATE",
+    "generic_name": "benzalkonium chloride + choline salicylate",
+    "aliases": []
+  },
+  {
+    "brand_name": "BENZODIAZEPINE POISONING",
+    "generic_name": "benzodiazepine poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "BENZOIC ACID AND SALICYLIC ACID",
+    "generic_name": "benzoic acid and salicylic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "BENZTROPINE",
+    "generic_name": "benztropine",
+    "aliases": []
+  },
+  {
+    "brand_name": "BENZYL BENZOATE",
+    "generic_name": "benzyl benzoate",
+    "aliases": []
+  },
+  {
+    "brand_name": "BENZYL PENICILLIN (PENICILLIN G)",
+    "generic_name": "benzyl penicillin penicillin g",
+    "aliases": [
+      "benzyl penicillin"
+    ]
+  },
+  {
+    "brand_name": "BETAHISTINE",
+    "generic_name": "betahistine",
+    "aliases": []
+  },
+  {
+    "brand_name": "BETAMETHASONE",
+    "generic_name": "betamethasone",
+    "aliases": []
+  },
+  {
+    "brand_name": "BETHANECHOL",
+    "generic_name": "bethanechol",
+    "aliases": []
+  },
+  {
+    "brand_name": "BEVACIZUMAB",
+    "generic_name": "bevacizumab",
+    "aliases": []
+  },
+  {
+    "brand_name": "BICALUTAMIDE",
+    "generic_name": "bicalutamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "BIMATOPROST",
+    "generic_name": "bimatoprost",
+    "aliases": []
+  },
+  {
+    "brand_name": "BISACODYL",
+    "generic_name": "bisacodyl",
+    "aliases": []
+  },
+  {
+    "brand_name": "BISOPROLOL",
+    "generic_name": "bisoprolol",
+    "aliases": []
+  },
+  {
+    "brand_name": "BIVALIRUDIN",
+    "generic_name": "bivalirudin",
+    "aliases": []
+  },
+  {
+    "brand_name": "BONE WAX",
+    "generic_name": "bone wax",
+    "aliases": []
+  },
+  {
+    "brand_name": "BORTEZOMIB",
+    "generic_name": "bortezomib",
+    "aliases": []
+  },
+  {
+    "brand_name": "BOSENTAN",
+    "generic_name": "bosentan",
+    "aliases": []
+  },
+  {
+    "brand_name": "BRIMONIDINE",
+    "generic_name": "brimonidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "BROMHEXINE",
+    "generic_name": "bromhexine",
+    "aliases": []
+  },
+  {
+    "brand_name": "BROMOCRIPTINE",
+    "generic_name": "bromocriptine",
+    "aliases": []
+  },
+  {
+    "brand_name": "BUDESONIDE",
+    "generic_name": "budesonide",
+    "aliases": []
+  },
+  {
+    "brand_name": "BUPIVACAINE",
+    "generic_name": "bupivacaine",
+    "aliases": []
+  },
+  {
+    "brand_name": "BUPRENORPHINE",
+    "generic_name": "buprenorphine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CAFFEINE CITRATE",
+    "generic_name": "caffeine citrate",
+    "aliases": []
+  },
+  {
+    "brand_name": "CALCIPOTRIOL",
+    "generic_name": "calcipotriol",
+    "aliases": []
+  },
+  {
+    "brand_name": "CALCITONIN",
+    "generic_name": "calcitonin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CALCIUM",
+    "generic_name": "calcium",
+    "aliases": []
+  },
+  {
+    "brand_name": "CALCIUM FOLINATE (CALCIUM LEUCOVORIN)",
+    "generic_name": "calcium folinate calcium leucovorin",
+    "aliases": [
+      "calcium folinate"
+    ]
+  },
+  {
+    "brand_name": "CAPECITABINE",
+    "generic_name": "capecitabine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CAPREOMYCIN",
+    "generic_name": "capreomycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CAPSAICIN",
+    "generic_name": "capsaicin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CAPTOPRIL",
+    "generic_name": "captopril",
+    "aliases": []
+  },
+  {
+    "brand_name": "CARBAMATE POISONING",
+    "generic_name": "carbamate poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "CARBAMAZEPINE",
+    "generic_name": "carbamazepine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CARBENICILLIN",
+    "generic_name": "carbenicillin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CARBIMAZOLE",
+    "generic_name": "carbimazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "CARBOCYSTEINE",
+    "generic_name": "carbocysteine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CARBOMER",
+    "generic_name": "carbomer",
+    "aliases": []
+  },
+  {
+    "brand_name": "CARBON MONOXIDE POISONING",
+    "generic_name": "carbon monoxide poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "CARBOPLATIN",
+    "generic_name": "carboplatin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CARVEDILOL",
+    "generic_name": "carvedilol",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFACLOR",
+    "generic_name": "cefaclor",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFADROXIL",
+    "generic_name": "cefadroxil",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFALEXIN",
+    "generic_name": "cefalexin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFAZOLIN",
+    "generic_name": "cefazolin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFDINIR",
+    "generic_name": "cefdinir",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFEPIME",
+    "generic_name": "cefepime",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFIXIME",
+    "generic_name": "cefixime",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFOPERAZONE",
+    "generic_name": "cefoperazone",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFOTAXIME",
+    "generic_name": "cefotaxime",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFPODOXIME",
+    "generic_name": "cefpodoxime",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFTAZIDIME",
+    "generic_name": "ceftazidime",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFTRIAXONE",
+    "generic_name": "ceftriaxone",
+    "aliases": []
+  },
+  {
+    "brand_name": "CEFUROXIME",
+    "generic_name": "cefuroxime",
+    "aliases": []
+  },
+  {
+    "brand_name": "CELECOXIB",
+    "generic_name": "celecoxib",
+    "aliases": []
+  },
+  {
+    "brand_name": "CETIRIZINE",
+    "generic_name": "cetirizine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CETUXIMAB",
+    "generic_name": "cetuximab",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHLORAMBUCIL",
+    "generic_name": "chlorambucil",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHLORAMPHENICOL",
+    "generic_name": "chloramphenicol",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHLORAMPHENICOL WITH DEXAMETHASONE",
+    "generic_name": "chloramphenicol with dexamethasone",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHLORHEXIDINE",
+    "generic_name": "chlorhexidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHLORHEXIDINE + LIDOCAINE + METRONIDAZOLE",
+    "generic_name": "chlorhexidine + lidocaine + metronidazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHLORINATED HYDROCARBON INSECTICIDES POISONING",
+    "generic_name": "chlorinated hydrocarbon insecticides poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHLOROQUINE",
+    "generic_name": "chloroquine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHLORPROPAMIDE",
+    "generic_name": "chlorpropamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHLORTHALIDONE",
+    "generic_name": "chlorthalidone",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHOLESTYRAMINE RESINS",
+    "generic_name": "cholestyramine resins",
+    "aliases": []
+  },
+  {
+    "brand_name": "CHORIONIC GONADOTROPHIN (HCG)",
+    "generic_name": "chorionic gonadotrophin hcg",
+    "aliases": [
+      "chorionic gonadotrophin"
+    ]
+  },
+  {
+    "brand_name": "CIMETIDINE",
+    "generic_name": "cimetidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CINNARIZINE",
+    "generic_name": "cinnarizine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CIPROFLOXACIN",
+    "generic_name": "ciprofloxacin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CISPLATIN",
+    "generic_name": "cisplatin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLARITHROMYCIN",
+    "generic_name": "clarithromycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLINDAMYCIN",
+    "generic_name": "clindamycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLOBAZAM",
+    "generic_name": "clobazam",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLOBETASOL PROPIONATE",
+    "generic_name": "clobetasol propionate",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLOBETASONE BUTYRATE",
+    "generic_name": "clobetasone butyrate",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLOFAZIMINE",
+    "generic_name": "clofazimine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLOMIPHENE",
+    "generic_name": "clomiphene",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLONAZEPAM",
+    "generic_name": "clonazepam",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLONIDINE",
+    "generic_name": "clonidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLOPIDOGREL",
+    "generic_name": "clopidogrel",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLOTRIMAZOLE",
+    "generic_name": "clotrimazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "CLOXACILLIN",
+    "generic_name": "cloxacillin",
+    "aliases": []
+  },
+  {
+    "brand_name": "COAL TAR",
+    "generic_name": "coal tar",
+    "aliases": []
+  },
+  {
+    "brand_name": "CODEINE PHOSPHATE",
+    "generic_name": "codeine phosphate",
+    "aliases": []
+  },
+  {
+    "brand_name": "COLCHICINE",
+    "generic_name": "colchicine",
+    "aliases": []
+  },
+  {
+    "brand_name": "COMBINED ORAL CONTRACEPTIVE PILLS (OCPS)",
+    "generic_name": "combined oral contraceptive pills ocps",
+    "aliases": [
+      "combined oral contraceptive pills"
+    ]
+  },
+  {
+    "brand_name": "CONJUGATED ESTROGEN",
+    "generic_name": "conjugated estrogen",
+    "aliases": [
+      "conjugated oestrogen"
+    ]
+  },
+  {
+    "brand_name": "CORROSIVES (ACIDS AND ALKALIS)",
+    "generic_name": "corrosives acids and alkalis",
+    "aliases": [
+      "corrosives"
+    ]
+  },
+  {
+    "brand_name": "CORTISONE ACETATE",
+    "generic_name": "cortisone acetate",
+    "aliases": []
+  },
+  {
+    "brand_name": "COTRIMOXAZOLE (SULPHAMETHOXAZOLE and TRIMETHOPRIM)",
+    "generic_name": "cotrimoxazole sulphamethoxazole and trimethoprim",
+    "aliases": [
+      "cotrimoxazole"
+    ]
+  },
+  {
+    "brand_name": "CYCLIZINE",
+    "generic_name": "cyclizine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CYCLOPENTOLATE",
+    "generic_name": "cyclopentolate",
+    "aliases": []
+  },
+  {
+    "brand_name": "CYCLOPHOSPHAMIDE",
+    "generic_name": "cyclophosphamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "CYCLOSERINE",
+    "generic_name": "cycloserine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CYCLOSPORINE",
+    "generic_name": "cyclosporine",
+    "aliases": []
+  },
+  {
+    "brand_name": "CYTARABINE",
+    "generic_name": "cytarabine",
+    "aliases": []
+  },
+  {
+    "brand_name": "DABIGATRAN",
+    "generic_name": "dabigatran",
+    "aliases": []
+  },
+  {
+    "brand_name": "DALTEPARIN",
+    "generic_name": "dalteparin",
+    "aliases": []
+  },
+  {
+    "brand_name": "DANAZOL",
+    "generic_name": "danazol",
+    "aliases": []
+  },
+  {
+    "brand_name": "DAPSONE",
+    "generic_name": "dapsone",
+    "aliases": []
+  },
+  {
+    "brand_name": "DAUNORUBICIN",
+    "generic_name": "daunorubicin",
+    "aliases": []
+  },
+  {
+    "brand_name": "DENOSUMAB",
+    "generic_name": "denosumab",
+    "aliases": []
+  },
+  {
+    "brand_name": "DESMOPRESSIN",
+    "generic_name": "desmopressin",
+    "aliases": []
+  },
+  {
+    "brand_name": "DEXAMETHASONE",
+    "generic_name": "dexamethasone",
+    "aliases": []
+  },
+  {
+    "brand_name": "DEXMEDETOMIDINE",
+    "generic_name": "dexmedetomidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "DEXTROMETHORPHAN",
+    "generic_name": "dextromethorphan",
+    "aliases": []
+  },
+  {
+    "brand_name": "DIACEREIN",
+    "generic_name": "diacerein",
+    "aliases": []
+  },
+  {
+    "brand_name": "DIAZEPAM",
+    "generic_name": "diazepam",
+    "aliases": []
+  },
+  {
+    "brand_name": "DICLOFENAC",
+    "generic_name": "diclofenac",
+    "aliases": []
+  },
+  {
+    "brand_name": "DIDANOSINE",
+    "generic_name": "didanosine",
+    "aliases": []
+  },
+  {
+    "brand_name": "DIGOXIN",
+    "generic_name": "digoxin",
+    "aliases": []
+  },
+  {
+    "brand_name": "DILOXANIDE FUROATE",
+    "generic_name": "diloxanide furoate",
+    "aliases": []
+  },
+  {
+    "brand_name": "DILTIAZEM",
+    "generic_name": "diltiazem",
+    "aliases": []
+  },
+  {
+    "brand_name": "DIMENHYDRINATE",
+    "generic_name": "dimenhydrinate",
+    "aliases": []
+  },
+  {
+    "brand_name": "DIPHENHYDRAMINE",
+    "generic_name": "diphenhydramine",
+    "aliases": []
+  },
+  {
+    "brand_name": "DIPHENOXYLATE",
+    "generic_name": "diphenoxylate",
+    "aliases": []
+  },
+  {
+    "brand_name": "DIPHTHERIA ANTITOXINS",
+    "generic_name": "diphtheria antitoxins",
+    "aliases": []
+  },
+  {
+    "brand_name": "DISOPYRAMIDE",
+    "generic_name": "disopyramide",
+    "aliases": []
+  },
+  {
+    "brand_name": "DITHRANOL (ANTHRALIN)",
+    "generic_name": "dithranol anthralin",
+    "aliases": [
+      "dithranol"
+    ]
+  },
+  {
+    "brand_name": "DOBUTAMINE",
+    "generic_name": "dobutamine",
+    "aliases": []
+  },
+  {
+    "brand_name": "DOCETAXEL",
+    "generic_name": "docetaxel",
+    "aliases": []
+  },
+  {
+    "brand_name": "DOCUSATE SODIUM",
+    "generic_name": "docusate sodium",
+    "aliases": []
+  },
+  {
+    "brand_name": "DOMPERIDONE",
+    "generic_name": "domperidone",
+    "aliases": []
+  },
+  {
+    "brand_name": "DOPAMINE",
+    "generic_name": "dopamine",
+    "aliases": []
+  },
+  {
+    "brand_name": "DORZOLAMIDE",
+    "generic_name": "dorzolamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "DOXEPIN",
+    "generic_name": "doxepin",
+    "aliases": []
+  },
+  {
+    "brand_name": "DOXOFYLLINE",
+    "generic_name": "doxofylline",
+    "aliases": []
+  },
+  {
+    "brand_name": "DOXORUBICIN",
+    "generic_name": "doxorubicin",
+    "aliases": []
+  },
+  {
+    "brand_name": "DOXYCYCLINE",
+    "generic_name": "doxycycline",
+    "aliases": []
+  },
+  {
+    "brand_name": "DOXYCYCLINE HYCLATE (SDD)",
+    "generic_name": "doxycycline hyclate sdd",
+    "aliases": [
+      "doxycycline hyclate"
+    ]
+  },
+  {
+    "brand_name": "DROTAVERINE",
+    "generic_name": "drotaverine",
+    "aliases": []
+  },
+  {
+    "brand_name": "DYDROGESTERONE",
+    "generic_name": "dydrogesterone",
+    "aliases": []
+  },
+  {
+    "brand_name": "EFAVIRENZ",
+    "generic_name": "efavirenz",
+    "aliases": []
+  },
+  {
+    "brand_name": "EFLORNITHINE",
+    "generic_name": "eflornithine",
+    "aliases": []
+  },
+  {
+    "brand_name": "ENALAPRIL",
+    "generic_name": "enalapril",
+    "aliases": []
+  },
+  {
+    "brand_name": "ENOXAPARIN",
+    "generic_name": "enoxaparin",
+    "aliases": []
+  },
+  {
+    "brand_name": "ENTACAPONE",
+    "generic_name": "entacapone",
+    "aliases": []
+  },
+  {
+    "brand_name": "ENTECAVIR",
+    "generic_name": "entecavir",
+    "aliases": []
+  },
+  {
+    "brand_name": "EPHEDRINE HYDROCHLORIDE",
+    "generic_name": "ephedrine hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "EPINEPHRINE /ADRENALINE",
+    "generic_name": "epinephrine / adrenaline",
+    "aliases": [
+      "adrenaline",
+      "epinephrine"
+    ]
+  },
+  {
+    "brand_name": "EPIRUBICIN",
+    "generic_name": "epirubicin",
+    "aliases": []
+  },
+  {
+    "brand_name": "EPLERENONE",
+    "generic_name": "eplerenone",
+    "aliases": []
+  },
+  {
+    "brand_name": "EPOETIN ALFA",
+    "generic_name": "epoetin alfa",
+    "aliases": []
+  },
+  {
+    "brand_name": "ERGOT ALKALOIDS (ERGOMETRINE, METHYL ERGOMETRINE)",
+    "generic_name": "ergot alkaloids ergometrine methyl ergometrine",
+    "aliases": [
+      "ergot alkaloids"
+    ]
+  },
+  {
+    "brand_name": "ERGOTAMINE TARTARATE",
+    "generic_name": "ergotamine tartarate",
+    "aliases": []
+  },
+  {
+    "brand_name": "ERLOTINIB",
+    "generic_name": "erlotinib",
+    "aliases": []
+  },
+  {
+    "brand_name": "ERYTHROMYCIN",
+    "generic_name": "erythromycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "ESOMEPRAZOLE",
+    "generic_name": "esomeprazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "ESTRADIOL",
+    "generic_name": "estradiol",
+    "aliases": []
+  },
+  {
+    "brand_name": "ETANERCEPT",
+    "generic_name": "etanercept",
+    "aliases": []
+  },
+  {
+    "brand_name": "ETHAMBUTOL",
+    "generic_name": "ethambutol",
+    "aliases": []
+  },
+  {
+    "brand_name": "ETHAMSYLATE",
+    "generic_name": "ethamsylate",
+    "aliases": []
+  },
+  {
+    "brand_name": "ETHINYL ESTRADIOL",
+    "generic_name": "ethinyl estradiol",
+    "aliases": []
+  },
+  {
+    "brand_name": "ETHIONAMIDE",
+    "generic_name": "ethionamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "ETHYLENE GLYCOL POISONING",
+    "generic_name": "ethylene glycol poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "ETIDRONATE",
+    "generic_name": "etidronate",
+    "aliases": []
+  },
+  {
+    "brand_name": "ETOPOSIDE",
+    "generic_name": "etoposide",
+    "aliases": []
+  },
+  {
+    "brand_name": "ETORICOXIB",
+    "generic_name": "etoricoxib",
+    "aliases": []
+  },
+  {
+    "brand_name": "EXEMESTANE",
+    "generic_name": "exemestane",
+    "aliases": []
+  },
+  {
+    "brand_name": "EZETIMIBE",
+    "generic_name": "ezetimibe",
+    "aliases": []
+  },
+  {
+    "brand_name": "FACTOR IX COMPLEX",
+    "generic_name": "factor ix complex",
+    "aliases": []
+  },
+  {
+    "brand_name": "FAMOTIDINE",
+    "generic_name": "famotidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "FEBUXOSTAT",
+    "generic_name": "febuxostat",
+    "aliases": []
+  },
+  {
+    "brand_name": "FELODIPINE",
+    "generic_name": "felodipine",
+    "aliases": []
+  },
+  {
+    "brand_name": "FENOFIBRATE",
+    "generic_name": "fenofibrate",
+    "aliases": []
+  },
+  {
+    "brand_name": "FENTANYL",
+    "generic_name": "fentanyl",
+    "aliases": []
+  },
+  {
+    "brand_name": "FERROUS FUMARATE",
+    "generic_name": "ferrous fumarate",
+    "aliases": []
+  },
+  {
+    "brand_name": "FERROUS FUMARATE WITH FOLIC ACID",
+    "generic_name": "ferrous fumarate with folic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "FERROUS GLUCONATE",
+    "generic_name": "ferrous gluconate",
+    "aliases": []
+  },
+  {
+    "brand_name": "FERROUS SULFATE WITH ASCORBIC ACID",
+    "generic_name": "ferrous sulfate with ascorbic acid",
+    "aliases": [
+      "ferrous sulphate with ascorbic acid"
+    ]
+  },
+  {
+    "brand_name": "FERROUS SULPHATE",
+    "generic_name": "ferrous sulphate",
+    "aliases": [
+      "ferrous sulfate"
+    ]
+  },
+  {
+    "brand_name": "FERROUS SULPHATE WITH FOLIC ACID",
+    "generic_name": "ferrous sulphate with folic acid",
+    "aliases": [
+      "ferrous sulfate with folic acid"
+    ]
+  },
+  {
+    "brand_name": "FINASTERIDE",
+    "generic_name": "finasteride",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLAVOXATE",
+    "generic_name": "flavoxate",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLAVOXATE HYDROCHLORIDE",
+    "generic_name": "flavoxate hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "Flexon",
+    "generic_name": "ibuprofen",
+    "aliases": [
+      "flexon"
+    ]
+  },
+  {
+    "brand_name": "FLUCLOXACILLIN",
+    "generic_name": "flucloxacillin",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUCONAZOLE",
+    "generic_name": "fluconazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUDARABINE",
+    "generic_name": "fludarabine",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUDROCORTISONE ACETATE",
+    "generic_name": "fludrocortisone acetate",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUNARIZINE",
+    "generic_name": "flunarizine",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUOCINOLONE ACETONIDE",
+    "generic_name": "fluocinolone acetonide",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUORESCEIN SODIUM",
+    "generic_name": "fluorescein sodium",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUOROMETHOLONE",
+    "generic_name": "fluorometholone",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUOROURACIL",
+    "generic_name": "fluorouracil",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUOXETINE",
+    "generic_name": "fluoxetine",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLURBIPROFEN",
+    "generic_name": "flurbiprofen",
+    "aliases": []
+  },
+  {
+    "brand_name": "FLUTICASONE",
+    "generic_name": "fluticasone",
+    "aliases": []
+  },
+  {
+    "brand_name": "FOLIC ACID",
+    "generic_name": "folic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "FONDAPARINUX",
+    "generic_name": "fondaparinux",
+    "aliases": []
+  },
+  {
+    "brand_name": "FORMOTEROL",
+    "generic_name": "formoterol",
+    "aliases": []
+  },
+  {
+    "brand_name": "FULVESTRANT",
+    "generic_name": "fulvestrant",
+    "aliases": []
+  },
+  {
+    "brand_name": "FUROSEMIDE",
+    "generic_name": "furosemide",
+    "aliases": []
+  },
+  {
+    "brand_name": "FUSIDIC ACID",
+    "generic_name": "fusidic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "GABAPENTIN",
+    "generic_name": "gabapentin",
+    "aliases": []
+  },
+  {
+    "brand_name": "GANCICLOVIR",
+    "generic_name": "ganciclovir",
+    "aliases": []
+  },
+  {
+    "brand_name": "GEFITINIB",
+    "generic_name": "gefitinib",
+    "aliases": []
+  },
+  {
+    "brand_name": "GELFOAM",
+    "generic_name": "gelfoam",
+    "aliases": []
+  },
+  {
+    "brand_name": "GEMFIBROZIL",
+    "generic_name": "gemfibrozil",
+    "aliases": []
+  },
+  {
+    "brand_name": "GENTAMICIN",
+    "generic_name": "gentamicin",
+    "aliases": []
+  },
+  {
+    "brand_name": "GENTIAN VIOLET",
+    "generic_name": "gentian violet",
+    "aliases": []
+  },
+  {
+    "brand_name": "GLIBENCLAMIDE",
+    "generic_name": "glibenclamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "GLICLAZIDE",
+    "generic_name": "gliclazide",
+    "aliases": []
+  },
+  {
+    "brand_name": "GLIMEPERIDE",
+    "generic_name": "glimeperide",
+    "aliases": []
+  },
+  {
+    "brand_name": "GLIPIZIDE",
+    "generic_name": "glipizide",
+    "aliases": []
+  },
+  {
+    "brand_name": "GLUCAGON",
+    "generic_name": "glucagon",
+    "aliases": []
+  },
+  {
+    "brand_name": "GLUCOSE",
+    "generic_name": "glucose",
+    "aliases": []
+  },
+  {
+    "brand_name": "GLUCOSE IN GLYCERINE",
+    "generic_name": "glucose in glycerine",
+    "aliases": []
+  },
+  {
+    "brand_name": "GLUTARALDEHYDE",
+    "generic_name": "glutaraldehyde",
+    "aliases": []
+  },
+  {
+    "brand_name": "GLYCERYL TRINATRE (NITROGLYCERINE)",
+    "generic_name": "glyceryl trinatre nitroglycerine",
+    "aliases": [
+      "glyceryl trinatre"
+    ]
+  },
+  {
+    "brand_name": "GLYCERYL TRINITRATE (GTN)",
+    "generic_name": "glyceryl trinitrate gtn",
+    "aliases": [
+      "glyceryl trinitrate",
+      "gtn",
+      "nitroglycerin",
+      "nitroglycerine"
+    ]
+  },
+  {
+    "brand_name": "GLYCOPYRRONIUM BROMIDE (GLYCOPYRROLATE)",
+    "generic_name": "glycopyrronium bromide glycopyrrolate",
+    "aliases": [
+      "glycopyrronium bromide"
+    ]
+  },
+  {
+    "brand_name": "GRISEOFULVIN",
+    "generic_name": "griseofulvin",
+    "aliases": []
+  },
+  {
+    "brand_name": "HALOTHANE",
+    "generic_name": "halothane",
+    "aliases": []
+  },
+  {
+    "brand_name": "HEPARIN (UNFRACTIONATED)",
+    "generic_name": "heparin unfractionated",
+    "aliases": [
+      "heparin",
+      "ufh",
+      "unfractionated heparin"
+    ]
+  },
+  {
+    "brand_name": "HEPATITIS B IMMUNOGLOBULIN",
+    "generic_name": "hepatitis b immunoglobulin",
+    "aliases": []
+  },
+  {
+    "brand_name": "HOMATROPINE",
+    "generic_name": "homatropine",
+    "aliases": []
+  },
+  {
+    "brand_name": "HUMAN ALBUMIN",
+    "generic_name": "human albumin",
+    "aliases": []
+  },
+  {
+    "brand_name": "HUMAN PAPILLOMA VIRUS VACCINE",
+    "generic_name": "human papilloma virus vaccine",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYDRALAZINE HYDROCHLORIDE",
+    "generic_name": "hydralazine hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYDROCHLORTHIAZIDE",
+    "generic_name": "hydrochlorthiazide",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYDROCORTISONE",
+    "generic_name": "hydrocortisone",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYDROCORTISONE ACETATE",
+    "generic_name": "hydrocortisone acetate",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYDROGEN PEROXIDE",
+    "generic_name": "hydrogen peroxide",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYDROQUINONE",
+    "generic_name": "hydroquinone",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYDROXYCHOLOROQUINE SULFATE (HCQS)",
+    "generic_name": "hydroxycholoroquine sulfate hcqs",
+    "aliases": [
+      "hydroxycholoroquine sulfate",
+      "hydroxycholoroquine sulphate",
+      "hydroxycholoroquine sulphate hcqs"
+    ]
+  },
+  {
+    "brand_name": "HYDROXYPROGESTERONE",
+    "generic_name": "hydroxyprogesterone",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYDROXYUREA",
+    "generic_name": "hydroxyurea",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYOSCINE BUTYL BROMIDE",
+    "generic_name": "hyoscine butyl bromide",
+    "aliases": []
+  },
+  {
+    "brand_name": "HYPROMELLOSE",
+    "generic_name": "hypromellose",
+    "aliases": []
+  },
+  {
+    "brand_name": "IBANDRONATE",
+    "generic_name": "ibandronate",
+    "aliases": []
+  },
+  {
+    "brand_name": "IBUPROFEN",
+    "generic_name": "ibuprofen",
+    "aliases": []
+  },
+  {
+    "brand_name": "ICHTHAMMOL IN GLYCERINE PACK",
+    "generic_name": "ichthammol in glycerine pack",
+    "aliases": []
+  },
+  {
+    "brand_name": "IDOXURIDINE",
+    "generic_name": "idoxuridine",
+    "aliases": []
+  },
+  {
+    "brand_name": "IMATINIB",
+    "generic_name": "imatinib",
+    "aliases": []
+  },
+  {
+    "brand_name": "INDAPAMIDE",
+    "generic_name": "indapamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "INDINAVIR",
+    "generic_name": "indinavir",
+    "aliases": []
+  },
+  {
+    "brand_name": "INDOMETHACIN",
+    "generic_name": "indomethacin",
+    "aliases": []
+  },
+  {
+    "brand_name": "INFLIXIMAB",
+    "generic_name": "infliximab",
+    "aliases": []
+  },
+  {
+    "brand_name": "INFLUENZA VACCINE",
+    "generic_name": "influenza vaccine",
+    "aliases": []
+  },
+  {
+    "brand_name": "INSECT STINGS (ANTS, BEES, WASPS)",
+    "generic_name": "insect stings ants bees wasps",
+    "aliases": [
+      "insect stings"
+    ]
+  },
+  {
+    "brand_name": "INSULIN ASPART",
+    "generic_name": "insulin aspart",
+    "aliases": []
+  },
+  {
+    "brand_name": "INSULIN GLARGINE",
+    "generic_name": "insulin glargine",
+    "aliases": []
+  },
+  {
+    "brand_name": "INSULIN ISOPHANE (NPH)",
+    "generic_name": "insulin isophane nph",
+    "aliases": [
+      "insulin isophane"
+    ]
+  },
+  {
+    "brand_name": "INSULIN LISPRO",
+    "generic_name": "insulin lispro",
+    "aliases": []
+  },
+  {
+    "brand_name": "INSULIN PROTAMINE ZINC (PZI)",
+    "generic_name": "insulin protamine zinc pzi",
+    "aliases": [
+      "insulin protamine zinc"
+    ]
+  },
+  {
+    "brand_name": "INSULIN SOLUBLE",
+    "generic_name": "insulin soluble",
+    "aliases": []
+  },
+  {
+    "brand_name": "INSULIN ZINC SUSPENSION (LENTE)",
+    "generic_name": "insulin zinc suspension lente",
+    "aliases": [
+      "insulin zinc suspension"
+    ]
+  },
+  {
+    "brand_name": "INTERFERON BETA",
+    "generic_name": "interferon beta",
+    "aliases": []
+  },
+  {
+    "brand_name": "INTERFERON GAMMA-1B",
+    "generic_name": "interferon gamma 1b",
+    "aliases": []
+  },
+  {
+    "brand_name": "IODINE",
+    "generic_name": "iodine",
+    "aliases": []
+  },
+  {
+    "brand_name": "IPRATROPIUM BROMIDE",
+    "generic_name": "ipratropium bromide",
+    "aliases": []
+  },
+  {
+    "brand_name": "IRBESARTAN",
+    "generic_name": "irbesartan",
+    "aliases": []
+  },
+  {
+    "brand_name": "IRINOTECAN",
+    "generic_name": "irinotecan",
+    "aliases": []
+  },
+  {
+    "brand_name": "IRON",
+    "generic_name": "iron",
+    "aliases": []
+  },
+  {
+    "brand_name": "IRON DEXTRAN",
+    "generic_name": "iron dextran",
+    "aliases": []
+  },
+  {
+    "brand_name": "ISOFLURANE",
+    "generic_name": "isoflurane",
+    "aliases": []
+  },
+  {
+    "brand_name": "ISONIAZID",
+    "generic_name": "isoniazid",
+    "aliases": []
+  },
+  {
+    "brand_name": "ISOPRENALINE",
+    "generic_name": "isoprenaline",
+    "aliases": []
+  },
+  {
+    "brand_name": "ISOSOBIDE MONONITRATES",
+    "generic_name": "isosobide mononitrates",
+    "aliases": []
+  },
+  {
+    "brand_name": "ISOSORBIDE DINITRATE",
+    "generic_name": "isosorbide dinitrate",
+    "aliases": []
+  },
+  {
+    "brand_name": "ISOTRETINOIN",
+    "generic_name": "isotretinoin",
+    "aliases": []
+  },
+  {
+    "brand_name": "ISOXSUPRINE",
+    "generic_name": "isoxsuprine",
+    "aliases": []
+  },
+  {
+    "brand_name": "ISPAGHULA HUSK",
+    "generic_name": "ispaghula husk",
+    "aliases": []
+  },
+  {
+    "brand_name": "ITRACONAZOLE",
+    "generic_name": "itraconazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "IVERMECTIN",
+    "generic_name": "ivermectin",
+    "aliases": []
+  },
+  {
+    "brand_name": "KANAMYCIN",
+    "generic_name": "kanamycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "KEROSENE POISONING",
+    "generic_name": "kerosene poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "KETAMINE",
+    "generic_name": "ketamine",
+    "aliases": []
+  },
+  {
+    "brand_name": "KETOCONAZOLE",
+    "generic_name": "ketoconazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "KETOROLAC",
+    "generic_name": "ketorolac",
+    "aliases": []
+  },
+  {
+    "brand_name": "KETOTIFEN",
+    "generic_name": "ketotifen",
+    "aliases": []
+  },
+  {
+    "brand_name": "LABETALOL",
+    "generic_name": "labetalol",
+    "aliases": []
+  },
+  {
+    "brand_name": "LACOSAMIDE",
+    "generic_name": "lacosamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "LACTULOSE",
+    "generic_name": "lactulose",
+    "aliases": []
+  },
+  {
+    "brand_name": "LAMIVUDINE",
+    "generic_name": "lamivudine",
+    "aliases": []
+  },
+  {
+    "brand_name": "LAMOTRIGINE",
+    "generic_name": "lamotrigine",
+    "aliases": []
+  },
+  {
+    "brand_name": "LANSOPRAZOLE",
+    "generic_name": "lansoprazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "LATANOPROST",
+    "generic_name": "latanoprost",
+    "aliases": []
+  },
+  {
+    "brand_name": "LEFLUNOMIDE",
+    "generic_name": "leflunomide",
+    "aliases": []
+  },
+  {
+    "brand_name": "LEVETIRACETAM",
+    "generic_name": "levetiracetam",
+    "aliases": []
+  },
+  {
+    "brand_name": "LEVODOPA AND CARBIDOPA",
+    "generic_name": "levodopa and carbidopa",
+    "aliases": []
+  },
+  {
+    "brand_name": "LEVOFLOXACIN",
+    "generic_name": "levofloxacin",
+    "aliases": []
+  },
+  {
+    "brand_name": "LEVONORGESTREL",
+    "generic_name": "levonorgestrel",
+    "aliases": []
+  },
+  {
+    "brand_name": "LEVOTHYROXINE (L-THYROXINE)",
+    "generic_name": "levothyroxine l thyroxine",
+    "aliases": [
+      "levothyroxine"
+    ]
+  },
+  {
+    "brand_name": "LIDOCAINE (LIGNOCAINE)",
+    "generic_name": "lidocaine lignocaine",
+    "aliases": [
+      "lidocaine",
+      "lignocaine"
+    ]
+  },
+  {
+    "brand_name": "LIDOCAINE/ LIGNOCAINE",
+    "generic_name": "lidocaine / lignocaine",
+    "aliases": [
+      "lidocaine",
+      "lignocaine"
+    ]
+  },
+  {
+    "brand_name": "LINEZOLID",
+    "generic_name": "linezolid",
+    "aliases": []
+  },
+  {
+    "brand_name": "LIQUID PARAFFIN",
+    "generic_name": "liquid paraffin",
+    "aliases": []
+  },
+  {
+    "brand_name": "LIRAGLUTIDE",
+    "generic_name": "liraglutide",
+    "aliases": []
+  },
+  {
+    "brand_name": "LISINOPRIL",
+    "generic_name": "lisinopril",
+    "aliases": []
+  },
+  {
+    "brand_name": "LITHIUM",
+    "generic_name": "lithium",
+    "aliases": []
+  },
+  {
+    "brand_name": "LOMUSTINE",
+    "generic_name": "lomustine",
+    "aliases": []
+  },
+  {
+    "brand_name": "LOPERAMIDE",
+    "generic_name": "loperamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "LOPINAVIR + RITONAVIR",
+    "generic_name": "lopinavir + ritonavir",
+    "aliases": []
+  },
+  {
+    "brand_name": "LOSARTAN",
+    "generic_name": "losartan",
+    "aliases": []
+  },
+  {
+    "brand_name": "LOW MOLECULAR WEIGHT HEPARINS",
+    "generic_name": "low molecular weight heparins",
+    "aliases": [
+      "lmwh"
+    ]
+  },
+  {
+    "brand_name": "LUGOL’S IODINE",
+    "generic_name": "lugol s iodine",
+    "aliases": []
+  },
+  {
+    "brand_name": "MACROGOL 3350",
+    "generic_name": "macrogol 3350",
+    "aliases": []
+  },
+  {
+    "brand_name": "MAGNESIUM HYDROXIDE",
+    "generic_name": "magnesium hydroxide",
+    "aliases": []
+  },
+  {
+    "brand_name": "MAGNESIUM HYDROXIDE (MILK OF MAGNESIA)",
+    "generic_name": "magnesium hydroxide milk of magnesia",
+    "aliases": [
+      "magnesium hydroxide"
+    ]
+  },
+  {
+    "brand_name": "MAGNESIUM SULPHATE",
+    "generic_name": "magnesium sulphate",
+    "aliases": [
+      "magnesium sulfate"
+    ]
+  },
+  {
+    "brand_name": "MANNITOL",
+    "generic_name": "mannitol",
+    "aliases": []
+  },
+  {
+    "brand_name": "MEASLES VACCINE",
+    "generic_name": "measles vaccine",
+    "aliases": []
+  },
+  {
+    "brand_name": "MEASLES, MUMPS, RUBELLA (MMR) VACCINE",
+    "generic_name": "measles mumps rubella mmr vaccine",
+    "aliases": [
+      "measles mumps rubella vaccine"
+    ]
+  },
+  {
+    "brand_name": "MEBENDAZOLE",
+    "generic_name": "mebendazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "MEBEVERINE HYDROCHLORIDE",
+    "generic_name": "mebeverine hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "MEDROXYPROGESTERONE",
+    "generic_name": "medroxyprogesterone",
+    "aliases": []
+  },
+  {
+    "brand_name": "MEFENAMIC ACID",
+    "generic_name": "mefenamic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "MEFLOQUINE",
+    "generic_name": "mefloquine",
+    "aliases": []
+  },
+  {
+    "brand_name": "MELPHALAN",
+    "generic_name": "melphalan",
+    "aliases": []
+  },
+  {
+    "brand_name": "MERCAPTOPURINE (6-MERCAPTOPURINE)",
+    "generic_name": "mercaptopurine 6 mercaptopurine",
+    "aliases": [
+      "mercaptopurine"
+    ]
+  },
+  {
+    "brand_name": "MESALAZINE",
+    "generic_name": "mesalazine",
+    "aliases": []
+  },
+  {
+    "brand_name": "MESTEROLONE",
+    "generic_name": "mesterolone",
+    "aliases": []
+  },
+  {
+    "brand_name": "METFORMIN",
+    "generic_name": "metformin",
+    "aliases": []
+  },
+  {
+    "brand_name": "METHADONE HYDROCHLORIDE",
+    "generic_name": "methadone hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "METHANOL POISONING",
+    "generic_name": "methanol poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "METHOTREXATE",
+    "generic_name": "methotrexate",
+    "aliases": []
+  },
+  {
+    "brand_name": "METHYL-TESTOSTERONE",
+    "generic_name": "methyl testosterone",
+    "aliases": []
+  },
+  {
+    "brand_name": "METHYLDOPA",
+    "generic_name": "methyldopa",
+    "aliases": []
+  },
+  {
+    "brand_name": "METHYLPREDNISOLONE",
+    "generic_name": "methylprednisolone",
+    "aliases": []
+  },
+  {
+    "brand_name": "METOCLOPRAMIDE",
+    "generic_name": "metoclopramide",
+    "aliases": []
+  },
+  {
+    "brand_name": "METOLAZONE",
+    "generic_name": "metolazone",
+    "aliases": []
+  },
+  {
+    "brand_name": "METOPROLOL",
+    "generic_name": "metoprolol",
+    "aliases": []
+  },
+  {
+    "brand_name": "METRONIDAZOLE",
+    "generic_name": "metronidazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "MICONAZOLE NITRATE",
+    "generic_name": "miconazole nitrate",
+    "aliases": []
+  },
+  {
+    "brand_name": "MIDAZOLAM",
+    "generic_name": "midazolam",
+    "aliases": []
+  },
+  {
+    "brand_name": "MIFEPRISTONE",
+    "generic_name": "mifepristone",
+    "aliases": []
+  },
+  {
+    "brand_name": "MILRINONE",
+    "generic_name": "milrinone",
+    "aliases": []
+  },
+  {
+    "brand_name": "MILTEFOSINE",
+    "generic_name": "miltefosine",
+    "aliases": []
+  },
+  {
+    "brand_name": "MINOCYCLINE",
+    "generic_name": "minocycline",
+    "aliases": []
+  },
+  {
+    "brand_name": "MINOXIDIL",
+    "generic_name": "minoxidil",
+    "aliases": []
+  },
+  {
+    "brand_name": "MIRABEGRON",
+    "generic_name": "mirabegron",
+    "aliases": []
+  },
+  {
+    "brand_name": "MIRTAZAPINE",
+    "generic_name": "mirtazapine",
+    "aliases": []
+  },
+  {
+    "brand_name": "MISOPROSTOL",
+    "generic_name": "misoprostol",
+    "aliases": []
+  },
+  {
+    "brand_name": "MITOMYCIN",
+    "generic_name": "mitomycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "MITOXANTRONE",
+    "generic_name": "mitoxantrone",
+    "aliases": []
+  },
+  {
+    "brand_name": "MOMETASONE FUROATE",
+    "generic_name": "mometasone furoate",
+    "aliases": []
+  },
+  {
+    "brand_name": "MONTELUKAST",
+    "generic_name": "montelukast",
+    "aliases": []
+  },
+  {
+    "brand_name": "MORPHINE AND OTHER OPIOIDS POISONING",
+    "generic_name": "morphine and other opioids poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "MORPHINE SULPHATE",
+    "generic_name": "morphine sulphate",
+    "aliases": [
+      "morphine sulfate"
+    ]
+  },
+  {
+    "brand_name": "MOXIFLOXACIN",
+    "generic_name": "moxifloxacin",
+    "aliases": []
+  },
+  {
+    "brand_name": "MUPIROCIN",
+    "generic_name": "mupirocin",
+    "aliases": []
+  },
+  {
+    "brand_name": "MUSHROOM POISONING",
+    "generic_name": "mushroom poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "NALIDIXIC ACID",
+    "generic_name": "nalidixic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "NALOXONE",
+    "generic_name": "naloxone",
+    "aliases": []
+  },
+  {
+    "brand_name": "NALTREXONE",
+    "generic_name": "naltrexone",
+    "aliases": []
+  },
+  {
+    "brand_name": "NANDROLONE",
+    "generic_name": "nandrolone",
+    "aliases": []
+  },
+  {
+    "brand_name": "Napa",
+    "generic_name": "paracetamol",
+    "aliases": [
+      "napa",
+      "acetaminophen"
+    ]
+  },
+  {
+    "brand_name": "NAPROXEN",
+    "generic_name": "naproxen",
+    "aliases": []
+  },
+  {
+    "brand_name": "NATAMYCIN",
+    "generic_name": "natamycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "NEBIVOLOL",
+    "generic_name": "nebivolol",
+    "aliases": []
+  },
+  {
+    "brand_name": "NELFINAVIR",
+    "generic_name": "nelfinavir",
+    "aliases": []
+  },
+  {
+    "brand_name": "NEOSTIGMINE",
+    "generic_name": "neostigmine",
+    "aliases": []
+  },
+  {
+    "brand_name": "NEPAL EPI SCHEDULE (2017)",
+    "generic_name": "nepal epi schedule 2017",
+    "aliases": [
+      "nepal epi schedule"
+    ]
+  },
+  {
+    "brand_name": "NEVIRAPINE",
+    "generic_name": "nevirapine",
+    "aliases": []
+  },
+  {
+    "brand_name": "NICLOSAMIDE",
+    "generic_name": "niclosamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "NICOTINIC ACID (NIACIN)",
+    "generic_name": "nicotinic acid niacin",
+    "aliases": [
+      "nicotinic acid"
+    ]
+  },
+  {
+    "brand_name": "NIFEDIPINE",
+    "generic_name": "nifedipine",
+    "aliases": []
+  },
+  {
+    "brand_name": "NILOTINIB",
+    "generic_name": "nilotinib",
+    "aliases": []
+  },
+  {
+    "brand_name": "NITROFURANTOIN",
+    "generic_name": "nitrofurantoin",
+    "aliases": []
+  },
+  {
+    "brand_name": "NITROUS OXIDE",
+    "generic_name": "nitrous oxide",
+    "aliases": []
+  },
+  {
+    "brand_name": "NOREPINEPHRINE/NORADRENALINE",
+    "generic_name": "norepinephrine / noradrenaline",
+    "aliases": [
+      "noradrenaline",
+      "norepinephrine"
+    ]
+  },
+  {
+    "brand_name": "NORETHISTERONE",
+    "generic_name": "norethisterone",
+    "aliases": []
+  },
+  {
+    "brand_name": "NORFLOXACIN",
+    "generic_name": "norfloxacin",
+    "aliases": []
+  },
+  {
+    "brand_name": "NORMAL IMMUNOGLOBULIN",
+    "generic_name": "normal immunoglobulin",
+    "aliases": []
+  },
+  {
+    "brand_name": "NOSCAPINE",
+    "generic_name": "noscapine",
+    "aliases": []
+  },
+  {
+    "brand_name": "NYSTATIN",
+    "generic_name": "nystatin",
+    "aliases": []
+  },
+  {
+    "brand_name": "OCTREOTIDE",
+    "generic_name": "octreotide",
+    "aliases": []
+  },
+  {
+    "brand_name": "OFLOXACIN",
+    "generic_name": "ofloxacin",
+    "aliases": []
+  },
+  {
+    "brand_name": "OLOPATADINE",
+    "generic_name": "olopatadine",
+    "aliases": []
+  },
+  {
+    "brand_name": "OMEPRAZOLE",
+    "generic_name": "omeprazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "ONDANSETRON",
+    "generic_name": "ondansetron",
+    "aliases": []
+  },
+  {
+    "brand_name": "ORAL REHYDRATION SALTS",
+    "generic_name": "oral rehydration salts",
+    "aliases": [
+      "ors"
+    ]
+  },
+  {
+    "brand_name": "ORGANOPHOSPHORUS INSECTICIDE POISONING",
+    "generic_name": "organophosphorus insecticide poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "ORLISTAT",
+    "generic_name": "orlistat",
+    "aliases": []
+  },
+  {
+    "brand_name": "OSELTAMIVIR",
+    "generic_name": "oseltamivir",
+    "aliases": []
+  },
+  {
+    "brand_name": "OSIMERTINIB",
+    "generic_name": "osimertinib",
+    "aliases": []
+  },
+  {
+    "brand_name": "OXALIPLATIN",
+    "generic_name": "oxaliplatin",
+    "aliases": []
+  },
+  {
+    "brand_name": "OXCARBAZEPINE",
+    "generic_name": "oxcarbazepine",
+    "aliases": []
+  },
+  {
+    "brand_name": "OXYBUTYNIN",
+    "generic_name": "oxybutynin",
+    "aliases": []
+  },
+  {
+    "brand_name": "OXYGEN",
+    "generic_name": "oxygen",
+    "aliases": []
+  },
+  {
+    "brand_name": "OXYMETAZOLINE",
+    "generic_name": "oxymetazoline",
+    "aliases": []
+  },
+  {
+    "brand_name": "OXYMETHOLONE",
+    "generic_name": "oxymetholone",
+    "aliases": []
+  },
+  {
+    "brand_name": "OXYTETRACYCLINE",
+    "generic_name": "oxytetracycline",
+    "aliases": []
+  },
+  {
+    "brand_name": "OXYTOCIN",
+    "generic_name": "oxytocin",
+    "aliases": []
+  },
+  {
+    "brand_name": "P-AMINOSALICYLIC ACID (PAS)",
+    "generic_name": "p aminosalicylic acid pas",
+    "aliases": [
+      "p aminosalicylic acid"
+    ]
+  },
+  {
+    "brand_name": "PACLITAXEL",
+    "generic_name": "paclitaxel",
+    "aliases": []
+  },
+  {
+    "brand_name": "PAMIDRONATE",
+    "generic_name": "pamidronate",
+    "aliases": []
+  },
+  {
+    "brand_name": "PANCURONIUM",
+    "generic_name": "pancuronium",
+    "aliases": []
+  },
+  {
+    "brand_name": "PANTOPRAZOLE",
+    "generic_name": "pantoprazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "PARACETAMOL",
+    "generic_name": "paracetamol",
+    "aliases": [
+      "acetaminophen"
+    ]
+  },
+  {
+    "brand_name": "PARACETAMOL POISONING",
+    "generic_name": "paracetamol poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "PEGINTERFERON ALFA",
+    "generic_name": "peginterferon alfa",
+    "aliases": []
+  },
+  {
+    "brand_name": "PEMETREXED",
+    "generic_name": "pemetrexed",
+    "aliases": []
+  },
+  {
+    "brand_name": "PENICILLAMINE",
+    "generic_name": "penicillamine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PENICILLIN V",
+    "generic_name": "penicillin v",
+    "aliases": []
+  },
+  {
+    "brand_name": "PENTAMIDINE",
+    "generic_name": "pentamidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PENTAVALENT VACCINE (DPT-HepB-Hib)",
+    "generic_name": "pentavalent vaccine dpt hepb hib",
+    "aliases": [
+      "pentavalent vaccine"
+    ]
+  },
+  {
+    "brand_name": "PENTAZOCINE",
+    "generic_name": "pentazocine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PERMETHRIN",
+    "generic_name": "permethrin",
+    "aliases": []
+  },
+  {
+    "brand_name": "PETHIDINE HYDROCHLORIDE (MEPERIDINE)",
+    "generic_name": "pethidine hydrochloride meperidine",
+    "aliases": [
+      "pethidine hydrochloride"
+    ]
+  },
+  {
+    "brand_name": "PHENOBARBITAL",
+    "generic_name": "phenobarbital",
+    "aliases": []
+  },
+  {
+    "brand_name": "PHENOXY METHYL PENICILLIN (PENICILLIN V)",
+    "generic_name": "phenoxy methyl penicillin penicillin v",
+    "aliases": [
+      "phenoxy methyl penicillin"
+    ]
+  },
+  {
+    "brand_name": "PHENYLEPHRINE",
+    "generic_name": "phenylephrine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PHENYTOIN",
+    "generic_name": "phenytoin",
+    "aliases": []
+  },
+  {
+    "brand_name": "PHOLCODINE",
+    "generic_name": "pholcodine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PHOSPHATES",
+    "generic_name": "phosphates",
+    "aliases": []
+  },
+  {
+    "brand_name": "PHYTOMENADIONE (VITAMIN K1)",
+    "generic_name": "phytomenadione vitamin k1",
+    "aliases": [
+      "phytomenadione"
+    ]
+  },
+  {
+    "brand_name": "PILOCARPINE",
+    "generic_name": "pilocarpine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PIOGLITAZONE",
+    "generic_name": "pioglitazone",
+    "aliases": []
+  },
+  {
+    "brand_name": "PIPERACILLIN",
+    "generic_name": "piperacillin",
+    "aliases": []
+  },
+  {
+    "brand_name": "PIPERACILLIN with TAZOBACTAM",
+    "generic_name": "piperacillin with tazobactam",
+    "aliases": []
+  },
+  {
+    "brand_name": "PIPERAZINE",
+    "generic_name": "piperazine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PIROXICAM",
+    "generic_name": "piroxicam",
+    "aliases": []
+  },
+  {
+    "brand_name": "POLIOMYELITIS VACCINE (ORAL)/OPV (LIVE ATTENUATED)",
+    "generic_name": "poliomyelitis vaccine oral / opv live attenuated",
+    "aliases": [
+      "opv live attenuated",
+      "poliomyelitis vaccine / opv",
+      "poliomyelitis vaccine oral"
+    ]
+  },
+  {
+    "brand_name": "POLYETHYLENE GLYCOL 3350",
+    "generic_name": "polyethylene glycol 3350",
+    "aliases": []
+  },
+  {
+    "brand_name": "POLYGELINE",
+    "generic_name": "polygeline",
+    "aliases": []
+  },
+  {
+    "brand_name": "POLYMYXIN B",
+    "generic_name": "polymyxin b",
+    "aliases": []
+  },
+  {
+    "brand_name": "POLYVENUM ANTISNAKE SERUM",
+    "generic_name": "polyvenum antisnake serum",
+    "aliases": []
+  },
+  {
+    "brand_name": "POLYVINYL ALCOHOL",
+    "generic_name": "polyvinyl alcohol",
+    "aliases": []
+  },
+  {
+    "brand_name": "POTASSIUM CHLORIDE",
+    "generic_name": "potassium chloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "POTASSIUM NITRATE",
+    "generic_name": "potassium nitrate",
+    "aliases": []
+  },
+  {
+    "brand_name": "POTASSIUM PERMANGANATE",
+    "generic_name": "potassium permanganate",
+    "aliases": []
+  },
+  {
+    "brand_name": "POVIDONE IODINE",
+    "generic_name": "povidone iodine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PRAMIPEXOLE",
+    "generic_name": "pramipexole",
+    "aliases": []
+  },
+  {
+    "brand_name": "PRASUGREL",
+    "generic_name": "prasugrel",
+    "aliases": []
+  },
+  {
+    "brand_name": "PRAZIQUANTEL",
+    "generic_name": "praziquantel",
+    "aliases": []
+  },
+  {
+    "brand_name": "PRAZOSIN",
+    "generic_name": "prazosin",
+    "aliases": []
+  },
+  {
+    "brand_name": "PREDNISOLONE",
+    "generic_name": "prednisolone",
+    "aliases": []
+  },
+  {
+    "brand_name": "PREGABALIN",
+    "generic_name": "pregabalin",
+    "aliases": []
+  },
+  {
+    "brand_name": "PRILOCAINE HYDROCHLORIDE",
+    "generic_name": "prilocaine hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "PRIMAQUINE",
+    "generic_name": "primaquine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROBENECID",
+    "generic_name": "probenecid",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROBIOTICS",
+    "generic_name": "probiotics",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROCAINAMIDE",
+    "generic_name": "procainamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROCAINE HYDROCHLORIDE",
+    "generic_name": "procaine hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROCARBAZINE",
+    "generic_name": "procarbazine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROCHLORPERAZINE",
+    "generic_name": "prochlorperazine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROMETHAZINE",
+    "generic_name": "promethazine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROPOFOL",
+    "generic_name": "propofol",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROPRANOLOL",
+    "generic_name": "propranolol",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROPYLTHIOURACIL",
+    "generic_name": "propylthiouracil",
+    "aliases": []
+  },
+  {
+    "brand_name": "PROTAMINE SULPHATE",
+    "generic_name": "protamine sulphate",
+    "aliases": [
+      "protamine sulfate"
+    ]
+  },
+  {
+    "brand_name": "PSEUDOEPHEDRINE",
+    "generic_name": "pseudoephedrine",
+    "aliases": []
+  },
+  {
+    "brand_name": "PSORALENS",
+    "generic_name": "psoralens",
+    "aliases": []
+  },
+  {
+    "brand_name": "PYRANTEL PAMOATE",
+    "generic_name": "pyrantel pamoate",
+    "aliases": []
+  },
+  {
+    "brand_name": "PYRAZINAMIDE",
+    "generic_name": "pyrazinamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "QUININE",
+    "generic_name": "quinine",
+    "aliases": []
+  },
+  {
+    "brand_name": "RABEPRAZOLE",
+    "generic_name": "rabeprazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "RABIES VACCINE",
+    "generic_name": "rabies vaccine",
+    "aliases": []
+  },
+  {
+    "brand_name": "RAMIPRIL",
+    "generic_name": "ramipril",
+    "aliases": []
+  },
+  {
+    "brand_name": "RANITIDINE",
+    "generic_name": "ranitidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "RASAGILINE",
+    "generic_name": "rasagiline",
+    "aliases": []
+  },
+  {
+    "brand_name": "REPAGLINIDE",
+    "generic_name": "repaglinide",
+    "aliases": []
+  },
+  {
+    "brand_name": "RIFAMPIN",
+    "generic_name": "rifampin",
+    "aliases": []
+  },
+  {
+    "brand_name": "RIFAXIMIN",
+    "generic_name": "rifaximin",
+    "aliases": []
+  },
+  {
+    "brand_name": "RINGER’S LACTATE",
+    "generic_name": "ringer s lactate",
+    "aliases": []
+  },
+  {
+    "brand_name": "RISEDRONATE",
+    "generic_name": "risedronate",
+    "aliases": []
+  },
+  {
+    "brand_name": "RITONAVIR",
+    "generic_name": "ritonavir",
+    "aliases": []
+  },
+  {
+    "brand_name": "RITUXIMAB",
+    "generic_name": "rituximab",
+    "aliases": []
+  },
+  {
+    "brand_name": "RIVAROXABAN",
+    "generic_name": "rivaroxaban",
+    "aliases": []
+  },
+  {
+    "brand_name": "RIZATRIPTAN",
+    "generic_name": "rizatriptan",
+    "aliases": []
+  },
+  {
+    "brand_name": "ROCURONIUM BROMIDE",
+    "generic_name": "rocuronium bromide",
+    "aliases": []
+  },
+  {
+    "brand_name": "ROPINIROLE",
+    "generic_name": "ropinirole",
+    "aliases": []
+  },
+  {
+    "brand_name": "ROSUVASTATIN",
+    "generic_name": "rosuvastatin",
+    "aliases": []
+  },
+  {
+    "brand_name": "ROTAVIRUS VACCINE",
+    "generic_name": "rotavirus vaccine",
+    "aliases": []
+  },
+  {
+    "brand_name": "SALBUTAMOL",
+    "generic_name": "salbutamol",
+    "aliases": [
+      "albuterol"
+    ]
+  },
+  {
+    "brand_name": "SALBUTAMOL/ALBUTEROL",
+    "generic_name": "salbutamol / albuterol",
+    "aliases": [
+      "albuterol",
+      "salbutamol"
+    ]
+  },
+  {
+    "brand_name": "SALMETEROL",
+    "generic_name": "salmeterol",
+    "aliases": []
+  },
+  {
+    "brand_name": "SAQUINAVIR",
+    "generic_name": "saquinavir",
+    "aliases": []
+  },
+  {
+    "brand_name": "SECNIDAZOLE",
+    "generic_name": "secnidazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "SELEGILINE HYDROCHLORIDE",
+    "generic_name": "selegiline hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "SELENIUM SULPHIDE",
+    "generic_name": "selenium sulphide",
+    "aliases": [
+      "selenium sulfide"
+    ]
+  },
+  {
+    "brand_name": "SENNA",
+    "generic_name": "senna",
+    "aliases": []
+  },
+  {
+    "brand_name": "SERTACONAZOLE",
+    "generic_name": "sertaconazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "SEVOFLURANE",
+    "generic_name": "sevoflurane",
+    "aliases": []
+  },
+  {
+    "brand_name": "SILDENAFIL",
+    "generic_name": "sildenafil",
+    "aliases": []
+  },
+  {
+    "brand_name": "SILVER NITRATE",
+    "generic_name": "silver nitrate",
+    "aliases": []
+  },
+  {
+    "brand_name": "SILVER SULFADIAZINE",
+    "generic_name": "silver sulfadiazine",
+    "aliases": []
+  },
+  {
+    "brand_name": "SIMVASTATIN",
+    "generic_name": "simvastatin",
+    "aliases": []
+  },
+  {
+    "brand_name": "SITAGLIPTIN",
+    "generic_name": "sitagliptin",
+    "aliases": []
+  },
+  {
+    "brand_name": "SODIUM ALDRONATE",
+    "generic_name": "sodium aldronate",
+    "aliases": []
+  },
+  {
+    "brand_name": "SODIUM BICARBONATE",
+    "generic_name": "sodium bicarbonate",
+    "aliases": []
+  },
+  {
+    "brand_name": "SODIUM CHLORIDE",
+    "generic_name": "sodium chloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "SODIUM CHROMOGLYCATE",
+    "generic_name": "sodium chromoglycate",
+    "aliases": []
+  },
+  {
+    "brand_name": "SODIUM CROMOGLYCATE",
+    "generic_name": "sodium cromoglycate",
+    "aliases": []
+  },
+  {
+    "brand_name": "SODIUM FLUORIDE",
+    "generic_name": "sodium fluoride",
+    "aliases": []
+  },
+  {
+    "brand_name": "SODIUM NITROPRUSSIDE",
+    "generic_name": "sodium nitroprusside",
+    "aliases": []
+  },
+  {
+    "brand_name": "SODIUM STIBOGLUCONATE",
+    "generic_name": "sodium stibogluconate",
+    "aliases": []
+  },
+  {
+    "brand_name": "SOFOSBUVIR",
+    "generic_name": "sofosbuvir",
+    "aliases": []
+  },
+  {
+    "brand_name": "SOLIFENACIN",
+    "generic_name": "solifenacin",
+    "aliases": []
+  },
+  {
+    "brand_name": "SOMATROPIN",
+    "generic_name": "somatropin",
+    "aliases": []
+  },
+  {
+    "brand_name": "SPIRONOLACTONE",
+    "generic_name": "spironolactone",
+    "aliases": []
+  },
+  {
+    "brand_name": "STANOZOLOL",
+    "generic_name": "stanozolol",
+    "aliases": []
+  },
+  {
+    "brand_name": "STAVUDINE",
+    "generic_name": "stavudine",
+    "aliases": []
+  },
+  {
+    "brand_name": "STREPTOKINASE",
+    "generic_name": "streptokinase",
+    "aliases": []
+  },
+  {
+    "brand_name": "STREPTOMYCIN",
+    "generic_name": "streptomycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "SUCRALFATE",
+    "generic_name": "sucralfate",
+    "aliases": []
+  },
+  {
+    "brand_name": "SULFADOXINE and PYRIMETHAMINE",
+    "generic_name": "sulfadoxine and pyrimethamine",
+    "aliases": []
+  },
+  {
+    "brand_name": "SULFASALAZINE",
+    "generic_name": "sulfasalazine",
+    "aliases": []
+  },
+  {
+    "brand_name": "SULPHINPYRAZONE",
+    "generic_name": "sulphinpyrazone",
+    "aliases": []
+  },
+  {
+    "brand_name": "SUMATRIPTAN",
+    "generic_name": "sumatriptan",
+    "aliases": []
+  },
+  {
+    "brand_name": "SUNITINIB",
+    "generic_name": "sunitinib",
+    "aliases": []
+  },
+  {
+    "brand_name": "TACROLIMUS",
+    "generic_name": "tacrolimus",
+    "aliases": []
+  },
+  {
+    "brand_name": "TAMOXIFEN",
+    "generic_name": "tamoxifen",
+    "aliases": []
+  },
+  {
+    "brand_name": "TAMSULOSIN",
+    "generic_name": "tamsulosin",
+    "aliases": []
+  },
+  {
+    "brand_name": "TAZAROTENE",
+    "generic_name": "tazarotene",
+    "aliases": []
+  },
+  {
+    "brand_name": "TELMISARTAN",
+    "generic_name": "telmisartan",
+    "aliases": []
+  },
+  {
+    "brand_name": "TEMOZOLOMIDE",
+    "generic_name": "temozolomide",
+    "aliases": []
+  },
+  {
+    "brand_name": "TENECTEPLASE",
+    "generic_name": "tenecteplase",
+    "aliases": []
+  },
+  {
+    "brand_name": "TENOFOVIR DISOPROXIL",
+    "generic_name": "tenofovir disoproxil",
+    "aliases": []
+  },
+  {
+    "brand_name": "TERAZOSIN",
+    "generic_name": "terazosin",
+    "aliases": []
+  },
+  {
+    "brand_name": "TERBINAFINE",
+    "generic_name": "terbinafine",
+    "aliases": []
+  },
+  {
+    "brand_name": "TERBUTALINE",
+    "generic_name": "terbutaline",
+    "aliases": []
+  },
+  {
+    "brand_name": "TERBUTALINE SULFATE",
+    "generic_name": "terbutaline sulfate",
+    "aliases": [
+      "terbutaline sulphate"
+    ]
+  },
+  {
+    "brand_name": "TERIPARATIDE",
+    "generic_name": "teriparatide",
+    "aliases": []
+  },
+  {
+    "brand_name": "TERLIPRESSIN",
+    "generic_name": "terlipressin",
+    "aliases": []
+  },
+  {
+    "brand_name": "TESTOSTERONE",
+    "generic_name": "testosterone",
+    "aliases": []
+  },
+  {
+    "brand_name": "TETANUS IMMUNOGLOBULIN (HUMAN)",
+    "generic_name": "tetanus immunoglobulin human",
+    "aliases": [
+      "tetanus immunoglobulin"
+    ]
+  },
+  {
+    "brand_name": "TETANUS TOXOID",
+    "generic_name": "tetanus toxoid",
+    "aliases": []
+  },
+  {
+    "brand_name": "TETRACYCLINE",
+    "generic_name": "tetracycline",
+    "aliases": []
+  },
+  {
+    "brand_name": "THEOPHYLLINE",
+    "generic_name": "theophylline",
+    "aliases": []
+  },
+  {
+    "brand_name": "THIOPENTAL SODIUM",
+    "generic_name": "thiopental sodium",
+    "aliases": []
+  },
+  {
+    "brand_name": "TICLOPIDINE",
+    "generic_name": "ticlopidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "TIMOLOL",
+    "generic_name": "timolol",
+    "aliases": []
+  },
+  {
+    "brand_name": "TINIDAZOLE",
+    "generic_name": "tinidazole",
+    "aliases": []
+  },
+  {
+    "brand_name": "TIZANIDINE",
+    "generic_name": "tizanidine",
+    "aliases": []
+  },
+  {
+    "brand_name": "TOCILIZUMAB",
+    "generic_name": "tocilizumab",
+    "aliases": []
+  },
+  {
+    "brand_name": "TOFACUTINIB",
+    "generic_name": "tofacutinib",
+    "aliases": []
+  },
+  {
+    "brand_name": "TOLTERODIN",
+    "generic_name": "tolterodin",
+    "aliases": []
+  },
+  {
+    "brand_name": "TOPIRAMATE",
+    "generic_name": "topiramate",
+    "aliases": []
+  },
+  {
+    "brand_name": "TOPOTECAN",
+    "generic_name": "topotecan",
+    "aliases": []
+  },
+  {
+    "brand_name": "TORSEMIDE",
+    "generic_name": "torsemide",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRAMADOL HYDROCHLORIDE",
+    "generic_name": "tramadol hydrochloride",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRANEXAMIC ACID",
+    "generic_name": "tranexamic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRASTUZUMAB",
+    "generic_name": "trastuzumab",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRAVOPROST",
+    "generic_name": "travoprost",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRETINOIN",
+    "generic_name": "tretinoin",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRIAMCINOLONE",
+    "generic_name": "triamcinolone",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRIAMCINOLONE ACETONIDE",
+    "generic_name": "triamcinolone acetonide",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRIAMTERENE",
+    "generic_name": "triamterene",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRICYCLIC ANTIDEPRESSANT POISONING",
+    "generic_name": "tricyclic antidepressant poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "TRIHEXYPHENIDYL HYDROCHLORIDE (BENZHEXOL)",
+    "generic_name": "trihexyphenidyl hydrochloride benzhexol",
+    "aliases": [
+      "trihexyphenidyl hydrochloride"
+    ]
+  },
+  {
+    "brand_name": "TROPICAMIDE",
+    "generic_name": "tropicamide",
+    "aliases": []
+  },
+  {
+    "brand_name": "TUBERCULIN, PURIFIED PROTEIN DERIVATIVE (PPD)",
+    "generic_name": "tuberculin purified protein derivative ppd",
+    "aliases": [
+      "tuberculin purified protein derivative"
+    ]
+  },
+  {
+    "brand_name": "TYPHOID VACCINE",
+    "generic_name": "typhoid vaccine",
+    "aliases": []
+  },
+  {
+    "brand_name": "UROKINASE",
+    "generic_name": "urokinase",
+    "aliases": []
+  },
+  {
+    "brand_name": "URSODEOXYCHOLIC ACID",
+    "generic_name": "ursodeoxycholic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "VALACYCLOVIR",
+    "generic_name": "valacyclovir",
+    "aliases": []
+  },
+  {
+    "brand_name": "VALPROIC ACID",
+    "generic_name": "valproic acid",
+    "aliases": []
+  },
+  {
+    "brand_name": "VALSARTAN",
+    "generic_name": "valsartan",
+    "aliases": []
+  },
+  {
+    "brand_name": "VANCOMYCIN",
+    "generic_name": "vancomycin",
+    "aliases": []
+  },
+  {
+    "brand_name": "VASOPRESSIN (ANTIDIURETIC HORMONE)",
+    "generic_name": "vasopressin antidiuretic hormone",
+    "aliases": [
+      "vasopressin"
+    ]
+  },
+  {
+    "brand_name": "VECURONIUM",
+    "generic_name": "vecuronium",
+    "aliases": []
+  },
+  {
+    "brand_name": "VERAPAMIL",
+    "generic_name": "verapamil",
+    "aliases": []
+  },
+  {
+    "brand_name": "VINBLASTINE",
+    "generic_name": "vinblastine",
+    "aliases": []
+  },
+  {
+    "brand_name": "VINCRISTINE",
+    "generic_name": "vincristine",
+    "aliases": []
+  },
+  {
+    "brand_name": "VINORELBINE",
+    "generic_name": "vinorelbine",
+    "aliases": []
+  },
+  {
+    "brand_name": "VITAMIN A (RETINOL)",
+    "generic_name": "vitamin a retinol",
+    "aliases": [
+      "vitamin a"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN B1 (THIAMINE)",
+    "generic_name": "vitamin b1 thiamine",
+    "aliases": [
+      "vitamin b1"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN B12 (COBALAMIN)",
+    "generic_name": "vitamin b12 cobalamin",
+    "aliases": [
+      "vitamin b12"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN B2 (RIBOFLAVIN)",
+    "generic_name": "vitamin b2 riboflavin",
+    "aliases": [
+      "vitamin b2"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN B3 (NIACIN)",
+    "generic_name": "vitamin b3 niacin",
+    "aliases": [
+      "vitamin b3"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN B6 (PYRIDOXINE)",
+    "generic_name": "vitamin b6 pyridoxine",
+    "aliases": [
+      "vitamin b6"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN B9 (FOLIC ACID)",
+    "generic_name": "vitamin b9 folic acid",
+    "aliases": [
+      "vitamin b9"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN C (ASCORBIC ACID)",
+    "generic_name": "vitamin c ascorbic acid",
+    "aliases": [
+      "vitamin c"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN D3 (CALCITRIOL)",
+    "generic_name": "vitamin d3 calcitriol",
+    "aliases": [
+      "vitamin d3"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN E (TOCOPHEROL)",
+    "generic_name": "vitamin e tocopherol",
+    "aliases": [
+      "vitamin e"
+    ]
+  },
+  {
+    "brand_name": "VITAMIN K",
+    "generic_name": "vitamin k",
+    "aliases": []
+  },
+  {
+    "brand_name": "WARFARIN",
+    "generic_name": "warfarin",
+    "aliases": []
+  },
+  {
+    "brand_name": "XYLOMETAZOLINE",
+    "generic_name": "xylometazoline",
+    "aliases": []
+  },
+  {
+    "brand_name": "YELLOW FEVER VACCINE",
+    "generic_name": "yellow fever vaccine",
+    "aliases": []
+  },
+  {
+    "brand_name": "ZAFIRLUKAST",
+    "generic_name": "zafirlukast",
+    "aliases": []
+  },
+  {
+    "brand_name": "ZIDOVUDINE",
+    "generic_name": "zidovudine",
+    "aliases": []
+  },
+  {
+    "brand_name": "ZINC",
+    "generic_name": "zinc",
+    "aliases": []
+  },
+  {
+    "brand_name": "ZINC PHOSPHIDE POISONING",
+    "generic_name": "zinc phosphide poisoning",
+    "aliases": []
+  },
+  {
+    "brand_name": "ZINC SULFATE",
+    "generic_name": "zinc sulfate",
+    "aliases": [
+      "zinc sulphate"
+    ]
+  },
+  {
+    "brand_name": "ZOLEDRONATE",
+    "generic_name": "zoledronate",
+    "aliases": []
+  },
+  {
+    "brand_name": "ZOLPIDEM",
+    "generic_name": "zolpidem",
+    "aliases": []
+  }
+]

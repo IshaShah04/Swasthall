@@ -6,6 +6,7 @@ import 'package:swasthall/services/queue_widget_service.dart';
 import 'package:swasthall/services/booking_fee_service.dart';
 import 'package:swasthall/services/offline_booking_queue.dart';
 import 'widgets/app_transitions.dart';
+import 'theme_colors.dart';
 
 class ConsultationPaymentScreen extends StatefulWidget {
   final Map<String, dynamic> doctorData;
@@ -213,15 +214,15 @@ class _ConsultationPaymentScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Payment Details',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary(context)),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -253,11 +254,11 @@ class _ConsultationPaymentScreenState
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: AppColors.shadow(context),
             blurRadius: 10,
           ),
         ],
@@ -349,7 +350,7 @@ class _ConsultationPaymentScreenState
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+          Text(label, style: TextStyle(color: const Color(0xFF475569), fontSize: 14)),
           Flexible(
             child: Text(
               value,
@@ -379,7 +380,7 @@ class _ConsultationPaymentScreenState
                     fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
                   )),
               if (sub != null)
-                Text(sub, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+                Text(sub, style: TextStyle(fontSize: 11, color: const Color(0xFF94A3B8))),
             ],
           ),
           Text(
@@ -403,10 +404,10 @@ class _ConsultationPaymentScreenState
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           borderRadius: BorderRadius.circular(15),
           border: Border.all(
-            color: isSelected ? method['color'] as Color : Colors.grey.shade200,
+            color: isSelected ? method['color'] as Color : AppColors.surfaceBg(context),
             width: 2,
           ),
         ),
@@ -438,8 +439,8 @@ class _ConsultationPaymentScreenState
   Widget _buildBottomPayButton() {
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(context),
         border: Border(top: BorderSide(color: Colors.black12)),
       ),
       child: SafeArea(
@@ -456,7 +457,7 @@ class _ConsultationPaymentScreenState
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
           child: _isProcessing
-              ? const SizedBox(
+              ? SizedBox(
                   height: 24,
                   width: 24,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
@@ -465,7 +466,7 @@ class _ConsultationPaymentScreenState
                   _feeLoading
                       ? 'Calculating...'
                       : 'Pay Rs. ${_totalPayable.toStringAsFixed(0)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme_colors.dart';
 
 class BloodBank extends StatefulWidget {
   const BloodBank({super.key});
@@ -28,11 +29,11 @@ class _BloodBankState extends State<BloodBank> {
           .from('profiles')
           .select('role')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
       if (mounted) {
         setState(() {
-          isHospital = response['role'] == 'hospital';
+          isHospital = response?['role'] == 'hospital';
         });
       }
     }
@@ -41,12 +42,12 @@ class _BloodBankState extends State<BloodBank> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: const Text("Emergency Blood Bank",
             style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         foregroundColor: Colors.black,
         elevation: 0,
       ),
@@ -96,11 +97,11 @@ class _BloodBankState extends State<BloodBank> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.05),
+            color: AppColors.textMuted(context).withValues(alpha: 0.05),
             spreadRadius: 2,
             blurRadius: 10,
           )

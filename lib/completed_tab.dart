@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'supabase_handler.dart';
 import 'shared_widgets.dart';
+import 'theme_colors.dart';
 
 class CompletedTab extends StatefulWidget {
   final String userRole;
@@ -205,12 +206,12 @@ class _CompletedTabState extends State<CompletedTab>
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.cardBg(context),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                           color: isFailed
                               ? errorRed.withValues(alpha: 0.1)
-                              : Colors.grey.shade100),
+                              : AppColors.surfaceBg(context)),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.02),
@@ -307,14 +308,14 @@ class _CompletedTabState extends State<CompletedTab>
           hintText: "Search name or phone...",
           prefixIcon: Icon(Icons.search_rounded, color: brandIndigo, size: 22),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.inputFill(context),
           contentPadding: EdgeInsets.zero,
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
-              borderSide: BorderSide(color: Colors.grey.shade100)),
+              borderSide: BorderSide(color: const Color(0xFFF1F5F9))),
           enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
-              borderSide: BorderSide(color: Colors.grey.shade100)),
+              borderSide: BorderSide(color: const Color(0xFFF1F5F9))),
         ),
       ),
     );
@@ -382,11 +383,11 @@ class _CompletedTabState extends State<CompletedTab>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.history_toggle_off_rounded,
-              size: 64, color: Colors.grey.shade200),
+              size: 64, color: const Color(0xFFE2E8F0)),
           const SizedBox(height: 16),
           Text("No historical records",
               style: TextStyle(
-                  color: Colors.grey.shade400, fontWeight: FontWeight.w500)),
+                  color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
         ],
       ),
     );

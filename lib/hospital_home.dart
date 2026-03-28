@@ -6,6 +6,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'hospital_profile.dart';
 import 'doctor_detail.dart';
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
 
 class HospitalHomeScreen extends StatefulWidget {
   const HospitalHomeScreen({super.key});
@@ -124,7 +125,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: _buildAppBar(),
       body: RefreshIndicator(
         color: brandBlue,
@@ -178,7 +179,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       elevation: 0,
       leadingWidth: 56,
       leading: StreamBuilder<Map<String, dynamic>>(
@@ -248,7 +249,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                   decoration: const BoxDecoration(
                       color: Colors.red, shape: BoxShape.circle),
                   child: Text(_unreadCount.toString(),
-                      style: const TextStyle(color: Colors.white,
+                      style: TextStyle(color: AppColors.cardBg(context),
                           fontSize: 8, fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -273,9 +274,9 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
         onChanged: (value) => setState(() => _searchQuery = value),
         decoration: InputDecoration(
           hintText: "Search name or speciality...",
-          prefixIcon: const Icon(Icons.search, color: Colors.grey),
+          prefixIcon: Icon(Icons.search, color: AppColors.textMuted(context)),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.inputFill(context),
           contentPadding: const EdgeInsets.symmetric(vertical: 0),
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
@@ -290,15 +291,15 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: AppColors.shadow(context),
               blurRadius: 20,
               offset: const Offset(0, 10))
         ],
-        border: Border.all(color: Colors.grey.shade100),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,7 +321,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                             fontSize: 12)),
                     selected: isSelected,
                     selectedColor: brandBlue,
-                    backgroundColor: Colors.grey.shade100,
+                    backgroundColor: AppColors.surfaceBg(context),
                     showCheckmark: false,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20)),
@@ -357,10 +358,10 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                   return Center(
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.bar_chart_rounded,
-                          size: 36, color: Colors.grey.shade300),
+                          size: 36, color: const Color(0xFFCBD5E1)),
                       const SizedBox(height: 8),
                       Text("Could not load revenue",
-                          style: TextStyle(color: Colors.grey.shade400)),
+                          style: TextStyle(color: const Color(0xFF94A3B8))),
                     ]),
                   );
                 }
@@ -369,10 +370,10 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                   return Center(
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.bar_chart_rounded,
-                          size: 36, color: Colors.grey.shade300),
+                          size: 36, color: const Color(0xFFCBD5E1)),
                       const SizedBox(height: 8),
                       Text("No data for this period",
-                          style: TextStyle(color: Colors.grey.shade400)),
+                          style: TextStyle(color: const Color(0xFF94A3B8))),
                     ]),
                   );
                 }
@@ -398,7 +399,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                             color: brandBlue),
                       ),
                       Text("Total revenue",
-                          style: TextStyle(color: Colors.grey.shade400)),
+                          style: TextStyle(color: const Color(0xFF94A3B8))),
                     ]),
                   );
                 }
@@ -461,7 +462,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
               width: 130,
               margin: const EdgeInsets.only(right: 12, bottom: 10, top: 5),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.cardBg(context),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
@@ -478,7 +479,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                     url: doc['avatar_url']?.toString(),
                     radius: 32,
                     name: doc['name']?.toString(),
-                    backgroundColor: Colors.grey.shade100,
+                    backgroundColor: AppColors.surfaceBg(context),
                   ),
                   const SizedBox(height: 8),
                   Text(doc['name'] ?? "Doctor",
@@ -487,7 +488,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 13)),
                   Text(doc['speciality'] ?? "Consultant",
-                      style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                      style: TextStyle(color: AppColors.textMuted(context), fontSize: 11)),
                 ],
               ),
             ),
@@ -529,11 +530,11 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
           child: Container(
             padding: const EdgeInsets.fromLTRB(12, 55, 12, 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.cardBg(context),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: AppColors.shadow(context),
                     blurRadius: 15,
                     offset: const Offset(0, 8))
               ],
@@ -571,7 +572,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
               url: member['avatar_url']?.toString(),
               radius: 42,
               name: member['name']?.toString(),
-              backgroundColor: Colors.white,
+              backgroundColor: AppColors.cardBg(context),
             ),
           ),
         ),
@@ -584,7 +585,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
       padding: const EdgeInsets.only(bottom: 2),
       child: Row(
         children: [
-          Icon(icon, size: 13, color: Colors.grey.shade600),
+          Icon(icon, size: 13, color: const Color(0xFF475569)),
           const SizedBox(width: 6),
           Expanded(
             child: Text(text,

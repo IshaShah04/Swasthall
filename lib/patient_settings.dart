@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'services/account_service.dart';
 import 'legal_viewer_screen.dart';
 import 'services/secure_logout.dart';
+import 'theme_colors.dart';
+import 'widgets/theme_toggle.dart';
 
 class PatientSettings extends StatefulWidget {
   const PatientSettings({super.key});
@@ -116,6 +118,10 @@ class _PatientSettingsState extends State<PatientSettings> {
     if (!silent) setState(() => _loading = true);
     try {
       final user = _supabase.auth.currentUser;
+      if (user == null) {
+        if (mounted && !silent) setState(() => _loading = false);
+        return;
+      }
       await _supabase.from('profiles').update({
         'full_name': _nameController.text,
         'phone_number': _phoneController.text,
@@ -124,7 +130,7 @@ class _PatientSettingsState extends State<PatientSettings> {
         'allow_newsletters': _allowNewsletters,
         'blood_group': _selectedBloodGroup,
         'height_cm': double.tryParse(_heightController.text.trim()),
-      }).eq('id', user!.id);
+      }).eq('id', user.id);
 
       await AccountService.saveCurrentAccount();
 
@@ -192,7 +198,7 @@ class _PatientSettingsState extends State<PatientSettings> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFFEEF2FF),
+              color: AppColors.indigoTint(context),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Text(
@@ -212,7 +218,7 @@ class _PatientSettingsState extends State<PatientSettings> {
               Navigator.pop(context);
               await _submitDataRequest('download');
             },
-            child: const Text("Request", style: TextStyle(color: Colors.white)),
+            child: Text("Request", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -254,7 +260,7 @@ class _PatientSettingsState extends State<PatientSettings> {
               if (!mounted) return;
               await SecureLogout.perform(context);
             },
-            child: const Text("Delete My Account", style: TextStyle(color: Colors.white)),
+            child: Text("Delete My Account", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -295,8 +301,8 @@ class _PatientSettingsState extends State<PatientSettings> {
     backgroundColor: Colors.transparent,
     builder: (sheetContext) {
       return Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: AppColors.cardBg(context),
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
@@ -476,15 +482,15 @@ Future<void> _refreshAfterSwitch() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       appBar: AppBar(
-        title: const Text("Profile Settings",
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800, fontSize: 18)),
-        backgroundColor: Colors.white,
+        title: Text("Profile Settings",
+            style: TextStyle(color: AppColors.textPrimary(context), fontWeight: FontWeight.w800, fontSize: 18)),
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.textPrimary(context), size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -506,10 +512,10 @@ Future<void> _refreshAfterSwitch() async {
                           ),
                           child: CircleAvatar(
                             radius: 60,
-                            backgroundColor: const Color(0xFFF8FAFC),
+                            backgroundColor: AppColors.scaffoldBg(context),
                             backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
                             child: _avatarUrl == null
-                                ? Icon(Icons.person_rounded, size: 50, color: Colors.grey[400])
+                                ? Icon(Icons.person_rounded, size: 50, color: AppColors.textMuted(context))
                                 : null,
                           ),
                         ),
@@ -523,7 +529,7 @@ Future<void> _refreshAfterSwitch() async {
                             child: CircleAvatar(
                               backgroundColor: primaryTeal,
                               radius: 18,
-                              child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                              child: Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                             ),
                           ),
                         ),
@@ -553,13 +559,13 @@ Future<void> _refreshAfterSwitch() async {
                       Padding(
                         padding: const EdgeInsets.only(left: 4, bottom: 8),
                         child: Text("Blood Group",
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey[600])),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary(context))),
                       ),
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.grey[50],
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.grey[200]!),
+                          border: Border.all(color: AppColors.border(context)),
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: DropdownButtonHideUnderline(
@@ -567,12 +573,12 @@ Future<void> _refreshAfterSwitch() async {
                             value: _selectedBloodGroup,
                             isExpanded: true,
                             hint: Row(children: [
-                              Icon(Icons.bloodtype_outlined, color: Colors.grey[400], size: 20),
+                              Icon(Icons.bloodtype_outlined, color: AppColors.textMuted(context), size: 20),
                               const SizedBox(width: 12),
                               Text("Select blood group",
-                                  style: TextStyle(color: Colors.grey[400], fontSize: 15)),
+                                  style: TextStyle(color: AppColors.textMuted(context), fontSize: 15)),
                             ]),
-                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey[400]),
+                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted(context)),
                             items: _bloodGroups.map((g) => DropdownMenuItem(
                               value: g,
                               child: Row(children: [
@@ -615,6 +621,12 @@ Future<void> _refreshAfterSwitch() async {
                   const SizedBox(height: 25),
 
                   // ── Data & Privacy ─────────────────────
+                  // ── Appearance ────────────────────────────
+                  _sectionLabel("Appearance"),
+                  const SizedBox(height: 10),
+                  const AppearanceToggle(),
+                  const SizedBox(height: 20),
+
                   _sectionLabel("Data & Privacy"),
                   const SizedBox(height: 10),
                   _settingsCard([
@@ -707,7 +719,7 @@ Future<void> _refreshAfterSwitch() async {
                   const SizedBox(height: 16),
                   Center(
                     child: Text("Swasthall Pvt. Ltd.  •  v1.0",
-                        style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                        style: TextStyle(color: AppColors.textMuted(context), fontSize: 11)),
                   ),
                   const SizedBox(height: 40),
                 ],
@@ -727,18 +739,18 @@ Future<void> _refreshAfterSwitch() async {
             style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: Colors.grey[500],
+                color: AppColors.textMuted(context),
                 letterSpacing: 0.5)),
       );
 
   Widget _settingsCard(List<Widget> children) => Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.grey.shade100),
+          border: Border.all(color: const Color(0xFFF1F5F9)),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
+                color: AppColors.shadow(context),
                 blurRadius: 10,
                 offset: const Offset(0, 3))
           ],
@@ -747,7 +759,7 @@ Future<void> _refreshAfterSwitch() async {
       );
 
   Widget _divider() => Divider(
-      height: 1, thickness: 1, indent: 18, endIndent: 18, color: Colors.grey.shade100);
+      height: 1, thickness: 1, indent: 18, endIndent: 18, color: const Color(0xFFF1F5F9));
 
   Widget _tile({
     required IconData icon,
@@ -776,7 +788,7 @@ Future<void> _refreshAfterSwitch() async {
               color: titleColor ?? const Color(0xFF1F2937))),
       subtitle: Text(sub,
           style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
-      trailing: Icon(Icons.chevron_right_rounded, color: Colors.grey.shade300, size: 20),
+      trailing: Icon(Icons.chevron_right_rounded, color: const Color(0xFFCBD5E1), size: 20),
     );
   }
 
@@ -812,7 +824,7 @@ Future<void> _refreshAfterSwitch() async {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey[600])),
+          child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary(context))),
         ),
         TextField(
           controller: controller,
@@ -822,11 +834,11 @@ Future<void> _refreshAfterSwitch() async {
           decoration: InputDecoration(
             prefixIcon: Icon(icon, color: enabled ? primaryTeal : Colors.grey[400], size: 20),
             filled: true,
-            fillColor: enabled ? Colors.grey[50] : const Color(0xFFF1F5F9),
+            fillColor: AppColors.inputFill(context),
             contentPadding: const EdgeInsets.symmetric(vertical: 18),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
             enabledBorder:
-                OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide(color: Colors.grey[200]!)),
+                OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide(color: AppColors.border(context))),
             focusedBorder:
                 OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide(color: primaryTeal, width: 1.5)),
           ),

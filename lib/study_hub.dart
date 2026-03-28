@@ -8,6 +8,7 @@ import 'config/env_config.dart';
 import 'global_search_bar.dart';
 import 'universal_search_delegate.dart';
 import 'services/voice_service.dart';
+import 'theme_colors.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  Language enum
@@ -52,7 +53,13 @@ extension HubLanguageExt on HubLanguage {
 //  Screen
 // ─────────────────────────────────────────────────────────────
 class StudyHubScreen extends StatefulWidget {
-  const StudyHubScreen({super.key});
+  /// When [isStandalone] is true the screen was pushed onto the navigator stack
+  /// (e.g. from Quick Categories) and should show a back arrow.
+  /// When false (default) it is embedded in the bottom-nav IndexedStack and
+  /// has no parent route to pop back to — the back arrow is hidden.
+  final bool isStandalone;
+
+  const StudyHubScreen({super.key, this.isStandalone = false});
 
   @override
   State<StudyHubScreen> createState() => _StudyHubScreenState();
@@ -71,7 +78,7 @@ class _StudyHubScreenState extends State<StudyHubScreen> {
   HubLanguage _language = HubLanguage.english;
 
   final Color primaryColor = const Color(0xFF6366F1);
-  final Color surfaceColor = Colors.white;
+  Color get surfaceColor => AppColors.cardBg(context);
 
   final Map<HubLanguage, List<Map<String, dynamic>>> _masterData = {};
   final List<String> _searchHistory = ["Napa", "Paracetamol", "Flexon"];
@@ -435,17 +442,25 @@ class _StudyHubScreenState extends State<StudyHubScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       appBar: AppBar(
         title: const Text("Knowledge Hub",
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         foregroundColor: Colors.black,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () { _voiceService.stop(); Navigator.pop(context); },
-        ),
+        // Show back arrow only when launched as a standalone pushed route.
+        // When embedded in the bottom nav there is no route to pop back to.
+        automaticallyImplyLeading: false,
+        leading: widget.isStandalone
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  _voiceService.stop();
+                  Navigator.pop(context);
+                },
+              )
+            : null,
         actions: [_buildLanguageToggle()],
       ),
       body: SingleChildScrollView(
@@ -618,7 +633,7 @@ class _StudyHubScreenState extends State<StudyHubScreen> {
                           fontWeight: FontWeight.bold, color: primaryColor)),
                   if (genericName.isNotEmpty)
                     Text(genericName,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary(context))),
                   const SizedBox(height: 4),
                   Wrap(
                     spacing: 6,
@@ -774,7 +789,7 @@ class _StudyHubScreenState extends State<StudyHubScreen> {
                   const SizedBox(height: 6),
                   Text(content,
                       style: TextStyle(
-                          color: Colors.grey.shade800,
+                          color: const Color(0xFF1E293B),
                           height: 1.6,
                           fontSize: 13.5)),
                 ],

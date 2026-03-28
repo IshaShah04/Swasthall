@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_handler.dart';
 import 'services/offline_booking_queue.dart';
@@ -22,12 +23,14 @@ import 'login_page.dart';
 import 'registration_page.dart';
 import 'services/voice_service.dart';
 import 'services/account_service.dart';
-import 'services/realtime_call_service.dart';
+import 'services/realtime_call_service.dart'; // BUG-21: use ONLY services/ path — delete lib/realtime_call_service.dart
 import 'services/app_cache.dart';
 import 'call_landing_page.dart';
 
 import 'physical.dart';
 import 'verification_pending_screen.dart';
+import 'theme_notifier.dart';
+import 'web_video_call_page.dart';
 
 final ValueNotifier<IncomingInvite?> incomingInvite =
     ValueNotifier<IncomingInvite?>(null);
@@ -180,9 +183,20 @@ Future<void> _preloadCommonData() async {
 // ─────────────────────────────────────────────────────────────────────────────
 // main()
 // ─────────────────────────────────────────────────────────────────────────────
+@pragma('vm:entry-point')
+Future<void> _handleFcmBackground(RemoteMessage message) async {
+  debugPrint('FCM background: ${message.data}');
+}
+
 Future<void> main() async {
   final WidgetsBinding widgetsBinding =
       WidgetsFlutterBinding.ensureInitialized();
+
+  // Fail fast in debug builds if any required --dart-define value is missing.
+  // This catches missing secrets before any network call is made.
+  EnvConfig.validate();
+
+  await loadSavedTheme();
 
   // ── Step 1: Zego system-calling UI (mobile only, must be very first) ───────
   if (!kIsWeb) {
@@ -197,9 +211,40 @@ Future<void> main() async {
   if (!kIsWeb) {
     await Firebase.initializeApp();
     // Catch all Flutter framework errors → Crashlytics
-    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    // Filter: the ZegoSystemService "Invalid state transition paused→inactive"
+    // assertion is a known ZEGO/Android-14 lifecycle ordering issue triggered
+    // by FCM waking the process while the screen is locked. It is non-fatal
+    // (the call still connects) and is fixed at root by removing the
+    // LiveActivityFirebaseMessagingService from the manifest. Log it as
+    // non-fatal so we can track frequency without polluting crash counts.
+    FlutterError.onError = (FlutterErrorDetails details) {
+      final String msg = details.exceptionAsString();
+      if (msg.contains('Invalid state transition') &&
+          msg.contains('AppLifecycleState')) {
+        // Known ZEGO+Android lifecycle ordering issue — log non-fatally
+        FirebaseCrashlytics.instance.recordError(
+          details.exception,
+          details.stack,
+          reason: 'ZegoSystemService lifecycle ordering (non-fatal)',
+          fatal: false,
+        );
+        return;
+      }
+      // All other Flutter errors are fatal
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    };
     // Catch async errors outside Flutter (platform channels, isolates)
     PlatformDispatcher.instance.onError = (error, stack) {
+      final String msg = error.toString();
+      if (msg.contains('Invalid state transition') &&
+          msg.contains('AppLifecycleState')) {
+        FirebaseCrashlytics.instance.recordError(
+          error, stack,
+          reason: 'ZegoSystemService lifecycle ordering (non-fatal)',
+          fatal: false,
+        );
+        return true;
+      }
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
       return true;
     };
@@ -259,10 +304,8 @@ class _SwasthallSplashScreenState extends State<SwasthallSplashScreen>
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
           if (!kIsWeb) FlutterNativeSplash.remove();
-          // Animation + preload run simultaneously.
-          // forward() takes 1600ms — preload fires immediately and fills cache.
-          // When animation ends, common data is ready for the first screen.
-          _preloadCommonData(); // concurrent — does not block animation
+          // Preload was already kicked off in main() before runApp().
+          // No need to call it again here — the cache is already filling.
           _controller.forward().then((_) => _navigateToNext());
         }
       });
@@ -424,54 +467,64 @@ class HeartbeatPainter extends CustomPainter {
 // ─────────────────────────────────────────────────────────────────────────────
 // App root
 // ─────────────────────────────────────────────────────────────────────────────
-class HealthApp extends StatelessWidget {
+class HealthApp extends StatefulWidget {
   const HealthApp({super.key});
 
   @override
+  State<HealthApp> createState() => _HealthAppState();
+}
+
+class _HealthAppState extends State<HealthApp> {
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      debugShowCheckedModeBanner: false,
-      title: 'Swasthall',
-      // ── Light theme ──────────────────────────────────────────────────────
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        primaryColor: const Color(0xFF6366F1),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-      ),
-      // ── Dark theme ───────────────────────────────────────────────────────
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        primaryColor: const Color(0xFF6366F1),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-          brightness: Brightness.dark,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
-        cardColor: const Color(0xFF1E293B),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1E293B),
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF1E293B),
-          selectedItemColor: Color(0xFF818CF8),
-          unselectedItemColor: Color(0xFF64748B),
-        ),
-      ),
-      // ── Follow device setting automatically ──────────────────────────────
-      themeMode: ThemeMode.system,
-      home: const SwasthallSplashScreen(nextScreen: AuthGate()),
-      routes: {
-        '/login': (context) => const LoginPage(),
-        '/register': (context) => const RegistrationPage(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (context, themeMode, _) {
+        return MaterialApp(
+          navigatorKey: navigatorKey,
+          debugShowCheckedModeBanner: false,
+          title: 'Swasthall',
+          // ── Light theme ────────────────────────────────────────────────
+          theme: ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.light,
+            primaryColor: const Color(0xFF6366F1),
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF6366F1),
+              brightness: Brightness.light,
+            ),
+            scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+          ),
+          // ── Dark theme ─────────────────────────────────────────────────
+          darkTheme: ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.dark,
+            primaryColor: const Color(0xFF6366F1),
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF6366F1),
+              brightness: Brightness.dark,
+            ),
+            scaffoldBackgroundColor: const Color(0xFF0F172A),
+            cardColor: const Color(0xFF1E293B),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF1E293B),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+              backgroundColor: Color(0xFF1E293B),
+              selectedItemColor: Color(0xFF818CF8),
+              unselectedItemColor: Color(0xFF64748B),
+            ),
+          ),
+          // ── Controlled by user preference ──────────────────────────────
+          themeMode: themeMode,
+          home: const SwasthallSplashScreen(nextScreen: AuthGate()),
+          routes: {
+            '/login': (context) => const LoginPage(),
+            '/register': (context) => const RegistrationPage(),
+          },
+        );
       },
     );
   }
@@ -597,14 +650,18 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
+    debugPrint('📡 Setting up Realtime call listener for uid: ${user.id}');
+
     try {
       _realtimeCallSub?.cancel();
       _realtimeCallSub = RealtimeCallService()
           .listenForCalls(user.id)
           .listen((IncomingCallPayload payload) {
+        debugPrint('📲 Incoming call dialog triggered: callId=${payload.callId}, caller=${payload.callerName}');
         if (!mounted) return;
         unawaited(_showIncomingCallDialog(payload));
       });
+      debugPrint('📡 Realtime call listener active');
     } catch (e) {
       debugPrint('RealtimeCall listener setup error: $e');
     }
@@ -695,6 +752,120 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       }
       await _initOrReinitZego(zegoUid.trim(), name);
     });
+
+    // Save FCM token so web callers can send push notifications
+    if (!kIsWeb) {
+      _saveFcmToken(user.id);
+    }
+  }
+
+  Future<void> _saveFcmToken(String userId) async {
+    try {
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission();
+      final token = await messaging.getToken();
+      if (token == null) return;
+      debugPrint('FCM token: ${token.substring(0, 20)}...');
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'fcm_token': token})
+          .eq('id', userId);
+      debugPrint('FCM token saved to profiles');
+
+      // Listen for incoming call FCM data messages (web→phone background)
+      FirebaseMessaging.onMessage.listen(_handleFcmMessage);
+      FirebaseMessaging.onBackgroundMessage(_handleFcmBackground);
+
+      // App opened from a tapped notification while backgrounded
+      FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+        debugPrint('FCM onMessageOpenedApp: ${msg.data}');
+        if (msg.data['type'] == 'incoming_call') {
+          _handleIncomingCallFcm(msg.data);
+        }
+      });
+
+      // App cold-started (killed) by tapping a notification — user already accepted
+      final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+      debugPrint('FCM launch message: ${initialMessage?.data}');
+      if (initialMessage != null &&
+          initialMessage.data['type'] == 'incoming_call') {
+        // Delay until the widget tree + ZEGO are ready, then auto-accept
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _handleKilledAppAccept(initialMessage.data);
+        });
+      }
+    } catch (e) {
+      debugPrint('FCM token save error: $e');
+    }
+  }
+
+  /// Called when the app was KILLED and user tapped Accept on the notification.
+  /// The dialog is skipped — navigate directly to the call page.
+  void _handleKilledAppAccept(Map<String, dynamic> data) async {
+    final channelName = data['channel_name'] ?? '';
+    final callerName  = data['caller_name']  ?? 'Doctor';
+    final callerId    = data['caller_id']    ?? '';
+    final bookingId   = data['booking_id']   ?? '';
+    if (channelName.isEmpty) return;
+
+    debugPrint('[KilledAccept] channel=$channelName caller=$callerName');
+
+    // Wait for auth + zego_uid to be ready (up to 8 seconds)
+    String? myZegoUid;
+    String  myName = 'Patient';
+    for (int i = 0; i < 16; i++) {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        myZegoUid = await _getMyZegoUid(user);
+        myName = user.userMetadata?['full_name']?.toString().trim() ?? 'Patient';
+        if (myZegoUid != null && myZegoUid.isNotEmpty) break;
+      }
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    if (myZegoUid == null || myZegoUid.isEmpty) {
+      debugPrint('[KilledAccept] zego_uid still missing after wait — aborting');
+      return;
+    }
+
+    // Signal accept so the doctor knows we're joining
+    await RealtimeCallService().acceptCall(channelName);
+
+    final nav = navigatorKey.currentState;
+    if (nav == null) {
+      debugPrint('[KilledAccept] Navigator not ready');
+      return;
+    }
+
+    debugPrint('[KilledAccept] Navigating to PatientVideoCallPage myUid=$myZegoUid');
+    nav.push(MaterialPageRoute(
+      builder: (_) => PatientVideoCallPage(
+        callID:           channelName,
+        userID:           myZegoUid!,
+        userName:         myName,
+        professionalName: callerName,
+        bookingId:        bookingId,
+        professionalId:   callerId,
+      ),
+    ));
+  }
+
+  void _handleFcmMessage(RemoteMessage message) {
+    debugPrint('FCM foreground message: ${message.data}');
+    if (message.data['type'] == 'incoming_call') {
+      _handleIncomingCallFcm(message.data);
+    }
+  }
+
+  void _handleIncomingCallFcm(Map<String, dynamic> data) {
+    final payload = IncomingCallPayload(
+      callId:     data['channel_name'] ?? '',
+      callerId:   data['caller_id'] ?? '',   // the doctor who placed the call
+      callerName: data['caller_name'] ?? 'Doctor',
+      bookingId:  data['booking_id'] ?? '',
+    );
+    if (payload.callId.isEmpty) return;
+    unawaited(_showIncomingCallDialog(payload));
   }
 
   Future<void> requestPermissions() async {
@@ -998,10 +1169,92 @@ class BookingSuccessScreenLauncher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('Open your booking details here'),
+    // BUG-11 fix: was a blank placeholder — now routes to booking list
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: const Text('Your Bookings', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1E293B),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
       ),
+      body: _BookingDeepLinkBody(),
+    );
+  }
+}
+
+class _BookingDeepLinkBody extends StatefulWidget {
+  @override
+  State<_BookingDeepLinkBody> createState() => _BookingDeepLinkBodyState();
+}
+
+class _BookingDeepLinkBodyState extends State<_BookingDeepLinkBody> {
+  List<Map<String, dynamic>> _bookings = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBookings();
+  }
+
+  Future<void> _loadBookings() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) { setState(() => _loading = false); return; }
+    try {
+      final data = await Supabase.instance.client
+          .from('bookings')
+          .select('id, appointment_date, appointment_time, type, status, staff_id')
+          .or('patient_id.eq.\${user.id},user_id.eq.\${user.id}')
+          .order('appointment_date', ascending: false)
+          .limit(20);
+      if (mounted) setState(() { _bookings = List<Map<String, dynamic>>.from(data); _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)));
+    if (_bookings.isEmpty) return const Center(child: Text('No bookings found.'));
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _bookings.length,
+      itemBuilder: (context, index) {
+        final b = _bookings[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            leading: CircleAvatar(
+              backgroundColor: const Color(0xFF6366F1).withValues(alpha: 0.12),
+              child: const Icon(Icons.calendar_today_rounded, color: Color(0xFF6366F1)),
+            ),
+            title: Text(b['appointment_date']?.toString() ?? 'N/A',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('${b["type"] ?? "Consultation"} · ${b["appointment_time"] ?? ""}'),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(b['status']?.toString().toUpperCase() ?? '',
+                  style: const TextStyle(fontSize: 10, color: Color(0xFF6366F1), fontWeight: FontWeight.bold)),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1055,17 +1308,28 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
     RealtimeCallService().acceptCall(widget.payload.callId);
     Navigator.of(context).pop(); // pop overlay
 
-    // Navigate into the Zego room as the callee (patient side)
+    // Web uses ZegoExpressEngine directly (UIKit uses Platform.isAndroid → crashes web).
+    // Mobile uses UIKit Prebuilt as before.
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PatientVideoCallPage(
-          callID:           widget.payload.callId,
-          userID:           widget.myUserId,
-          userName:         widget.myUserName,
-          professionalName: widget.payload.callerName,
-          bookingId:        widget.payload.bookingId,
-          professionalId:   widget.payload.callerId,
-        ),
+        builder: (_) => kIsWeb
+            ? WebVideoCallPage(
+                callID:           widget.payload.callId,
+                userID:           widget.myUserId,
+                userName:         widget.myUserName,
+                patientID:        widget.payload.callerId,
+                patientName:      widget.payload.callerName,
+                professionalRole: 'patient',
+                bookingId:        widget.payload.bookingId,
+              )
+            : PatientVideoCallPage(
+                callID:           widget.payload.callId,
+                userID:           widget.myUserId,
+                userName:         widget.myUserName,
+                professionalName: widget.payload.callerName,
+                bookingId:        widget.payload.bookingId,
+                professionalId:   widget.payload.callerId,
+              ),
       ),
     );
   }

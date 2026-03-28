@@ -14,6 +14,7 @@ import 'web_download_stub.dart'
     if (dart.library.js_interop) 'web_download_web.dart';
 
 import 'supabase_handler.dart';
+import 'theme_colors.dart';
 
 class MedicalVaultTab extends StatefulWidget {
   final String patientId;
@@ -52,7 +53,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   ];
 
   final Color primaryColor = const Color(0xFF6366F1);
-  final Color surfaceColor = Colors.white;
+  Color get surfaceColor => AppColors.cardBg(context);
   final Color bpColor = const Color(0xFFEF4444);
   final Color sugarColor = const Color(0xFF10B981);
 
@@ -222,6 +223,8 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   void _rebuildRecordsStream() {
     if (_selectedCategory == null) return;
     setState(() {
+      // Supabase stream() supports only one .eq() — filter by patient at DB level,
+      // provider_role is filtered client-side in the StreamBuilder (line ~666).
       _recordsStream = _supabaseClient
           .from('medical_records')
           .stream(primaryKey: ['id'])
@@ -234,12 +237,12 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: _selectedCategory != null
           ? AppBar(
               title: Text(_selectedCategory!),
               elevation: 0,
-              backgroundColor: Colors.white,
+              backgroundColor: AppColors.cardBg(context),
               foregroundColor: Colors.black,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -278,9 +281,9 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
                         },
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: AppColors.cardBg(context),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.grey.shade100),
+                            border: Border.all(color: const Color(0xFFF1F5F9)),
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -313,7 +316,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFE0E7FF)),
         boxShadow: [
@@ -335,7 +338,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEEF2FF),
+                    color: AppColors.indigoTint(context),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -406,12 +409,12 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.show_chart_rounded,
-                          size: 32, color: Colors.grey.shade300),
+                          size: 32, color: const Color(0xFFCBD5E1)),
                       const SizedBox(height: 6),
                       Text(
                         "Log your first reading below",
                         style: TextStyle(
-                            color: Colors.grey.shade400, fontSize: 12),
+                            color: const Color(0xFF94A3B8), fontSize: 12),
                       ),
                     ],
                   );
@@ -449,7 +452,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
                               value.toInt().toString(),
                               style: TextStyle(
                                 fontSize: 9,
-                                color: Colors.grey.shade400,
+                                color: const Color(0xFF94A3B8),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -474,8 +477,8 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
                                 s.bar.color == bpColor ? "BP" : "Sugar";
                             return LineTooltipItem(
                               "$label  ${s.y.toStringAsFixed(0)}",
-                              const TextStyle(
-                                color: Colors.white,
+                              TextStyle(
+                                color: AppColors.cardBg(context),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11,
                               ),
@@ -561,7 +564,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: AppColors.textPrimary(context), borderRadius: BorderRadius.circular(16)),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -574,7 +577,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
           ),
           IconButton(
             onPressed: () => _logVitals("BP", {"sys": _sysController.text, "dia": _diaController.text}),
-            icon: const Icon(Icons.check_circle, color: Colors.white, size: 32),
+            icon: Icon(Icons.check_circle, color: AppColors.cardBg(context), size: 32),
           ),
         ],
       ),
@@ -584,13 +587,13 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   Widget _bpDigitalCol(String label, TextEditingController ctrl) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+        Text(label, style: TextStyle(color: AppColors.textMuted(context), fontSize: 10)),
         SizedBox(
           width: 50,
           child: TextField(
             controller: ctrl,
             keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white, fontSize: 22),
+            style: TextStyle(color: AppColors.cardBg(context), fontSize: 22),
             decoration: const InputDecoration(
               border: InputBorder.none,
               hintText: "00",
@@ -609,7 +612,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
@@ -693,7 +696,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade100),
+        side: BorderSide(color: const Color(0xFFF1F5F9)),
       ),
       child: ListTile(
         onTap: () => _viewFile(url, fileName),
@@ -741,7 +744,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => SizedBox(
@@ -772,9 +775,9 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
                   : InteractiveViewer(
                       child: Image.network(
                         resolvedUrl,
-                        errorBuilder: (_, __, ___) => const Icon(
+                        errorBuilder: (_, __, ___) => Icon(
                             Icons.broken_image_outlined,
-                            color: Colors.grey,
+                            color: AppColors.textMuted(context),
                             size: 40),
                       ),
                     ),
@@ -816,10 +819,10 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
         .showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
   }
 
-  Widget _buildEmptyState() => const Center(
-        child: Padding(
+  Widget _buildEmptyState() => Center(
+        child: const Padding(
           padding: EdgeInsets.all(40.0),
-          child: Text("Folder is empty", style: TextStyle(color: Colors.grey)),
+          child: Text("Folder is empty", style: TextStyle(color: Color(0xFF94A3B8))),
         ),
       );
 }

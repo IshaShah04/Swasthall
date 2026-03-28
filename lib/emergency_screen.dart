@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'theme_colors.dart';
 
 class EmergencyScreen extends StatelessWidget {
   const EmergencyScreen({super.key});
@@ -48,9 +49,9 @@ class EmergencyScreen extends StatelessWidget {
               TextField(
                 decoration: InputDecoration(
                   hintText: "Find nearest hospital/service.",
-                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                  prefixIcon: Icon(Icons.search, color: AppColors.textMuted(context)),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppColors.inputFill(context),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(15),
                     borderSide: const BorderSide(color: Color(0xFFF3F4F6)),
@@ -141,12 +142,12 @@ class EmergencyScreen extends StatelessWidget {
       width: 150,
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ctx != null ? AppColors.cardBg(ctx) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFF3F4F6)),
         boxShadow: [
           BoxShadow(
-            color: color.withAlpha(15),
+            color: color.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, 4),
           )
@@ -158,7 +159,7 @@ class EmergencyScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withAlpha(25),
+              color: color.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 30),

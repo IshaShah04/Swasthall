@@ -3,6 +3,7 @@ import 'main.dart' show switchToCompletedTab;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'queue_tab.dart';
 import 'completed_tab.dart';
+import 'theme_colors.dart';
 
 class HealthVaultScreen extends StatefulWidget {
   final bool forceUploadMode;
@@ -106,10 +107,14 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
                   .eq('lab_category', lab ?? 'Unknown');
             } else {
               // Both Doctors and Nurses filter by the doctor's ID in 'provider_id'
-              _dashboardStream = supabase
-                  .from('bookings')
-                  .stream(primaryKey: ['id'])
-                  .eq('provider_id', finalFilterId ?? '');
+              if (finalFilterId != null && finalFilterId.isNotEmpty) {
+                _dashboardStream = supabase
+                    .from('bookings')
+                    .stream(primaryKey: ['id'])
+                    .eq('provider_id', finalFilterId);
+              } else {
+                debugPrint('health_vault: skipping stream — filterId empty');
+              }
             }
             _isInitializing = false;
           });
@@ -158,17 +163,17 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: Text(
           _isNurse() ? "Nursing Care Assistant" : "${widget.userRole} Professional Suite",
-          style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.black, fontSize: 16),
+          style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.textPrimary(context), fontSize: 16),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 18),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary(context), size: 18),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -178,11 +183,11 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
               children: [
                 _buildLiveStatsDashboard(),
                 Container(
-                  color: Colors.white,
+                  color: AppColors.cardBg(context),
                   child: TabBar(
                     controller: _tabController,
                     labelColor: brandIndigo,
-                    unselectedLabelColor: Colors.grey,
+                    unselectedLabelColor: AppColors.textMuted(context),
                     indicatorColor: brandIndigo,
                     indicatorWeight: 3,
                     labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
@@ -245,7 +250,7 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
+          decoration: BoxDecoration(color: AppColors.cardBg(context), border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
           child: Column(
             children: [
               if (servingNow.isNotEmpty) _buildActivePatientCard(servingNow),
@@ -278,9 +283,9 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: brandIndigo.withAlpha(25),
+        color: brandIndigo.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: brandIndigo.withAlpha(50)),
+        border: Border.all(color: brandIndigo.withValues(alpha: 0.20)),
       ),
       child: Row(
         children: [
@@ -292,7 +297,7 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
               children: [
                 Text(statusLabel, style: TextStyle(color: brandIndigo, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 1.2)),
                 Text("${servingNow['patient_name'] ?? 'Unknown'}", 
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Colors.black87)),
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: AppColors.textSecondary(context))),
               ],
             ),
           ),
@@ -310,9 +315,9 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          color: color.withAlpha(15),
+          color: color.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withAlpha(30)),
+          border: Border.all(color: color.withValues(alpha: 0.12)),
         ),
         child: Row(
           children: [

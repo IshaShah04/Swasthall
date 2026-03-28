@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme_colors.dart';
 
 class ProfessionalInsightsScreen extends StatefulWidget {
   const ProfessionalInsightsScreen({super.key});
@@ -72,23 +73,15 @@ class _ProfessionalInsightsScreenState
   Future<void> _fetchBookingStats(String uid) async {
     final from = _fromDate.toIso8601String();
 
-    // Query by provider_id first, fall back to staff_id if empty
-    // Both columns hold the professional's auth uid but older rows may only have staff_id
-    var rows = await _supabase
+    // Single query using OR — covers both provider_id and staff_id columns.
+    // Older bookings may only have staff_id set; newer ones use provider_id.
+    // Using .or() returns all rows for this professional in one round-trip.
+    final rows = await _supabase
         .from('bookings')
         .select('status, created_at')
-        .eq('provider_id', uid)
+        .or('provider_id.eq.$uid,staff_id.eq.$uid')
         .gte('created_at', from)
         .order('created_at');
-
-    if (rows.isEmpty) {
-      rows = await _supabase
-          .from('bookings')
-          .select('status, created_at')
-          .eq('staff_id', uid)
-          .gte('created_at', from)
-          .order('created_at');
-    }
 
     debugPrint('Insights bookings: ${rows.length} rows for uid=$uid');
 
@@ -180,15 +173,15 @@ class _ProfessionalInsightsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Performance Insights",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: AppColors.textPrimary(context), fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: _indigo))
@@ -233,10 +226,10 @@ class _ProfessionalInsightsScreenState
               },
               selectedColor: _indigo,
               labelStyle: TextStyle(
-                color: isSelected ? Colors.white : Colors.black,
+                color: isSelected ? Colors.white : AppColors.textPrimary(context),
                 fontWeight: FontWeight.bold,
               ),
-              backgroundColor: Colors.white,
+              backgroundColor: AppColors.cardBg(context),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -291,12 +284,12 @@ class _ProfessionalInsightsScreenState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        border: Border.all(color: AppColors.surfaceBg(context)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: AppColors.shadow(context),
             blurRadius: 8,
             offset: const Offset(0, 2),
           )
@@ -329,9 +322,9 @@ class _ProfessionalInsightsScreenState
       height: 260,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        border: Border.all(color: AppColors.surfaceBg(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,7 +353,7 @@ class _ProfessionalInsightsScreenState
                     child: Text(
                       "No completed consultations\nin this period",
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                      style: TextStyle(color: AppColors.textMuted(context), fontSize: 13),
                     ),
                   )
                 : LineChart(
@@ -393,9 +386,9 @@ class _ProfessionalInsightsScreenState
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        border: Border.all(color: AppColors.surfaceBg(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -427,7 +420,7 @@ class _ProfessionalInsightsScreenState
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Text(
                   "No reviews yet in this period",
-                  style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  style: TextStyle(color: AppColors.textMuted(context), fontSize: 13),
                 ),
               ),
             )
@@ -481,7 +474,7 @@ class _ProfessionalInsightsScreenState
                       duration > 0 ? _formatDuration(duration) : '',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey[400],
+                        color: AppColors.textMuted(context),
                       ),
                     ),
                   ],
@@ -499,7 +492,7 @@ class _ProfessionalInsightsScreenState
                   const SizedBox(height: 4),
                   Text(
                     "${date.day}/${date.month}/${date.year}",
-                    style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted(context)),
                   ),
                 ],
               ],

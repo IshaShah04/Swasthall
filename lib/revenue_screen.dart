@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme_colors.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  RevenueScreen — reads from platform_transactions (consultation)
@@ -434,9 +435,9 @@ class _RevenueScreenState extends State<RevenueScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Total Online Lab Booking Revenue',
+          Text('Total Online Lab Booking Revenue',
               style:
-                  TextStyle(color: Colors.black87, fontSize: 13)),
+                  TextStyle(color: AppColors.textSecondary(context), fontSize: 13)),
           const SizedBox(height: 10),
           _areaChart(_labSpots, _amber),
           const SizedBox(height: 20),
@@ -514,7 +515,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
             color: color,
             barWidth: 3,
             belowBarData: BarAreaData(
-                show: true, color: color.withAlpha(30)),
+                show: true, color: color.withValues(alpha: 0.12)),
             dotData: const FlDotData(show: false),
           ),
         ],
@@ -532,7 +533,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
         padding: const EdgeInsets.symmetric(
             horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: color.withAlpha(20),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -560,12 +561,12 @@ class _RevenueScreenState extends State<RevenueScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFF3F4F6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: AppColors.shadow(context),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -583,7 +584,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
                         fontSize: 16,
                         fontWeight: FontWeight.bold)),
               ),
-              Icon(icon, color: Colors.grey, size: 20),
+              Icon(icon, color: AppColors.textMuted(context), size: 20),
             ],
           ),
           const SizedBox(height: 20),
@@ -603,7 +604,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
           Expanded(
             child: Text(label,
                 style: TextStyle(
-                    color: Colors.grey[700], fontSize: 13)),
+                    color: AppColors.textSecondary(context), fontSize: 13)),
           ),
           Text(value,
               style: TextStyle(
@@ -624,13 +625,13 @@ class _RevenueScreenState extends State<RevenueScreen> {
             Icon(Icons.bar_chart_outlined,
                 size: 48, color: Colors.grey[300]),
             const SizedBox(height: 12),
-            const Text('No hospital linked',
+            Text('No hospital linked',
                 style: TextStyle(
-                    fontWeight: FontWeight.bold, color: Colors.grey)),
+                    fontWeight: FontWeight.bold, color: AppColors.textMuted(context))),
             const SizedBox(height: 4),
-            const Text('Connect to a hospital to view revenue',
+            Text('Connect to a hospital to view revenue',
                 style:
-                    TextStyle(fontSize: 12, color: Colors.grey)),
+                    TextStyle(fontSize: 12, color: AppColors.textMuted(context))),
           ],
         ),
       );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'theme_colors.dart';
 
 class StaffManagementSection extends StatefulWidget {
   final List<Map<String, dynamic>> staffList;
@@ -77,7 +78,7 @@ class _StaffManagementSectionState extends State<StaffManagementSection> {
           onPressed: () => widget.onAddStaff(role),
         ),
       ]),
-      Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      Text(subtitle, style: TextStyle(color: AppColors.textMuted(context), fontSize: 12)),
       const SizedBox(height: 12),
     ]);
   }
@@ -182,5 +183,5 @@ class _StaffManagementSectionState extends State<StaffManagementSection> {
   Widget _buildTechnicianForm(int index, Map data) => _buildCardFrame(index, [_buildBasicInfoFields(index, data), const SizedBox(height: 8), _buildSimpleTextField("Assigned Lab Section", index, 'assigned_lab', data['assigned_lab'])], color: const Color(0xFFF0FDF4));
   Widget _buildNurseForm(int index, Map data) => _buildCardFrame(index, [_buildBasicInfoFields(index, data)], color: const Color(0xFFFEFCE8));
   Widget _buildBasicInfoFields(int index, Map data) => Column(children: [_buildEmailRow(index, data, "Email Address"), const SizedBox(height: 8), Row(children: [Expanded(child: _buildSimpleTextField("Full Name", index, 'name', data['name'])), const SizedBox(width: 10), Expanded(child: _buildSimpleTextField("Speciality", index, 'speciality', data['speciality']))])]);
-  Widget _buildCardFrame(int index, List<Widget> children, {Color? color}) => Container(margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: color ?? const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade200)), child: Column(mainAxisSize: MainAxisSize.min, children: children));
+  Widget _buildCardFrame(int index, List<Widget> children, {Color? color}) => Container(margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: color ?? AppColors.surfaceBg(context), borderRadius: BorderRadius.circular(15), border: Border.all(color: AppColors.border(context))), child: Column(mainAxisSize: MainAxisSize.min, children: children));
 }

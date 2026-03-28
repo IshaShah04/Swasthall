@@ -61,7 +61,7 @@ class _LabOfferState extends State<LabOffer> {
                 ),
                 child: Text(
                   offer['tag'] ?? "OFFER",
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
@@ -71,7 +71,7 @@ class _LabOfferState extends State<LabOffer> {
               const SizedBox(height: 10),
               Text(
                 "${offer['title']}\n@ Rs. ${offer['price']}",
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,

@@ -62,11 +62,12 @@ dependencies:
   flutter_native_splash: ^2.4.7
   firebase_core: ^4.5.0
   firebase_messaging: ^16.1.2
-  app_links: ^6.4.1
+  app_links: ^7.0.0
   google_mlkit_translation: ^0.13.1
   uuid: ^4.5.3
   timeago: ^3.7.1
   firebase_crashlytics: ^5.0.8
+  zego_express_engine: ^3.23.0
 
 dev_dependencies:
   flutter_test:
@@ -102,6 +103,9 @@ flutter:
     - assets/data/nepal_medicines.json
     - assets/data/nepal_medicines_ne.json
     - assets/data/nepal_medicines_hi.json
+    - assets/data/nepal_medicinesDI.json
+    - assets/data/drug_interactions.json
+    - assets/data/nepal_brand_aliases.json
     - env.json
     - assets/swasthall_logo.png
     - assets/swasthall_icon.png

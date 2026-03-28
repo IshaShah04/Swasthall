@@ -37,8 +37,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- ── VOIP / TELECOM ────────────────────────────────────────────────── -->
-    <!-- Required for Android ConnectionService (WhatsApp-style killed-app  -->
-    <!-- wake-up). Lets ZEGO register a PhoneAccount with Android Telecom.  -->
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
 
     <!-- ── ALARM / SCHEDULING ────────────────────────────────────────────── -->
@@ -54,6 +52,35 @@
         android:label="Swasthall"
         android:networkSecurityConfig="@xml/network_security_config">
 
+        <!-- ── FIX: Remove live_activities plugin FCM service ───────────────
+             The live_activities plugin auto-merges a FirebaseMessagingService
+             (LiveActivityFirebaseMessagingService) that crashes at line 26
+             with NullPointerException on data-only FCM messages (our call
+             notifications). tools:node="remove" strips it from the merged
+             manifest before the APK is built, so it never runs.
+             
+             This stops BOTH crashes:
+             1. The NPE in LiveActivityFirebaseMessagingService itself
+             2. The ZegoSystemService "Invalid state transition paused→inactive"
+                crash that is cascading from process instability caused by #1
+        ──────────────────────────────────────────────────────────────────── -->
+        <service
+            android:name="com.example.live_activities.LiveActivityFirebaseMessagingService"
+            tools:node="remove" />
+
+        <!-- ── Our FCM message handler ──────────────────────────────────────
+             Handles all FCM messages that live_activities was intercepting.
+             This is a safe pass-through that does NOT crash on our data-only
+             call notification messages.
+        ──────────────────────────────────────────────────────────────────── -->
+        <service
+            android:name=".SwasthallFcmService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- ── ZEGO CALL FOREGROUND SERVICE ─────────────────────────────── -->
         <service
             android:name="com.zegocloud.uikit.prebuilt.call.internal.ZegoCallForegroundService"
@@ -62,17 +89,12 @@
             android:foregroundServiceType="phoneCall|camera|microphone" />
 
         <!-- ── ZEGO ZIM NETWORK SERVICE (required for offline call push) ── -->
-        <!--   Without this, calls to offline/killed app WILL NOT arrive.   -->
         <service
             android:name="im.zego.zim.internal.network.ZIMNetworkService"
             android:exported="false"
             android:foregroundServiceType="phoneCall" />
 
         <!-- ── ZEGO TELECOM CONNECTION SERVICE ──────────────────────────── -->
-        <!-- Registers Swasthall as a VoIP app with Android's Telecom API.  -->
-        <!-- Android OS handles incoming call wake-up like a real phone      -->
-        <!-- call — works even when the app is killed (like WhatsApp).       -->
-        <!-- Requires MANAGE_OWN_CALLS permission (above).                  -->
         <service
             android:name="com.zegocloud.uikit.prebuilt.call.flutter.ZegoCallConnectionService"
             android:exported="true"
@@ -83,13 +105,13 @@
         </service>
 
         <receiver
-    android:name=".ZegoFcmBroadcastReceiver"
-    android:enabled="true"
-    android:exported="false">
-    <intent-filter>
-        <action android:name="com.zegocloud.zegouikit.call.fcm"/>
-    </intent-filter>
-</receiver>
+            android:name=".ZegoFcmBroadcastReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.zegocloud.zegouikit.call.fcm"/>
+            </intent-filter>
+        </receiver>
 
         <!-- ── HOME WIDGET ───────────────────────────────────────────────── -->
         <service
@@ -106,10 +128,6 @@
         </receiver>
 
         <!-- ── MAIN ACTIVITY ─────────────────────────────────────────────── -->
-        <!--   singleTask required for ZEGO offline call tap-to-open:        -->
-        <!--   reuses the existing activity instance so ZEGO's internal      -->
-        <!--   call manager can attach to it. singleTop creates a new        -->
-        <!--   instance when app is backgrounded, breaking offline wake-up.  -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

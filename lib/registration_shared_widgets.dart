@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'registration_constants.dart';
+import 'theme_colors.dart';
 
 class SectionLabel extends StatelessWidget {
   final String label;
@@ -89,24 +90,24 @@ class ProfilePhotoUpload extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: RegistrationTheme.surface,
-          border: Border.all(color: Colors.grey.shade300, width: 2),
+          border: Border.all(color: const Color(0xFFCBD5E1), width: 2),
         ),
         child: profilePhotoBytes != null
             ? ClipOval(
                 child: Image.memory(profilePhotoBytes!, fit: BoxFit.cover),
               )
-            : const Column(
+            : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.add_a_photo_outlined,
                     color: RegistrationTheme.brand,
                     size: 28,
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
                     "Photo",
-                    style: TextStyle(color: Colors.grey, fontSize: 11),
+                    style: TextStyle(color: AppColors.textMuted(context), fontSize: 11),
                   ),
                 ],
               ),
@@ -143,7 +144,7 @@ class ProfessionalHintBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF2FF),
+        color: AppColors.indigoTint(context),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFC7D2FE)),
       ),
@@ -220,7 +221,7 @@ class DocumentUploads extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       color: isUploaded
                           ? const Color(0xFFDCFCE7)
-                          : Colors.grey.shade100,
+                          : AppColors.surfaceBg(context),
                     ),
                     child: isUploaded && uploadedDocBytes[key] != null
                         ? ClipRRect(
@@ -296,7 +297,7 @@ class DocumentUploads extends StatelessWidget {
                     isUploaded
                         ? Icons.edit_outlined
                         : Icons.chevron_right_rounded,
-                    color: Colors.grey.shade400,
+                    color: const Color(0xFF94A3B8),
                     size: 20,
                   ),
                 ],
@@ -367,10 +368,10 @@ class SharedRegistrationField extends StatelessWidget {
                 )
               : null,
           filled: true,
-          fillColor: RegistrationTheme.surface,
+          fillColor: AppColors.inputFill(context),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.grey.shade200),
+            borderSide: BorderSide(color: const Color(0xFFE2E8F0)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),

@@ -29,7 +29,7 @@ class LegalViewerScreen extends StatelessWidget {
     const Color brand = Color(0xFF6366F1);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -44,7 +44,7 @@ class LegalViewerScreen extends StatelessWidget {
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.grey.shade100),
+          child: Container(height: 1, color: const Color(0xFFF1F5F9)),
         ),
       ),
       body: ListView(
@@ -86,7 +86,7 @@ class LegalViewerScreen extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFEEF2FF),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFFC7D2FE)),
               ),
@@ -163,7 +163,7 @@ class LegalViewerScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade100),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

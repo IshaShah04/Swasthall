@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'consultation_payment_screen.dart';
-import 'services/voice_service.dart'; // Added VoiceService import
+import 'services/voice_service.dart';import 'theme_colors.dart';
+ // Added VoiceService import
 
 class BookingScreen extends StatefulWidget {
   final Map<String, dynamic> doctorData;
@@ -25,7 +26,7 @@ class _BookingScreenState extends State<BookingScreen> {
   DateTime _selectedDate = DateTime.now();
   Map<String, dynamic>? _selectedSlotData;
   bool _isLoadingSlots = false;
-  final bool _isOffline = false;
+  // _isOffline removed — was hardcoded false, creating dead code branch (BUG-18)
   List<Map<String, dynamic>> _availableSlots = [];
   
   // Voice Service instance
@@ -141,21 +142,21 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       appBar: AppBar(
         title: Text("${widget.appointmentType} Booking",
-            style: const TextStyle(
-                color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+            style: TextStyle(
+                color: AppColors.textPrimary(context), fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
       // Added Floating Action Button for Voice Service
       floatingActionButton: FloatingActionButton(
         onPressed: _announceSlots,
         backgroundColor: primaryColor,
         mini: true,
-        child: const Icon(Icons.volume_up, color: Colors.white),
+        child: Icon(Icons.volume_up, color: Colors.white),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,9 +170,7 @@ class _BookingScreenState extends State<BookingScreen> {
           Expanded(
             child: _isLoadingSlots
                 ? const Center(child: CircularProgressIndicator())
-                : _isOffline
-                    ? _buildErrorState("No Internet Connection")
-                    : _availableSlots.isEmpty
+                : _availableSlots.isEmpty
                         ? _buildErrorState("No slots available for this date.")
                         : _buildTimeGrid(),
           ),
@@ -202,7 +201,7 @@ class _BookingScreenState extends State<BookingScreen> {
               width: 70,
               margin: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: isSelected ? primaryColor : Colors.grey.shade100,
+                color: isSelected ? primaryColor : AppColors.surfaceBg(context),
                 borderRadius: BorderRadius.circular(15),
                 boxShadow: isSelected
                     ? [
@@ -222,7 +221,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           fontSize: 12)),
                   Text(DateFormat('d').format(date),
                       style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black,
+                          color: isSelected ? Colors.white : AppColors.textPrimary(context),
                           fontWeight: FontWeight.bold,
                           fontSize: 18)),
                 ],
@@ -278,9 +277,9 @@ class _BookingScreenState extends State<BookingScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.calendar_today_outlined,
-              size: 48, color: Colors.grey.shade300),
+              size: 48, color: const Color(0xFFCBD5E1)),
           const SizedBox(height: 16),
-          Text(message, style: TextStyle(color: Colors.grey.shade600)),
+          Text(message, style: TextStyle(color: const Color(0xFF475569))),
         ],
       ),
     );
@@ -290,10 +289,10 @@ class _BookingScreenState extends State<BookingScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg(context),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: AppColors.shadow(context),
                 blurRadius: 10,
                 offset: const Offset(0, -5))
           ],
@@ -305,8 +304,8 @@ class _BookingScreenState extends State<BookingScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text("Total Fee",
-                    style: TextStyle(color: Colors.grey, fontSize: 12)),
+                Text("Total Fee",
+                    style: TextStyle(color: AppColors.textMuted(context), fontSize: 12)),
                 Text("Rs ${widget.price.toInt()}",
                     style: const TextStyle(
                         fontSize: 22,
@@ -326,7 +325,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
-                child: const Text("Confirm Slot",
+                child: Text("Confirm Slot",
                     style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,

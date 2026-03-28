@@ -8,6 +8,7 @@ import 'config/env_config.dart';
 import 'supabase_handler.dart';
 import 'main.dart';
 import 'shared_widgets.dart';
+import 'theme_colors.dart';
 
 class VideoCallPage extends StatefulWidget {
   final String callID;
@@ -213,17 +214,17 @@ class _VideoCallPageState extends State<VideoCallPage>
                           color: Colors.black.withValues(alpha: 0.65),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3)),
+                              color: AppColors.cardBg(context).withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
-                          children: const [
+                          children: [
                             Icon(Icons.folder_shared_rounded,
                                 color: Colors.white, size: 16),
                             SizedBox(width: 5),
                             Text(
                               'Records',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,

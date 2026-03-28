@@ -5,6 +5,8 @@ import 'nurse_setting.dart';
 import 'pharmacist_setting.dart';
 import 'technician_setting.dart';
 import 'services/secure_logout.dart';
+import 'theme_colors.dart';
+import 'widgets/theme_toggle.dart';
 
 class ProfessionalSettings extends StatefulWidget {
   final String userRole; // This comes from the login/auth state
@@ -110,7 +112,7 @@ class _ProfessionalSettingsState extends State<ProfessionalSettings> {
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         foregroundColor: Colors.black,
         elevation: 0,
         title: Text("$displayName's Portal", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -125,7 +127,15 @@ class _ProfessionalSettingsState extends State<ProfessionalSettings> {
       // because individual screens (DoctorSetting, etc.) usually have their own scrolling logic.
       body: RefreshIndicator(
         onRefresh: _fetchInitialData,
-        child: _getRoleSpecificWidget(role),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: const AppearanceToggle(),
+            ),
+            Expanded(child: _getRoleSpecificWidget(role)),
+          ],
+        ),
       ),
     );
   }
@@ -144,7 +154,7 @@ class _ProfessionalSettingsState extends State<ProfessionalSettings> {
         return ListView( // Use ListView so Pull-to-Refresh still works
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-            const Icon(Icons.person_off_outlined, size: 64, color: Colors.grey),
+            Icon(Icons.person_off_outlined, size: 64, color: AppColors.textMuted(context)),
             const SizedBox(height: 16),
             Center(child: Text("Unknown Role: '$role'", style: const TextStyle(fontWeight: FontWeight.bold))),
             const Center(child: Text("Verify your role in the 'profiles' table.")),

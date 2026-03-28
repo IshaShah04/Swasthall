@@ -6,6 +6,7 @@ import 'consultation_description.dart';
 import 'services/voice_service.dart';
 import 'services/earliest_slot_service.dart';
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Local fuzzy match helpers (misspelling + voice tolerance)
@@ -292,10 +293,10 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.textPrimary(context), size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: TextField(
@@ -304,7 +305,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
           style: const TextStyle(fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+            hintStyle: TextStyle(color: AppColors.textMuted(context), fontSize: 14),
             border: InputBorder.none,
           ),
         ),
@@ -322,7 +323,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
                 tooltip: _isListening ? 'Tap to stop' : 'Search by voice',
                 icon: Icon(
                   _isListening ? Icons.mic : Icons.mic_none,
-                  color: Colors.white,
+                  color: AppColors.cardBg(context),
                   size: 20,
                 ),
                 onPressed: _toggleListening,
@@ -337,7 +338,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
       floatingActionButton: FloatingActionButton(
         onPressed: _speakResults,
         backgroundColor: const Color(0xFF6366F1),
-        child: const Icon(Icons.volume_up, color: Colors.white),
+        child: Icon(Icons.volume_up, color: Colors.white),
       ),
       body: _buildResultsGrid(),
     );
@@ -350,7 +351,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off_rounded, size: 64, color: Colors.grey.shade300),
+            Icon(Icons.search_off_rounded, size: 64, color: const Color(0xFFCBD5E1)),
             const SizedBox(height: 16),
             const Text("No matches found.",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -359,7 +360,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
               _isListening
                   ? "Listening... speak a name or specialty"
                   : "Try the mic 🎤 or check spelling",
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+              style: TextStyle(color: const Color(0xFF64748B), fontSize: 13),
             ),
           ],
         ),
@@ -409,7 +410,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
           Container(
             padding: const EdgeInsets.fromLTRB(12, 65, 12, 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.cardBg(context),
               borderRadius: BorderRadius.circular(25),
               border: isPriority
                   ? Border.all(
@@ -418,7 +419,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
                   : null,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
+                  color: AppColors.shadow(context),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 )
@@ -505,11 +506,11 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(children: [
-        Icon(icon, size: 12, color: Colors.grey),
+        Icon(icon, size: 12, color: AppColors.textMuted(context)),
         const SizedBox(width: 4),
         Expanded(
             child: Text(text,
-                style: const TextStyle(fontSize: 9, color: Colors.black87),
+                style: TextStyle(fontSize: 9, color: AppColors.textSecondary(context)),
                 overflow: TextOverflow.ellipsis)),
       ]),
     );
@@ -519,7 +520,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 8, color: Colors.grey)),
+        Text(label, style: TextStyle(fontSize: 8, color: AppColors.textMuted(context))),
         Text("Rs ${price.toInt()}",
             style: const TextStyle(
                 fontWeight: FontWeight.bold,
@@ -595,7 +596,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15)),
                 ),
-                child: const Text("Apply",
+                child: Text("Apply",
                     style: TextStyle(color: Colors.white)),
               ),
             ],

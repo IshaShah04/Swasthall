@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
 
 class DoctorSetting extends StatefulWidget {
   final Map<String, dynamic>? userData;
@@ -250,19 +251,19 @@ class _DoctorSettingState extends State<DoctorSetting> {
           CircleAvatar(
             backgroundColor: themeColor,
             radius: 18,
-            child: const Icon(Icons.person, color: Colors.white, size: 20),
+            child: Icon(Icons.person, color: AppColors.cardBg(context), size: 20),
           ),
           const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Assigned Nurse",
-                  style: TextStyle(fontSize: 11, color: Colors.grey)),
+              Text("Assigned Nurse",
+                  style: TextStyle(fontSize: 11, color: AppColors.textMuted(context))),
               Text(name,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87)),
+                      color: AppColors.textSecondary(context))),
             ],
           ),
         ],
@@ -282,10 +283,10 @@ class _DoctorSettingState extends State<DoctorSetting> {
             const Badge(label: Text("Live"), backgroundColor: Colors.red),
           ],
         ),
-        const Text(
+        Text(
           "Management permissions held by Nurse. Contact admin for slot changes.",
           style: TextStyle(
-              color: Colors.grey, fontSize: 11, fontStyle: FontStyle.italic),
+              color: AppColors.textMuted(context), fontSize: 11, fontStyle: FontStyle.italic),
         ),
       ],
     );
@@ -308,7 +309,7 @@ class _DoctorSettingState extends State<DoctorSetting> {
                 backgroundColor: themeColor.withValues(alpha: 0.1),
               ),
               if (_isUploading)
-                const Positioned.fill(
+                Positioned.fill(
                   child: CircleAvatar(
                     backgroundColor: Colors.black38,
                     child: CircularProgressIndicator(color: Colors.white),
@@ -321,10 +322,10 @@ class _DoctorSettingState extends State<DoctorSetting> {
                   decoration: BoxDecoration(
                     color: themeColor,
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
+                    border: Border.all(color: AppColors.cardBg(context), width: 2),
                   ),
-                  child: const Icon(Icons.camera_alt,
-                      color: Colors.white, size: 18),
+                  child: Icon(Icons.camera_alt,
+                      color: AppColors.cardBg(context), size: 18),
                 ),
               ),
             ],
@@ -360,22 +361,22 @@ class _DoctorSettingState extends State<DoctorSetting> {
     return Container(
       margin: const EdgeInsets.only(top: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: ListTile(
         leading: Icon(icon, color: themeColor, size: 20),
         title: Text(label,
-            style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            style: TextStyle(fontSize: 11, color: AppColors.textMuted(context))),
         subtitle: Text(value ?? "Click to add $label",
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87),
+                color: AppColors.textSecondary(context)),
             maxLines: isLongText ? 3 : 1,
             overflow: TextOverflow.ellipsis),
-        trailing: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+        trailing: Icon(Icons.edit_outlined, size: 18, color: AppColors.textMuted(context)),
         onTap: () => _showEditDialog(label, column, value ?? "", isLongText),
       ),
     );
@@ -408,10 +409,10 @@ class _DoctorSettingState extends State<DoctorSetting> {
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-                color: Colors.white, borderRadius: BorderRadius.circular(12)),
-            child: const Center(
+                color: AppColors.cardBg(context), borderRadius: BorderRadius.circular(12)),
+            child: Center(
                 child: Text("No schedule assigned yet.",
-                    style: TextStyle(color: Colors.grey))),
+                    style: TextStyle(color: AppColors.textMuted(context)))),
           );
         }
 
@@ -427,7 +428,7 @@ class _DoctorSettingState extends State<DoctorSetting> {
               margin: const EdgeInsets.only(bottom: 8),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade100)),
+                  side: BorderSide(color: const Color(0xFFF1F5F9))),
               child: ListTile(
                 leading: Icon(isOnline ? Icons.videocam : Icons.door_front_door,
                     color: isOnline ? Colors.blue : Colors.orange),
@@ -491,7 +492,7 @@ class _DoctorSettingState extends State<DoctorSetting> {
                 debugPrint("Update Error: $e");
               }
             },
-            child: const Text("Save", style: TextStyle(color: Colors.white)),
+            child: Text("Save", style: TextStyle(color: AppColors.cardBg(context))),
           ),
         ],
       ),

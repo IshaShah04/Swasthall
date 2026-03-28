@@ -7,6 +7,7 @@ import 'booking_success_screen.dart';
 import 'services/voice_service.dart';
 import 'services/app_cache.dart';
 import 'services/earliest_slot_service.dart';
+import 'theme_colors.dart';
 
 class ConsultationScreen extends StatefulWidget {
   final String patientId;
@@ -118,7 +119,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: AppColors.scaffoldBg(context),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           setState(() => _speakerOn = !_speakerOn);
@@ -144,7 +145,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             automaticallyImplyLeading: false,
             floating: true,
             expandedHeight: 90,
-            backgroundColor: Colors.white,
+            backgroundColor: AppColors.cardBg(context),
             elevation: 0,
             flexibleSpace: FlexibleSpaceBar(
               background: Padding(
@@ -156,7 +157,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
+                          color: AppColors.surfaceBg(context),
                           borderRadius: BorderRadius.circular(15),
                         ),
                         child: Row(
@@ -230,7 +231,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             .toList();
 
         if (activeBookings.isEmpty) return const SizedBox.shrink();
-        final booking = activeBookings.first;
+        final booking = activeBookings.first; // safe: isEmpty checked above
 
         return _buildSectionWrapper(
           title: "Active Appointment",
@@ -279,7 +280,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                         children: [
                           Text(
                             booking['doctor_name'] ?? "Consultation",
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           Text(
                             "${booking['appointment_date']} • ${booking['appointment_time']}",
@@ -288,7 +289,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                    Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
                   ],
                 ),
               ),
@@ -307,7 +308,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
-      decoration: const BoxDecoration(color: Colors.white),
+      decoration: BoxDecoration(color: AppColors.cardBg(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -454,7 +455,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
           margin: const EdgeInsets.only(top: 5),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: const Color(0xFFECFDF5),
+            color: AppColors.greenTint(context),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
           ),
@@ -500,9 +501,10 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             ),
           );
         }
-        final staffList = snapshot.data!['staff'] as List;
-        final profileMap = Map<String, dynamic>.from(
-            snapshot.data!['profiles'] as Map);
+        final staffList = (snapshot.data!['staff'] as List?) ?? [];
+        final profileMap = snapshot.data!['profiles'] is Map
+            ? Map<String, dynamic>.from(snapshot.data!['profiles'] as Map)
+            : <String, dynamic>{};
         if (staffList.isEmpty) return _buildEmptyState("No ${role}s found.");
 
         return Padding(
@@ -638,7 +640,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   Widget _buildFeeInfo(String label, dynamic value) {
     return Column(children: [
-      Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey)),
+      Text(label, style: TextStyle(fontSize: 9, color: AppColors.textMuted(context))),
       Text("Rs ${value ?? '0'}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
     ]);
   }
@@ -659,7 +661,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       itemBuilder: (context, index) => InkWell(
         onTap: () => _sendEmergencyRequest(items[index]['label']),
         child: Container(
-          decoration: BoxDecoration(color: const Color(0xFFFFF1F2), borderRadius: BorderRadius.circular(12), border: Border.all(color: emergencyRed.withValues(alpha: 0.2))),
+          decoration: BoxDecoration(color: AppColors.redTint(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: emergencyRed.withValues(alpha: 0.2))),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(items[index]['icon'], color: emergencyRed, size: 18),
             const SizedBox(width: 8),
@@ -671,6 +673,6 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   }
 
   Widget _buildEmptyState(String msg) {
-    return Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 40), child: Text(msg, style: const TextStyle(color: Colors.grey))));
+    return Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 40), child: Text(msg, style: TextStyle(color: AppColors.textMuted(context)))));
   }
 }

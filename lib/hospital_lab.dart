@@ -6,6 +6,7 @@ import 'package:intl/intl.dart'; // Add intl for time formatting
 import 'new_lab_test.dart';
 import 'hospital_lab_discription.dart';
 import 'all_bookings_screen.dart';
+import 'theme_colors.dart';
 
 class HospitalLabScreen extends StatefulWidget {
   const HospitalLabScreen({super.key});
@@ -102,7 +103,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardBg(context),
       body: Stack(
         children: [
           Column(
@@ -114,9 +115,9 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                   onChanged: (val) => setState(() => searchQuery = val),
                   decoration: InputDecoration(
                     hintText: "Search lab tests...",
-                    prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                    prefixIcon: Icon(Icons.search, color: AppColors.textMuted(context)),
                     filled: true,
-                    fillColor: Colors.grey[50],
+                    fillColor: AppColors.inputFill(context),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(15),
                       borderSide: BorderSide.none,
@@ -179,20 +180,20 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                                     hasAppointment
                                         ? appointment!['patient_name']
                                         : "No Recent Appointments",
-                                    style: const TextStyle(
-                                        color: Colors.white,
+                                    style: TextStyle(
+                                        color: AppColors.cardBg(context),
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16),
                                   ),
                                 ],
                               ),
                             ),
-                            const Text("View All",
+                            Text("View All",
                                 style: TextStyle(
-                                    color: Colors.white,
+                                    color: AppColors.cardBg(context),
                                     fontWeight: FontWeight.bold)),
-                            const Icon(Icons.chevron_right,
-                                color: Colors.white),
+                            Icon(Icons.chevron_right,
+                                color: AppColors.cardBg(context)),
                           ],
                         ),
                       ),
@@ -210,7 +211,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                           children: [
                             Icon(Icons.domain_disabled_rounded, size: 48, color: Colors.grey[300]),
                             const SizedBox(height: 12),
-                            const Text('No hospital linked', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+                            Text('No hospital linked', style: TextStyle(color: AppColors.textMuted(context), fontWeight: FontWeight.w500)),
                           ],
                         ),
                       )
@@ -296,7 +297,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                 context,
                 MaterialPageRoute(builder: (context) => const NewLabScreen()),
               ),
-              child: const Icon(Icons.add, color: Colors.white, size: 30),
+              child: Icon(Icons.add, color: Colors.white, size: 30),
             ),
           ),
         ],
@@ -310,7 +311,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
       ),
@@ -355,7 +356,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Total Income", style: TextStyle(color: Colors.grey)),
+              Text("Total Income", style: TextStyle(color: AppColors.textMuted(context))),
               Text("\$${total.toStringAsFixed(0)}",
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 18)),
@@ -371,9 +372,9 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey[100]!),
+        border: Border.all(color: AppColors.border(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -394,7 +395,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                             fit: BoxFit.cover,
                             loadingBuilder: (_, child, progress) =>
                                 progress == null ? child : const ShimmerBox(width: double.infinity, height: 120),
-                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 40),
+                            errorBuilder: (_, __, ___) => Icon(Icons.broken_image_outlined, color: AppColors.textMuted(context), size: 40),
                           )
                         : const Icon(Icons.biotech, color: Colors.black26),
                   ),
@@ -404,7 +405,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                   right: 12,
                   child: CircleAvatar(
                     radius: 16,
-                    backgroundColor: Colors.white.withValues(alpha: 0.9),
+                    backgroundColor: AppColors.cardBg(context).withValues(alpha: 0.9),
                     child: IconButton(
                       icon: const Icon(Icons.edit,
                           size: 16, color: Color(0xFF6366F1)),
@@ -436,7 +437,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.access_time, size: 12, color: Colors.grey),
+                    Icon(Icons.access_time, size: 12, color: AppColors.textMuted(context)),
                     const SizedBox(width: 4),
                     Expanded(
                       child: FutureBuilder<String>(
@@ -444,9 +445,9 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                         builder: (context, snapshot) {
                           return Text(
                             snapshot.data ?? "Loading...",
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 10,
-                                color: Colors.grey,
+                                color: AppColors.textMuted(context),
                                 fontWeight: FontWeight.w500),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -458,7 +459,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                 ),
 
                 Text("Bookings: ${test['bookings'] ?? 0}",
-                    style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    style: TextStyle(fontSize: 10, color: AppColors.textMuted(context))),
               ],
             ),
           ),

@@ -7,6 +7,7 @@ import 'quick_categories.dart';
 import 'special_offers.dart';
 import 'physical.dart';
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
 
 class DoctorHomeScreen extends StatefulWidget {
   const DoctorHomeScreen({super.key});
@@ -87,7 +88,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: AppColors.scaffoldBg(context),
       body: _isInitializing
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -111,7 +112,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     const Text("Quick Categories",
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
-                    QuickCategories(brandBlue: brandBlue),
+                    QuickCategories(brandBlue: brandBlue, userRole: _userRole),
                     const SizedBox(height: 24),
                     const Text("Special Offers",
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -144,7 +145,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
           // Use the assigned_doctor_id (which acts as the provider_id for the nurse)
           final providerId = snapshot.data!.first['assigned_doctor_id'];
-          return _buildAppointmentsList(providerId);
+          if (providerId == null) return _buildNoConsultationCard();
+          return _buildAppointmentsList(providerId.toString());
         },
       );
     } else {
@@ -283,12 +285,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     Icon(Icons.health_and_safety, color: brandBlue, size: 28),
               ),
               const SizedBox(width: 10),
-              const Text(
+              Text(
                 "Swasthall",
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF1F2937),
+                  color: AppColors.textPrimary(context),
                   letterSpacing: -0.5,
                 ),
               ),
@@ -305,8 +307,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   builder: (_) => NotificationScreen(userRole: _userRole)));
                 setState(() => _unreadCount = 0);
               },
-              icon: const Icon(Icons.notifications_none_outlined,
-                  color: Color(0xFF1F2937), size: 26),
+              icon: Icon(Icons.notifications_none_outlined,
+                  color: AppColors.textPrimary(context), size: 26),
               visualDensity: VisualDensity.compact,
             ),
             if (_unreadCount > 0)
@@ -317,7 +319,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   decoration: const BoxDecoration(
                       color: Colors.red, shape: BoxShape.circle),
                   child: Text(_unreadCount.toString(),
-                      style: const TextStyle(color: Colors.white,
+                      style: TextStyle(color: AppColors.cardBg(context),
                           fontSize: 8, fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -331,12 +333,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     return TextField(
       decoration: InputDecoration(
         hintText: _userRole == 'technician' ? "Search lab records..." : "Search patients...",
-        prefixIcon: const Icon(Icons.search, color: Colors.grey),
+        prefixIcon: Icon(Icons.search, color: AppColors.textMuted(context)),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: AppColors.inputFill(context),
         contentPadding: const EdgeInsets.symmetric(vertical: 0),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: const Color(0xFFE2E8F0))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: const Color(0xFFE2E8F0))),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: brandBlue)),
       ),
     );
@@ -363,7 +365,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(25),
-          boxShadow: [BoxShadow(color: cardColor.withAlpha(75), blurRadius: 15, offset: const Offset(0, 8))],
+          boxShadow: [BoxShadow(color: cardColor.withValues(alpha: 0.29), blurRadius: 15, offset: const Offset(0, 8))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,12 +373,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(child: Text(data['patient_name'] ?? data['full_name'] ?? "Patient", style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+                Expanded(child: Text(data['patient_name'] ?? data['full_name'] ?? "Patient", style: TextStyle(color: AppColors.cardBg(context), fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
                 if (_userRole == 'technician')
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
-                    child: Text(data['lab_category']?.toString().toUpperCase() ?? "LAB", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: Text(data['lab_category']?.toString().toUpperCase() ?? "LAB", style: TextStyle(color: AppColors.cardBg(context), fontSize: 10, fontWeight: FontWeight.bold)),
                   ),
                 if (isPhysical) const Icon(Icons.location_on, color: Colors.white70, size: 20),
               ],
@@ -390,12 +392,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.white.withAlpha(50), borderRadius: BorderRadius.circular(20)),
+                  decoration: BoxDecoration(color: AppColors.cardBg(context).withValues(alpha: 0.20), borderRadius: BorderRadius.circular(20)),
                   child: Row(
                     children: [
                       const Icon(Icons.circle, color: Colors.greenAccent, size: 8),
                       const SizedBox(width: 6),
-                      Text(status, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text(status, style: TextStyle(color: AppColors.cardBg(context), fontSize: 11, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -410,7 +412,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   Widget _buildLoadingPlaceholder() {
     return Container(
       height: 100,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25)),
+      decoration: BoxDecoration(color: AppColors.cardBg(context), borderRadius: BorderRadius.circular(25)),
       child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
     );
   }
@@ -419,12 +421,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), border: Border.all(color: Colors.grey.shade100)),
+      decoration: BoxDecoration(color: AppColors.cardBg(context), borderRadius: BorderRadius.circular(25), border: Border.all(color: const Color(0xFFF1F5F9))),
       child: Column(
         children: [
           Icon(Icons.check_circle_outline_rounded, size: 40, color: Colors.green.shade200),
           const SizedBox(height: 12),
-          Text("All caught up! No active appointments.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+          Text("All caught up! No active appointments.", textAlign: TextAlign.center, style: TextStyle(color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
         ],
       ),
     );

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'widgets/safe_network_image.dart';
+import 'theme_colors.dart';
 
 class HospitalInsuranceRequestsScreen extends StatefulWidget {
   const HospitalInsuranceRequestsScreen({super.key});
@@ -96,7 +97,7 @@ class _HospitalInsuranceRequestsScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('The patient will be notified with your reason.',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                style: TextStyle(fontSize: 13, color: const Color(0xFF475569))),
             const SizedBox(height: 14),
             TextField(
               controller: reasonCtrl,
@@ -122,8 +123,8 @@ class _HospitalInsuranceRequestsScreenState
                   borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Reject',
-                style: TextStyle(color: Colors.white)),
+            child: Text('Reject',
+                style: TextStyle(color: AppColors.cardBg(context))),
           ),
         ],
       ),
@@ -161,9 +162,9 @@ class _HospitalInsuranceRequestsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
         title: const Text(
@@ -176,7 +177,7 @@ class _HospitalInsuranceRequestsScreenState
         bottom: TabBar(
           controller: _tabController,
           labelColor: _indigo,
-          unselectedLabelColor: Colors.grey,
+          unselectedLabelColor: AppColors.textMuted(context),
           indicatorColor: _indigo,
           labelStyle: const TextStyle(
               fontWeight: FontWeight.w700, fontSize: 13),
@@ -241,7 +242,7 @@ class _RequestList extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.inbox_outlined,
-                    size: 56, color: Colors.grey.shade300),
+                    size: 56, color: const Color(0xFFCBD5E1)),
                 const SizedBox(height: 12),
                 Text(
                   status == 'pending'
@@ -250,7 +251,7 @@ class _RequestList extends StatelessWidget {
                           ? 'No approved subscriptions'
                           : 'No rejected requests',
                   style: TextStyle(
-                      color: Colors.grey.shade500,
+                      color: const Color(0xFF64748B),
                       fontWeight: FontWeight.w500),
                 ),
               ],
@@ -359,12 +360,12 @@ class _RequestCardState extends State<_RequestCard> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: AppColors.shadow(context),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -403,7 +404,7 @@ class _RequestCardState extends State<_RequestCard> {
                       Text(
                         _patientProfile?['email'] ?? '',
                         style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade500),
+                            fontSize: 12, color: const Color(0xFF64748B)),
                       ),
                     ],
                   ),
@@ -546,11 +547,11 @@ class _RequestCardState extends State<_RequestCard> {
                                     BorderRadius.circular(10)),
                             elevation: 0,
                           ),
-                          icon: const Icon(Icons.check_rounded,
-                              color: Colors.white, size: 16),
-                          label: const Text('Approve',
+                          icon: Icon(Icons.check_rounded,
+                              color: AppColors.cardBg(context), size: 16),
+                          label: Text('Approve',
                               style:
-                                  TextStyle(color: Colors.white)),
+                                  TextStyle(color: AppColors.cardBg(context))),
                         ),
                       ),
                     ],
@@ -582,11 +583,11 @@ class _InfoRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: Colors.grey.shade400),
+          Icon(icon, size: 14, color: const Color(0xFF94A3B8)),
           const SizedBox(width: 8),
           Text('$label: ',
               style: TextStyle(
-                  fontSize: 13, color: Colors.grey.shade500)),
+                  fontSize: 13, color: const Color(0xFF64748B))),
           Expanded(
             child: Text(
               value,
