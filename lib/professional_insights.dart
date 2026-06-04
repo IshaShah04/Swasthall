@@ -51,17 +51,50 @@ class _ProfessionalInsightsScreenState
     }
   }
 
+
+  Future<String?> _resolveProfessionalId() async {
+    final authUid = _supabase.auth.currentUser?.id;
+    if (authUid == null) return null;
+
+    try {
+      final staffByUser = await _supabase
+          .from('staff')
+          .select('id')
+          .eq('user_id', authUid)
+          .maybeSingle();
+
+      final staffId = staffByUser?['id']?.toString();
+      if (staffId != null && staffId.isNotEmpty) return staffId;
+
+      final email = _supabase.auth.currentUser?.email?.trim();
+      if (email != null && email.isNotEmpty) {
+        final staffByEmail = await _supabase
+            .from('staff')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle();
+
+        final emailStaffId = staffByEmail?['id']?.toString();
+        if (emailStaffId != null && emailStaffId.isNotEmpty) return emailStaffId;
+      }
+    } catch (e) {
+      debugPrint('Professional id resolution error: $e');
+    }
+
+    return authUid;
+  }
+
   Future<void> _fetchAll() async {
     setState(() => _isLoading = true);
-    final uid = _supabase.auth.currentUser?.id;
-    if (uid == null) {
+    final professionalId = await _resolveProfessionalId();
+    if (professionalId == null) {
       setState(() => _isLoading = false);
       return;
     }
     try {
       await Future.wait([
-        _fetchBookingStats(uid),
-        _fetchReviewStats(uid),
+        _fetchAnalyticsStats(professionalId),
+        _fetchReviewStats(professionalId),
       ]);
     } catch (e) {
       debugPrint('Insights fetch error: $e');
@@ -70,37 +103,58 @@ class _ProfessionalInsightsScreenState
     }
   }
 
-  Future<void> _fetchBookingStats(String uid) async {
-    final from = _fromDate.toIso8601String();
+  Future<void> _fetchAnalyticsStats(String uid) async {
+    final fromDate = _fromDate.toIso8601String().split('T').first;
 
-    // Single query using OR — covers both provider_id and staff_id columns.
-    // Older bookings may only have staff_id set; newer ones use provider_id.
-    // Using .or() returns all rows for this professional in one round-trip.
     final rows = await _supabase
-        .from('bookings')
-        .select('status, created_at')
-        .or('provider_id.eq.$uid,staff_id.eq.$uid')
-        .gte('created_at', from)
-        .order('created_at');
+        .from('professional_analytics_data')
+        .select(
+          'date_period, completed_count, cancelled_count, avg_rating, avg_duration',
+        )
+        .eq('doctor_id', uid)
+        .gte('date_period', fromDate)
+        .order('date_period');
 
-    debugPrint('Insights bookings: ${rows.length} rows for uid=$uid');
+    int completed = 0;
+    int cancelled = 0;
+    double weightedDurationTotal = 0;
+    int weightedDurationCount = 0;
+    double ratingDailySum = 0;
+    int ratingDays = 0;
 
-    int completed = 0, cancelled = 0;
     final Map<int, double> dayTotals = {};
 
     for (final r in rows) {
-      final status = r['status']?.toString() ?? '';
-      if (status == 'completed') {
-        completed++;
-        final day = DateTime.parse(r['created_at']).day;
-        dayTotals[day] = (dayTotals[day] ?? 0) + 1;
-      } else if (status == 'cancelled') {
-        cancelled++;
+      final dailyCompleted = (r['completed_count'] as num?)?.toInt() ?? 0;
+      final dailyCancelled = (r['cancelled_count'] as num?)?.toInt() ?? 0;
+      final dailyAvgRating = (r['avg_rating'] as num?)?.toDouble() ?? 0;
+      final dailyAvgDuration = (r['avg_duration'] as num?)?.toDouble() ?? 0;
+
+      completed += dailyCompleted;
+      cancelled += dailyCancelled;
+
+      if (dailyAvgDuration > 0 && dailyCompleted > 0) {
+        weightedDurationTotal += dailyAvgDuration * dailyCompleted;
+        weightedDurationCount += dailyCompleted;
+      }
+
+      if (dailyAvgRating > 0) {
+        ratingDailySum += dailyAvgRating;
+        ratingDays += 1;
+      }
+
+      final datePeriod = DateTime.tryParse((r['date_period'] ?? '').toString());
+      if (datePeriod != null) {
+        dayTotals[datePeriod.day] = (dayTotals[datePeriod.day] ?? 0) + dailyCompleted;
       }
     }
 
     _completedCount = completed;
     _cancelledCount = cancelled;
+    _avgDurationSeconds = weightedDurationCount == 0
+        ? 0
+        : (weightedDurationTotal / weightedDurationCount).round();
+    _avgRating = ratingDays == 0 ? 0 : (ratingDailySum / ratingDays);
 
     if (dayTotals.isEmpty) {
       _chartSpots = [const FlSpot(0, 0), const FlSpot(1, 0)];

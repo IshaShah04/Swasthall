@@ -122,20 +122,40 @@ class SupabaseHandler {
   // UTILS
   // ─────────────────────────────────────────────────────────────────────────
 
-  static String getNormalizedRoomId(String bookingId) =>
-      'room_${bookingId.replaceAll('-', '')}';
+  static String getNormalizedRoomId(String? roomId) {
+    final raw = (roomId ?? '').trim().toLowerCase();
+    if (raw.isEmpty) return '';
+
+    var normalized = raw;
+    if (normalized.startsWith('room_')) {
+      normalized = normalized.substring(5);
+    }
+
+    normalized = normalized.replaceAll('-', '');
+    return normalized.isEmpty ? '' : 'room_$normalized';
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // CALL STATUS HELPERS
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Doctor starts ringing patient.
+  Future<void> _advanceBookingStatus(String bookingId, String status) async {
+    final normalized = status.trim().toLowerCase();
+    if (bookingId.trim().isEmpty || normalized.isEmpty) return;
+
+    await client.rpc(
+      'advance_queue_safely',
+      params: {
+        'target_booking_id': bookingId,
+        'new_status': normalized,
+      },
+    );
+  }
+
+  /// Doctor/nurse starts ringing patient.
   Future<void> setCalling(String bookingId, {bool nurse = false}) async {
     try {
-      await client.from('bookings').update({
-        'status': nurse ? 'nurse_calling' : 'calling',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', bookingId);
+      await _advanceBookingStatus(bookingId, nurse ? 'nurse_calling' : 'calling');
     } catch (e) {
       debugPrint('setCalling error: $e');
     }
@@ -144,22 +164,21 @@ class SupabaseHandler {
   /// Both parties have joined the room.
   Future<void> setConsulting(String bookingId) async {
     try {
-      await client.from('bookings').update({
-        'status': 'consulting',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', bookingId);
+      await _advanceBookingStatus(bookingId, 'consulting');
     } catch (e) {
       debugPrint('setConsulting error: $e');
     }
   }
 
-  /// End call — doctor marks completed, nurse marks confirmed.
+  /// End call — doctor marks completed, nurse marks triaged/confirmed.
   Future<void> endConsultation(String bookingId, {bool nurse = false}) async {
     try {
-      await client.from('bookings').update({
-        'status': nurse ? 'confirmed' : 'completed',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', bookingId);
+      if (nurse) {
+        await client.rpc('mark_nurse_triaged', params: {'p_booking_id': bookingId});
+        await _advanceBookingStatus(bookingId, 'confirmed');
+      } else {
+        await client.rpc('mark_booking_completed', params: {'p_booking_id': bookingId});
+      }
     } catch (e) {
       debugPrint('endConsultation error: $e');
     }
@@ -284,10 +303,14 @@ class SupabaseHandler {
   Future<bool> updateAppointmentStatus(
       String appointmentId, String status) async {
     try {
-      await client.from('bookings').update({
-        'status': status.toLowerCase().trim(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', appointmentId);
+      final normalized = status.toLowerCase().trim();
+      if (normalized == 'completed') {
+        await client.rpc('mark_booking_completed', params: {'p_booking_id': appointmentId});
+      } else if (normalized == 'missed' || normalized == 'skipped' || normalized == 'absent') {
+        await client.rpc('mark_booking_missed', params: {'p_booking_id': appointmentId});
+      } else {
+        await _advanceBookingStatus(appointmentId, normalized);
+      }
       return true;
     } catch (e) {
       debugPrint('updateAppointmentStatus error: $e');
@@ -297,11 +320,8 @@ class SupabaseHandler {
 
   Future<bool> markAsTriaged(String appointmentId) async {
     try {
-      await client.from('bookings').update({
-        'nurse_seen': true,
-        'status': 'confirmed',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', appointmentId);
+      await client.rpc('mark_nurse_triaged', params: {'p_booking_id': appointmentId});
+      await _advanceBookingStatus(appointmentId, 'confirmed');
       return true;
     } catch (e) {
       debugPrint('markAsTriaged error: $e');

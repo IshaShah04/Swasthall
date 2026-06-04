@@ -4,6 +4,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'theme_colors.dart';
+import 'package:intl/intl.dart';
 
 class AllBookingsScreen extends StatefulWidget {
   const AllBookingsScreen({super.key});
@@ -15,23 +16,122 @@ class AllBookingsScreen extends StatefulWidget {
 class _AllBookingsScreenState extends State<AllBookingsScreen> {
   final supabase = Supabase.instance.client;
   String patientSearch = '';
-  late Stream<List<Map<String, dynamic>>> _bookingsStream;
+  String? _errorMessage;
+  Stream<List<Map<String, dynamic>>> _bookingsStream = const Stream.empty();
 
   @override
   void initState() {
     super.initState();
-    _setupStream();
+    _resolveHospitalIdAndSetupStream();
   }
 
-  void _setupStream() {
-    final user = supabase.auth.currentUser;
 
-    // Logic: Hospital sees everything where hospital_id matches their UID
-    _bookingsStream = supabase
-        .from('lab_appointments')
-        .stream(primaryKey: ['id'])
-        .eq('hospital_id', user?.id ?? '')
-        .order('created_at', ascending: false);
+  DateTime? _parseAppointmentDateTime(Map<String, dynamic> row) {
+    final date = (row['appointment_date'] ?? '').toString().trim();
+    final time = (row['appointment_time'] ?? '').toString().trim();
+    if (date.isEmpty || time.isEmpty) return null;
+
+    final candidates = <String>[
+      'yyyy-MM-dd hh:mm a',
+      'yyyy-MM-dd h:mm a',
+      'yyyy-MM-dd HH:mm',
+      'yyyy-MM-dd HH:mm:ss',
+    ];
+
+    for (final pattern in candidates) {
+      try {
+        return DateFormat(pattern).parseStrict('$date $time');
+      } catch (_) {}
+    }
+
+    return DateTime.tryParse('$date $time');
+  }
+
+  bool _shouldHideExpiredOrStaleScheduled(Map<String, dynamic> row) {
+    final status = (row['status'] ?? '').toString().toLowerCase().trim();
+    final isExpired = row['is_expired'] == true || status == 'expired';
+    if (isExpired) return true;
+    if (status != 'scheduled') return false;
+
+    final appointmentAt = _parseAppointmentDateTime(row);
+    if (appointmentAt == null) return false;
+
+    return DateTime.now().isAfter(
+      appointmentAt.add(const Duration(hours: 24)),
+    );
+  }
+
+  /// Resolves the effective hospital/clinic owner id for the current account.
+
+  /// Resolves the effective hospital/clinic owner id for the current account.
+  /// Hospital/clinic accounts use auth.uid(); linked staff fall back to staff.hospital_id.
+  Future<void> _resolveHospitalIdAndSetupStream() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    String? hospitalId;
+
+    try {
+      final profileRes = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final role = (profileRes?['role'] ?? '').toString().trim().toLowerCase();
+
+      if (role == 'hospital' || role == 'clinic') {
+        hospitalId = user.id;
+      }
+
+      if (hospitalId == null || hospitalId.isEmpty || hospitalId == 'null') {
+        final staffByUser = await supabase
+            .from('staff')
+            .select('hospital_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+        hospitalId = staffByUser?['hospital_id']?.toString();
+      }
+
+      if ((hospitalId == null || hospitalId.isEmpty || hospitalId == 'null') &&
+          (user.email?.trim().isNotEmpty ?? false)) {
+        final staffByEmail = await supabase
+            .from('staff')
+            .select('hospital_id')
+            .eq('email', user.email!.trim())
+            .maybeSingle();
+        hospitalId = staffByEmail?['hospital_id']?.toString();
+      }
+    } catch (e) {
+      debugPrint('AllBookings: hospital_id resolve error: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load hospital bookings. Please try again.';
+        });
+      }
+      return;
+    }
+
+    if (hospitalId == null || hospitalId.isEmpty || hospitalId == 'null') {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Hospital account not linked correctly.';
+        });
+      }
+      return;
+    }
+
+    final resolvedHospitalId = hospitalId;
+    if (!mounted) return;
+    setState(() {
+      _errorMessage = null;
+      _bookingsStream = supabase
+          .from('lab_appointments')
+          .stream(primaryKey: ['id'])
+          .eq('hospital_id', resolvedHospitalId)
+          .order('created_at', ascending: false)
+          .map((rows) => rows.where((row) => !_shouldHideExpiredOrStaleScheduled(row)).toList());
+    });
   }
 
   // --- PDF GENERATION LOGIC ---
@@ -89,8 +189,23 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
 
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Receipt_${booking['patient_name']}',
+      name: 'Receipt_${_sanitizeFilename(booking['patient_name']?.toString() ?? 'Unknown')}',
     );
+  }
+
+
+  String _sanitizeFilename(String name) {
+    final cleaned = name.replaceAll(RegExp(r'[:"/\|?*]+'), '_').trim();
+    return cleaned.isEmpty ? 'Unknown' : cleaned;
+  }
+
+  String _buildScheduleLabel(Map<String, dynamic> booking) {
+    final date = (booking['appointment_date'] ?? '').toString().trim();
+    final time = (booking['appointment_time'] ?? '').toString().trim();
+    if (date.isNotEmpty && time.isNotEmpty) return '$date | $time';
+    if (date.isNotEmpty) return date;
+    if (time.isNotEmpty) return time;
+    return 'Schedule unavailable';
   }
 
   @override
@@ -115,6 +230,23 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
         children: [
           _buildSummaryHeader(),
           _buildSearchBar(),
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Colors.red.shade800),
+                ),
+              ),
+            ),
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _bookingsStream,
@@ -138,6 +270,7 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
                 if (filteredBookings.isEmpty) return _buildEmptyState();
 
                 return ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   itemCount: filteredBookings.length,
@@ -211,8 +344,8 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(value,
-                style: TextStyle(
-                    color: AppColors.cardBg(context),
+                style: const TextStyle(
+                    color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 18)),
             Text(label,
@@ -252,14 +385,14 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(booking['patient_name'] ?? "Unknown",
+                            Text((booking['patient_name'] ?? 'Unknown').toString(),
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold, fontSize: 16)),
                             Text(booking['test_names'] ?? "Lab Test",
                                 style: TextStyle(
                                     fontSize: 13, color: AppColors.textSecondary(context))),
                             Text(
-                                "${booking['appointment_date']} | ${booking['appointment_time']}",
+                                _buildScheduleLabel(booking),
                                 style: TextStyle(
                                     color: AppColors.textMuted(context), fontSize: 12)),
                             const SizedBox(height: 8),
@@ -339,7 +472,7 @@ class _AllBookingsScreenState extends State<AllBookingsScreen> {
           children: [
             const Icon(Icons.receipt_long, size: 48, color: Color(0xFF6366F1)),
             const SizedBox(height: 16),
-            Text("Print Receipt for ${booking['patient_name']}?",
+            Text("Print Receipt for ${(booking['patient_name'] ?? 'Unknown Patient').toString()}?",
                 style:
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             const SizedBox(height: 24),

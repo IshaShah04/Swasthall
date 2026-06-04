@@ -9,6 +9,8 @@ import 'services/queue_widget_service.dart';
 import 'shared_widgets.dart';
 import 'theme_colors.dart';
 import 'web_video_call_page.dart';
+import 'video_call_page.dart';
+import 'package:intl/intl.dart';
 
 class QueueTab extends StatefulWidget {
   final String userRole;
@@ -41,6 +43,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
 
   String? _myZegoUid;
   bool _loadingZegoUid = false;
+  bool _isRefreshing = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -55,11 +58,10 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
   @override
   void didUpdateWidget(covariant QueueTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.filterId != widget.filterId) {
-      // _initBookingsStream() assigns to _bookingsStream — call it first,
-      // then trigger a single rebuild so the StreamBuilder picks up the new stream.
-      _initBookingsStream();
-      setState(() {});
+    if (oldWidget.filterId != widget.filterId ||
+        oldWidget.userRole != widget.userRole ||
+        oldWidget.selectedFilter != widget.selectedFilter) {
+      unawaited(_refreshQueue());
     }
   }
 
@@ -76,6 +78,43 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
   bool _isNurse() => widget.userRole.toLowerCase() == "nurse";
   bool _isTechnician() => widget.userRole.toLowerCase() == "technician";
 
+
+  DateTime? _parseAppointmentDateTime(Map<String, dynamic> row) {
+    final date = (row['appointment_date'] ?? '').toString().trim();
+    final time = (row['appointment_time'] ?? '').toString().trim();
+    if (date.isEmpty || time.isEmpty) return null;
+
+    final candidates = <String>[
+      'yyyy-MM-dd hh:mm a',
+      'yyyy-MM-dd h:mm a',
+      'yyyy-MM-dd HH:mm',
+      'yyyy-MM-dd HH:mm:ss',
+    ];
+
+    for (final pattern in candidates) {
+      try {
+        return DateFormat(pattern).parseStrict('$date $time');
+      } catch (_) {}
+    }
+
+    return DateTime.tryParse('$date $time');
+  }
+
+  bool _shouldHideExpiredOrStaleScheduled(Map<String, dynamic> row) {
+    final status = (row['status'] ?? '').toString().toLowerCase().trim();
+    final isExpired = row['is_expired'] == true || status == 'expired';
+    if (isExpired) return true;
+    if (status != 'scheduled') return false;
+
+    final appointmentAt = _parseAppointmentDateTime(row);
+    if (appointmentAt == null) return false;
+
+    return DateTime.now().isAfter(
+      appointmentAt.add(const Duration(hours: 24)),
+    );
+  }
+
+
   // ───────────────────────────────────────────────────────────────────────
   // Stream
   // ───────────────────────────────────────────────────────────────────────
@@ -83,11 +122,14 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
   void _initBookingsStream() {
     if (widget.filterId != null) {
       if (_isTechnician()) {
+        // Technician queue reads from lab_appointments table.
+        // professional_id = technician's own staff.id (passed as filterId
+        // from health_vault_screen._filterId, NOT _assignedLab).
         _bookingsStream = _supabase
-            .from('bookings')
+            .from('lab_appointments')
             .stream(primaryKey: ['id'])
-            .eq('lab_category', widget.filterId!)
-            .order('id', ascending: true);
+            .eq('professional_id', widget.filterId!)
+            .order('created_at', ascending: true);
       } else {
         _bookingsStream = _supabase
             .from('bookings')
@@ -101,6 +143,37 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
           .stream(primaryKey: ['id'])
           .order('id', ascending: true);
     }
+  }
+
+  Future<void> _refreshQueue() async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+    try {
+      await _loadMyZegoUid();
+      _initBookingsStream();
+      if (mounted) setState(() {});
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    } finally {
+      _isRefreshing = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  Widget _buildRefreshableFill(Widget child) {
+    return RefreshIndicator(
+      onRefresh: _refreshQueue,
+      color: _brandIndigo,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.55,
+            child: child,
+          ),
+        ],
+      ),
+    );
   }
 
   // ───────────────────────────────────────────────────────────────────────
@@ -202,7 +275,10 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
     try {
       final Map<String, dynamic> update = {'status': status.toLowerCase()};
       if (nurseSeen) update['nurse_seen'] = true;
-      await _supabase.from('bookings').update(update).eq('id', id);
+      // Technician status changes go to lab_appointments, others to bookings
+      final String table = _isTechnician() ? 'lab_appointments' : 'bookings';
+      await _supabase.from(table).update(update).eq('id', id);
+      await _refreshQueue();
     } catch (e) {
       _showError("Action failed: $e");
     }
@@ -213,6 +289,26 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
+  }
+
+  Future<void> _invokeNotifyIncomingCall(Map<String, dynamic> body) async {
+    try {
+      final refreshed = await _supabase.auth.refreshSession();
+      final token = refreshed.session?.accessToken ??
+          _supabase.auth.currentSession?.accessToken;
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Missing session token');
+      }
+
+      await _supabase.functions.invoke(
+        'notify-incoming-call',
+        headers: {'Authorization': 'Bearer $token'},
+        body: body,
+      );
+    } catch (e) {
+      debugPrint('notify-incoming-call failed: $e');
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────────
@@ -237,20 +333,23 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
     final String patientName =
         (appt['patient_name'] ?? appt['full_name'] ?? "Patient").toString();
 
-    final String providerZegoUid =
-        ((appt['provider_zego_uid'] ?? _myZegoUid) ?? '').toString().trim();
-
-    final String resolvedProviderZegoUid = providerZegoUid.isNotEmpty
-        ? providerZegoUid
+    // The caller must use their own profiles.zego_uid. The secured zego-token
+    // function rejects tokens requested for another user's ZEGO id.
+    final String callerZegoUid = ((_myZegoUid ?? '').toString().trim().isNotEmpty)
+        ? _myZegoUid!.trim()
         : ((await _readProfileZegoUid(
                 _supabase.auth.currentUser?.id.toString() ?? '',
               )) ??
             '');
 
-    if (resolvedProviderZegoUid.isEmpty) {
+    if (callerZegoUid.isEmpty) {
       _showError("Your profiles.zego_uid is missing. Cannot place call.");
       return;
     }
+
+    // Keep the booking's stored provider_zego_uid stable for legacy room records.
+    final String providerZegoUid =
+        ((appt['provider_zego_uid'] ?? callerZegoUid) ?? '').toString().trim();
 
     String patientZegoUid =
         (appt['patient_zego_uid'] ?? '').toString().trim();
@@ -277,12 +376,13 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
       bookingId: rawBookingId,
       roomId: normalizedRoomId,
       patientZegoUid: patientZegoUid,
-      providerZegoUid: resolvedProviderZegoUid,
+      providerZegoUid: providerZegoUid.isNotEmpty ? providerZegoUid : callerZegoUid,
     );
 
     // ── Set ringing status ────────────────────────────────────────────────
     final String ringingStatus = asNurse ? 'nurse_calling' : 'calling';
     await _updateStatus(rawBookingId, ringingStatus, nurseSeen: asNurse);
+    await _refreshQueue();
     if (!mounted) return;
 
     // ── Update nurse home screen widget when nurse starts pre-consultation ─
@@ -324,9 +424,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
       // FCM push bypasses that — it wakes the phone like a WhatsApp call.
       // notify-incoming-call reads the patient's fcm_token from profiles
       // and sends a high-priority FCM data message via FCM V1 API.
-      unawaited(_supabase.functions.invoke(
-        'notify-incoming-call',
-        body: {
+      unawaited(_invokeNotifyIncomingCall( {
           'callee_id':    patientAuthUid,
           'caller_id':    me.id,
           'caller_name':  myName,
@@ -356,7 +454,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
         MaterialPageRoute(
           builder: (_) => WebVideoCallPage(
             callID:           normalizedRoomId,
-            userID:           resolvedProviderZegoUid,
+            userID:           callerZegoUid,
             userName:         myName,
             patientID:        patientAuthUid,
             patientName:      patientName,
@@ -374,8 +472,6 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
 
     final me = _supabase.auth.currentUser;
 
-    // FIXED (CodeRabbit): Start Zego invite first — only signal Realtime
-    // after send() succeeds so we don't create ghost calls if Zego fails.
     try {
       await ZegoUIKitPrebuiltCallInvitationService().send(
         invitees: [ZegoCallUser(patientZegoUid, patientName)],
@@ -392,16 +488,21 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
       return;
     }
 
-    // Zego succeeded — now signal via Realtime for web patients.
-    // Mobile patients already get Zego push; web patients get this signal.
+    // Also signal via Realtime after Zego succeeds so web patients do not
+    // receive a call that the caller failed to place.
     if (me != null) {
-      unawaited(RealtimeCallService().initiateCall(
-        callId:     normalizedRoomId,
-        callerId:   me.id,
+      final realtimeResult = await RealtimeCallService().initiateCall(
+        callId: normalizedRoomId,
+        callerId: me.id,
         callerName: me.userMetadata?['full_name']?.toString() ?? 'Doctor',
-        calleeId:   patientAuthUid,
-        bookingId:  rawBookingId,
-      ));
+        calleeId: patientAuthUid,
+        bookingId: rawBookingId,
+      );
+      if (realtimeResult == null) {
+        debugPrint(
+          'Realtime signalling failed after successful Zego invite: room=$normalizedRoomId, booking=$rawBookingId',
+        );
+      }
     }
 
     // ── FCM notification push for killed-app wake-up ──────────────────────
@@ -411,9 +512,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
     // This is what makes ringing work on killed app — same as web→phone path.
     if (me != null) {
       final myName = me.userMetadata?['full_name']?.toString() ?? 'Doctor';
-      unawaited(_supabase.functions.invoke(
-        'notify-incoming-call',
-        body: {
+      unawaited(_invokeNotifyIncomingCall( {
           'callee_id':    patientAuthUid,
           'caller_id':    me.id,
           'caller_name':  myName,
@@ -434,7 +533,26 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
       ),
     );
 
-    // ZEGO opens the doctor's call UI automatically via requireConfig in main.dart
+
+    // Open the caller into the managed mobile call page so onCallEnd updates
+    // the booking to completed for doctors and confirmed for nurse triage.
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VideoCallPage(
+          callID: _buildRoomId(appt),
+          userID: callerZegoUid,
+          userName: me?.userMetadata?['full_name']?.toString() ?? 'Doctor',
+          patientID: patientAuthUid,
+          patientName: patientName,
+          professionalRole: asNurse ? 'nurse' : 'doctor',
+          appointmentData: appt,
+          bookingId: rawBookingId,
+          tabController: widget.tabController,
+        ),
+      ),
+    );
   }
 
   // ───────────────────────────────────────────────────────────────────────
@@ -457,7 +575,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
             stream: _bookingsStream,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return Center(child: Text("Access Error: ${snapshot.error}"));
+                return _buildRefreshableFill(Center(child: Text("Access Error: ${snapshot.error}")));
               }
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
@@ -469,9 +587,9 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
 
               if (data.isEmpty) {
                 if ((_isNurse() || _isTechnician()) && widget.filterId == null) {
-                  return _buildEmptyState(message: "Waiting for Assignment...");
+                  return _buildRefreshableFill(_buildEmptyState(message: "Waiting for Assignment..."));
                 }
-                return _buildEmptyState();
+                return _buildRefreshableFill(_buildEmptyState());
               }
 
               final List<Map<String, dynamic>> activeBookings =
@@ -480,11 +598,11 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
                     e['status']?.toString().toLowerCase() ?? '';
                 final bool matchesStatus = _isTechnician()
                     ? [
+                        'scheduled',
                         'confirmed',
                         'pending_lab',
                         'collecting_sample',
                         'processing',
-                        'scheduled',
                       ].contains(status)
                     : [
                         'pending',
@@ -501,39 +619,44 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
                         .toString()
                         .toLowerCase();
 
+                if (_shouldHideExpiredOrStaleScheduled(e)) return false;
                 return matchesStatus &&
                     patientName.contains(_searchQuery.toLowerCase());
               }).toList();
 
-              if (activeBookings.isEmpty) return _buildEmptyState();
+              if (activeBookings.isEmpty) return _buildRefreshableFill(_buildEmptyState());
 
-              return ListView.builder(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                itemCount: activeBookings.length,
-                itemBuilder: (context, index) {
-                  final Map<String, dynamic> appt = activeBookings[index];
-                  final String status =
-                      appt['status']?.toString().toLowerCase() ?? '';
-                  final bool nurseSeen = appt['nurse_seen'] ?? false;
-                  final bool isLive = _isTechnician()
-                      ? status == 'processing'
-                      : [
-                          'consulting',
-                          'in_progress',
-                          'nurse_calling',
-                          'calling',
-                        ].contains(status);
+              return RefreshIndicator(
+                onRefresh: _refreshQueue,
+                color: _brandIndigo,
+                child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  itemCount: activeBookings.length,
+                  itemBuilder: (context, index) {
+                    final Map<String, dynamic> appt = activeBookings[index];
+                    final String status =
+                        appt['status']?.toString().toLowerCase() ?? '';
+                    final bool nurseSeen = appt['nurse_seen'] ?? false;
+                    final bool isLive = _isTechnician()
+                        ? status == 'processing'
+                        : [
+                            'consulting',
+                            'in_progress',
+                            'nurse_calling',
+                            'calling',
+                          ].contains(status);
 
-                  return _buildQueueCard(
-                    appt,
-                    index,
-                    isLive,
-                    nurseSeen,
-                    status,
-                    currentUserId ?? '',
-                  );
-                },
+                    return _buildQueueCard(
+                      appt,
+                      index,
+                      isLive,
+                      nurseSeen,
+                      status,
+                      currentUserId ?? '',
+                    );
+                  },
+                ),
               );
             },
           ),
@@ -555,6 +678,17 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
         decoration: InputDecoration(
           hintText: "Search patient name...",
           prefixIcon: const Icon(Icons.search_rounded, size: 20),
+          suffixIcon: IconButton(
+            tooltip: 'Refresh queue',
+            onPressed: _isRefreshing ? null : _refreshQueue,
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded, size: 20),
+          ),
           filled: true,
           fillColor: AppColors.inputFill(context),
           contentPadding: const EdgeInsets.symmetric(vertical: 0),
@@ -583,6 +717,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
     String status,
     String userId,
   ) {
+    // lab_appointments uses user_id for patient; bookings uses patient_id
     final String patientId =
         (appt['patient_id'] ?? appt['user_id'] ?? '').toString();
     final String patientName =
@@ -648,7 +783,11 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
                           ? Icons.biotech_rounded
                           : Icons.access_time_filled_rounded,
                       _isTechnician()
-                          ? (appt['lab_category'] ?? "General Lab")
+                          ? ((appt['test_names']?.toString().trim().isNotEmpty == true)
+                              ? appt['test_names']
+                              : ((appt['lab_category']?.toString().trim().isNotEmpty == true)
+                                  ? appt['lab_category']
+                                  : "Lab Test"))
                           : (appt['appointment_time'] ?? "Waitlist"),
                     ),
                   ],
@@ -671,15 +810,25 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
   ) {
     // ── Technician ────────────────────────────────────────────────────────
     if (_isTechnician()) {
-      String btnText = "Collect Sample";
-      Color btnColor = _brandIndigo;
+      // Status cycle: scheduled → collecting_sample → processing → completed
+      String btnText;
+      Color btnColor;
+      String? nextStatus;
 
-      if (status == 'collecting_sample') {
+      if (['scheduled', 'confirmed', 'pending_lab'].contains(status)) {
+        btnText = "Collect Sample";
+        btnColor = _brandIndigo;
+        nextStatus = 'collecting_sample';
+      } else if (status == 'collecting_sample') {
         btnText = "Start Test";
         btnColor = Colors.orange;
+        nextStatus = 'processing';
       } else if (status == 'processing') {
-        btnText = "In Progress";
-        btnColor = _labAmber;
+        btnText = "Complete Test";
+        btnColor = const Color(0xFF10B981); // green
+        nextStatus = 'completed';
+      } else {
+        return const SizedBox.shrink(); // completed — disappears from queue
       }
 
       return ElevatedButton(
@@ -689,13 +838,7 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           padding: const EdgeInsets.symmetric(horizontal: 12),
         ),
-        onPressed: () {
-          if (['confirmed', 'pending_lab', 'scheduled'].contains(status)) {
-            _updateStatus(appt['id'].toString(), 'collecting_sample');
-          } else if (status == 'collecting_sample') {
-            _updateStatus(appt['id'].toString(), 'processing');
-          }
-        },
+        onPressed: () => _updateStatus(appt['id'].toString(), nextStatus!),
         child: Text(
           btnText,
           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),

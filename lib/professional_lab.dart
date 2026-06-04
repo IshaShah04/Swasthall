@@ -12,17 +12,32 @@ class ProfessionalLabScreen extends StatefulWidget {
 
 class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
   final supabase = Supabase.instance.client;
-
-  // Real-time stream from Supabase
-  final Stream<List<Map<String, dynamic>>> _labsStream = Supabase
-      .instance
-      .client
-      .from('lab_tests')
-      .stream(primaryKey: ['id'])
-      .order('name');
+  late Future<List<Map<String, dynamic>>> _labsFuture;
 
   final Color primaryColor = const Color(0xFF6366F1);
   final Color textDark = const Color(0xFF1E293B);
+
+  @override
+  void initState() {
+    super.initState();
+    _labsFuture = _fetchLabs();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchLabs() async {
+    final data = await Supabase.instance.client
+        .from('lab_tests')
+        .select()
+        .order('name');
+    return (data as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<void> _refreshLabs() async {
+    final future = _fetchLabs();
+    if (mounted) setState(() => _labsFuture = future);
+    await future;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,11 +59,13 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.search, color: AppColors.textMuted(context), size: 20),
-                    SizedBox(width: 8),
+                    Icon(Icons.search,
+                        color: AppColors.textMuted(context), size: 20),
+                    const SizedBox(width: 8),
                     Text(
                       "Search lab tests...",
-                      style: TextStyle(color: AppColors.textMuted(context), fontSize: 14),
+                      style: TextStyle(
+                          color: AppColors.textMuted(context), fontSize: 14),
                     ),
                   ],
                 ),
@@ -61,56 +78,61 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
                 border: Border.all(color: Colors.black12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.tune, color: AppColors.textSecondary(context), size: 20),
+              child:
+                  Icon(Icons.tune, color: AppColors.textSecondary(context), size: 20),
             ),
           ],
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Popular Lab Tests",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: textDark,
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _labsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error}"));
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final labs = snapshot.data!;
+
+          return RefreshIndicator(
+            onRefresh: _refreshLabs,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Popular Lab Tests",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      childAspectRatio: 0.78,
+                    ),
+                    itemCount: labs.length,
+                    itemBuilder: (context, index) {
+                      final test = labs[index];
+                      return _buildLabCard(test);
+                    },
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _labsStream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text("Error: ${snapshot.error}"));
-                }
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final labs = snapshot.data!;
-
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 0.78,
-                  ),
-                  itemCount: labs.length,
-                  itemBuilder: (context, index) {
-                    final test = labs[index];
-                    return _buildLabCard(test);
-                  },
-                );
-              },
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -133,7 +155,6 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Icon/Image Section
           Center(
             child: Container(
               height: 60,
@@ -147,8 +168,10 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
                   test['image_url'] ??
                       "https://api.dicebear.com/7.x/shapes/svg?seed=${test['name']}",
                   fit: BoxFit.cover,
-                  loadingBuilder: (_, child, progress) =>
-                      progress == null ? child : ShimmerBox(width: 60, height: 60, borderRadius: 30),
+                  loadingBuilder: (_, child, progress) => progress == null
+                      ? child
+                      : const ShimmerBox(
+                          width: 60, height: 60, borderRadius: 30),
                   errorBuilder: (context, error, stackTrace) =>
                       Icon(Icons.biotech, color: primaryColor),
                 ),
@@ -156,7 +179,6 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          // Name
           Text(
             test['name'] ?? "Lab Test",
             style: TextStyle(
@@ -168,23 +190,20 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
-          // Price (Live updating)
           Text(
             "\$${test['price']}",
             style: const TextStyle(
-              color: Color(0xFF10B981), // Emerald 500
+              color: Color(0xFF10B981),
               fontWeight: FontWeight.bold,
               fontSize: 16,
             ),
           ),
           const Divider(height: 20),
-          // Booking Info
           _infoRow(
             Icons.calendar_today_outlined,
             "Bookings: ${test['bookings'] ?? 0}",
           ),
           const SizedBox(height: 6),
-          // Location Info
           _infoRow(
             Icons.location_on_outlined,
             test['location'] ?? "Main Floor",
@@ -202,11 +221,7 @@ class _ProfessionalLabScreenState extends State<ProfessionalLabScreen> {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
-              color: Color(0xFF64748B),
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

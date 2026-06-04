@@ -35,12 +35,16 @@ class GlobalSearchBar extends StatelessWidget {
           prefixIcon: const Icon(Icons.search, color: Color(0xFF6366F1)),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 15),
-          suffixIcon: controller.text.isNotEmpty 
-            ? IconButton(
+          suffixIcon: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              if (value.text.isEmpty) return const SizedBox.shrink();
+              return IconButton(
                 icon: Icon(Icons.cancel, color: AppColors.textMuted(context)),
                 onPressed: () => controller.clear(),
-              )
-            : null,
+              );
+            },
+          ),
         ),
         onSubmitted: onSearch,
       ),

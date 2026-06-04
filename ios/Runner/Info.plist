@@ -72,5 +72,19 @@
 		<true/>
 		<key>FirebaseCrashlyticsCollectionEnabled</key>
         <true/>
-	</dict>
+	
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.raunak.swasthall</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>swasthall</string>
+			</array>
+		</dict>
+	</array>
+</dict>
 </plist>

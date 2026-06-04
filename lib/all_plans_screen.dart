@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'plan_details_screen.dart'; // Ensure this matches your filename
+import 'plan_details_screen.dart';
 import 'widgets/safe_network_image.dart';
 import 'theme_colors.dart';
 
@@ -12,16 +12,33 @@ class AllPlansScreen extends StatefulWidget {
 }
 
 class _AllPlansScreenState extends State<AllPlansScreen> {
-  late final Stream<List<Map<String, dynamic>>> _plansStream;
+  final supabase = Supabase.instance.client;
+  late Future<List<Map<String, dynamic>>> _plansFuture;
+  String searchQuery = "";
 
   @override
   void initState() {
     super.initState();
-    _plansStream = supabase.from('insurance_plans').stream(primaryKey: ['id']);
+    _plansFuture = _fetchPlans();
   }
 
-  final supabase = Supabase.instance.client;
-  String searchQuery = "";
+  Future<List<Map<String, dynamic>>> _fetchPlans() async {
+    final data = await supabase
+        .from('insurance_plans')
+        .select('id, name, hospital_name, description, benefits, price, discount, icon_url, type')
+        .limit(200);
+    return (data as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<void> _refreshPlans() async {
+    final future = _fetchPlans();
+    if (mounted) {
+      setState(() => _plansFuture = future);
+    }
+    await future;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,8 +49,10 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
       appBar: AppBar(
         title: const Text(
           "Health Plans & Insurance",
-          style:
-              TextStyle(color: Color(0xFF1F2937), fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Color(0xFF1F2937),
+            fontWeight: FontWeight.bold,
+          ),
         ),
         backgroundColor: AppColors.cardBg(context),
         elevation: 0,
@@ -42,7 +61,6 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
       ),
       body: Column(
         children: [
-          // 1. Search Bar Area
           Container(
             color: AppColors.cardBg(context),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -50,8 +68,9 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
               onChanged: (val) =>
                   setState(() => searchQuery = val.toLowerCase()),
               decoration: InputDecoration(
-                hintText: "Search by plan or hospital name...",
-                prefixIcon: const Icon(Icons.search_rounded, color: brandBlue),
+                hintText: "Search by plan name...",
+                prefixIcon:
+                    const Icon(Icons.search_rounded, color: brandBlue),
                 filled: true,
                 fillColor: AppColors.inputFill(context),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
@@ -62,33 +81,63 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
               ),
             ),
           ),
-
-          // 2. Dynamic Grouped List
           Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _plansStream,
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _plansFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
+                if (snapshot.hasError) {
+                  return RefreshIndicator(
+                    onRefresh: _refreshPlans,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.5,
+                          child: Center(
+                            child: Text('Error loading plans: ${snapshot.error}'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
 
                 final filteredData = snapshot.data?.where((plan) {
                       final name = plan['name'].toString().toLowerCase();
-                      return name.contains(searchQuery);
+                      final hospital = plan['hospital_name']?.toString().toLowerCase() ?? '';
+                      return name.contains(searchQuery) || hospital.contains(searchQuery);
                     }).toList() ??
                     [];
 
                 if (filteredData.isEmpty) {
-                  return _buildEmptyState();
+                  return RefreshIndicator(
+                    onRefresh: _refreshPlans,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.5,
+                          child: _buildEmptyState(),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: filteredData.length,
-                  itemBuilder: (context, index) {
-                    final plan = filteredData[index];
-                    return _buildWidePlanCard(context, plan);
-                  },
+                return RefreshIndicator(
+                  onRefresh: _refreshPlans,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    itemCount: filteredData.length,
+                    itemBuilder: (context, index) {
+                      final plan = filteredData[index];
+                      return _buildWidePlanCard(context, plan);
+                    },
+                  ),
                 );
               },
             ),
@@ -99,11 +148,41 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
   }
 
   Widget _buildWidePlanCard(BuildContext context, Map<String, dynamic> plan) {
+    final planId = plan['id'];
+    final planImage = ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: () {
+        final iconUrl = plan['icon_url']?.toString();
+        return (iconUrl != null && iconUrl.isNotEmpty)
+            ? Image.network(
+                iconUrl,
+                height: 64,
+                width: 64,
+                fit: BoxFit.cover,
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : const ShimmerBox(width: 64, height: 64),
+                errorBuilder: (c, e, s) => Container(
+                  height: 64,
+                  width: 64,
+                  color: AppColors.indigoTint(context),
+                  child: const Icon(Icons.shield, color: Color(0xFF6366F1)),
+                ),
+              )
+            : Container(
+                height: 64,
+                width: 64,
+                color: AppColors.indigoTint(context),
+                child: const Icon(Icons.shield, color: Color(0xFF6366F1)),
+              );
+      }(),
+    );
+
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => PlanDetailsScreen(plan: plan)),
-      ),
+      ).then((_) => _refreshPlans()),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),
@@ -121,36 +200,12 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
         ),
         child: Row(
           children: [
-            Hero(
-              tag: 'plan_icon_${plan["id"]}',
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: () {
-                  final iconUrl = plan['icon_url']?.toString();
-                  return (iconUrl != null && iconUrl.isNotEmpty)
-                      ? Image.network(
-                          iconUrl,
-                          height: 64,
-                          width: 64,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (_, child, progress) =>
-                              progress == null ? child : const ShimmerBox(width: 64, height: 64),
-                          errorBuilder: (c, e, s) => Container(
-                            height: 64,
-                            width: 64,
-                            color: AppColors.indigoTint(context),
-                            child: const Icon(Icons.shield, color: Color(0xFF6366F1)),
-                          ),
-                        )
-                      : Container(
-                          height: 64,
-                          width: 64,
-                          color: AppColors.indigoTint(context),
-                          child: const Icon(Icons.shield, color: Color(0xFF6366F1)),
-                        );
-                }(),
-              ),
-            ),
+            planId == null
+                ? planImage
+                : Hero(
+                    tag: 'plan_icon_$planId',
+                    child: planImage,
+                  ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -166,11 +221,12 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                     plan['description'] ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: AppColors.textMuted(context), fontSize: 13),
+                    style: TextStyle(
+                        color: AppColors.textMuted(context), fontSize: 13),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Rs. ${plan['price']}",
+                    "Rs. ${plan['price'] ?? '—'}",
                     style: const TextStyle(
                       color: Color(0xFF6366F1),
                       fontWeight: FontWeight.w800,
@@ -180,7 +236,8 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: AppColors.textMuted(context)),
+            Icon(Icons.chevron_right_rounded,
+                color: AppColors.textMuted(context)),
           ],
         ),
       ),
@@ -194,7 +251,8 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
         children: [
           Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          Text("No plans found", style: TextStyle(color: AppColors.textMuted(context))),
+          Text("No plans found",
+              style: TextStyle(color: AppColors.textMuted(context))),
         ],
       ),
     );

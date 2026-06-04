@@ -1,237 +1,112 @@
-// supabase/functions/gemini-prescription-proxy/index.ts
-//
-// Gemini Vision call to read handwritten prescriptions.
-// Extracts all medicines, dosage, frequency and suggested reminder time.
-//
-// Auth: standard Supabase pattern — anon key + user JWT → getUser().
-// This matches what the Supabase Flutter client sends via functions.invoke().
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { checkRateLimit } from '../_shared/rateLimit.ts'
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-const GEMINI_MODEL = "gemini-2.5-flash";
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  try {
-    // ── Auth ──────────────────────────────────────────────────────────────────
-    // IMPORTANT: Use ANON_KEY + user JWT, NOT SERVICE_ROLE_KEY.
-    // SERVICE_ROLE_KEY causes "Invalid JWT" because it creates a key-type
-    // mismatch. The anon key + forwarded Authorization header is the correct
-    // Supabase edge function auth pattern.
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing Authorization header" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,   // ← ANON_KEY, not SERVICE_ROLE_KEY
-      {
-        global: { headers: { Authorization: authHeader } },
-        auth: { persistSession: false },
-      }
-    );
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser();
-
-    if (authError || !user) {
-      console.error("Auth failed:", authError?.message);
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // ── Parse body ────────────────────────────────────────────────────────────
-    let body: Record<string, unknown>;
-    try {
-      body = await req.json();
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Flutter sends: { imageBase64: "..." }
-    const imageBase64 = body.imageBase64 as string | undefined;
-    if (!imageBase64 || imageBase64.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Missing imageBase64 in request body" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) {
-      return new Response(
-        JSON.stringify({ error: "GEMINI_API_KEY not configured on server" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // ── Gemini Vision prompt ──────────────────────────────────────────────────
-    const prompt = `You are a clinical pharmacist assistant specialising in Nepal medications.
-Analyse this doctor's prescription image carefully.
-
-Extract ALL medications written on it, even if the handwriting is difficult.
-
-Return ONLY a JSON object in this exact format — no markdown, no explanation:
-{
-  "medicines": [
-    {
-      "name": "medicine name as written",
-      "generic": "generic/active ingredient name if identifiable",
-      "dosage": "dose strength e.g. 500mg",
-      "frequency": "e.g. twice daily, TDS, OD",
-      "duration": "e.g. 5 days, 1 week",
-      "instructions": "e.g. after meals, with water"
-    }
-  ],
-  "reminder_hour": 8,
-  "reminder_minute": 0,
-  "notes": "any other clinical instructions e.g. rest, diet, follow-up"
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-Rules:
-- Include every medicine visible, even vitamins and supplements
-- For reminder_hour/minute: use the first morning dose time if specified, default 8:00 AM
-- Use common Nepal brand names as written (Napa, Cetamol, Flexon, Amoxil, etc.)
-- If a field is not readable or not specified, use null
-- Do NOT include patient name, age, address, or any identifying information
-- Return only the JSON object, nothing else`;
+const GEMINI_MODEL = 'gemini-2.0-flash'
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+const MAX_BASE64_CHARS = 8_000_000 // roughly <= 6MB binary image
 
-    // ── Gemini Vision API ─────────────────────────────────────────────────────
-    const geminiUrl =
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' },
+  })
+}
 
-    const geminiResponse = await fetch(geminiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+function detectMimeType(imageBase64: string): string {
+  if (imageBase64.startsWith('/9j/')) return 'image/jpeg'
+  if (imageBase64.startsWith('iVBOR')) return 'image/png'
+  if (imageBase64.startsWith('UklG')) return 'image/webp'
+  return 'image/jpeg'
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+
+  try {
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Missing or invalid Authorization header' }, 401)
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    const supabase = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: authHeader } },
+    })
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return json({ error: 'Unauthorized' }, 401)
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
+    const rl = await checkRateLimit(supabaseAdmin, user.id, 'gemini-prescription-proxy', 12)
+    if (!rl.allowed) return json({ error: 'Too many prescription scans. Please wait a minute.' }, 429)
+
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>
+    const imageBase64 = String(body.imageBase64 ?? '').trim()
+    if (!imageBase64) return json({ error: 'imageBase64 is required' }, 400)
+    if (imageBase64.length > MAX_BASE64_CHARS) return json({ error: 'Image is too large. Please upload a smaller image.' }, 413)
+
+    const geminiKey = Deno.env.get('GEMINI_API_KEY')
+    if (!geminiKey) return json({ error: 'Gemini API not configured on server' }, 500)
+
+    const prompt = `You are a medical prescription reader.
+Carefully read this prescription image and extract medicines only from visible prescription text.
+Do not guess unclear medicines. If unreadable, leave fields blank or say unclear.
+Return ONLY valid JSON with this structure:
+{
+  "medicines": [{"name":"","generic":"","dosage":"","frequency":"","duration":"","instructions":""}],
+  "notes":"",
+  "doctorName":"",
+  "patientName":""
+}`
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 20_000)
+
+    const geminiRes = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent?key=${geminiKey}`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: "image/jpeg",
-                  data: imageBase64,
-                },
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 1024,
-          responseMimeType: "application/json",
-        },
+        contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: detectMimeType(imageBase64), data: imageBase64 } }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 2048, responseMimeType: 'application/json' },
       }),
-    });
+    }).finally(() => clearTimeout(timeout))
 
-    if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      console.error("Gemini error:", geminiResponse.status, errText);
-      return new Response(
-        JSON.stringify({ error: `Gemini API error: ${geminiResponse.status}`, detail: errText }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text().catch(() => '')
+      console.error('Gemini API error:', geminiRes.status, errText.slice(0, 500))
+      return json({ error: 'Prescription AI service failed.' }, 502)
     }
 
-    const geminiData = await geminiResponse.json();
-    const rawText: string =
-      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const geminiData = await geminiRes.json()
+    const rawText: string = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    if (!rawText) return json({ medicines: [], notes: 'No response from AI' })
 
-    if (!rawText) {
-      return new Response(
-        JSON.stringify({ error: "Gemini returned empty response" }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    let parsed: Record<string, unknown>
+    try { parsed = JSON.parse(cleaned) } catch {
+      console.error('Failed to parse Gemini JSON:', cleaned.slice(0, 500))
+      return json({ medicines: [], notes: 'Could not parse prescription' })
     }
 
-    // Strip markdown fences if model ignores responseMimeType
-    const cleaned = rawText
-      .replace(/```json\s*/gi, "")
-      .replace(/```\s*/g, "")
-      .trim();
+    supabaseAdmin.from('prescription_scans').insert({
+      user_id: user.id,
+      medicines_count: Array.isArray(parsed.medicines) ? parsed.medicines.length : 0,
+      scanned_at: new Date().toISOString(),
+    }).then(() => {}).catch(() => {})
 
-    // Extract JSON object — guard against any preamble text
-    const jsonStart = cleaned.indexOf("{");
-    const jsonEnd = cleaned.lastIndexOf("}") + 1;
-    const jsonStr =
-      jsonStart !== -1 && jsonEnd > jsonStart
-        ? cleaned.slice(jsonStart, jsonEnd)
-        : cleaned;
-
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      console.error("JSON parse failed:", cleaned);
-      return new Response(
-        JSON.stringify({
-          medicines: [],
-          raw_text: rawText,
-          error: "Could not parse prescription — try a clearer photo",
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const medCount = (parsed.medicines as unknown[] | undefined)?.length ?? 0;
-    console.log(`Extracted ${medCount} medicines for user=${user.id}`);
-
-    return new Response(JSON.stringify(parsed), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-
-  } catch (err) {
-    console.error("Unhandled error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.log(`gemini-prescription-proxy: user=${user.id}`)
+    return json(parsed)
+  } catch (e) {
+    console.error('gemini-prescription-proxy fatal error:', e)
+    return json({ error: 'Internal server error' }, 500)
   }
-});
+})

@@ -1,16 +1,13 @@
-import 'dart:typed_data';
-
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'email_signup_otp_screen.dart';
 import 'legal_viewer_screen.dart';
-import 'navigation_wrapper.dart';
 import 'registration_constants.dart';
 import 'registration_legal_widgets.dart';
 import 'registration_shared_widgets.dart';
-import 'supabase_handler.dart';
 import 'theme_colors.dart';
 
 class RegistrationPage extends StatefulWidget {
@@ -22,7 +19,6 @@ class RegistrationPage extends StatefulWidget {
 
 class _RegistrationPageState extends State<RegistrationPage> {
   final _supabase = Supabase.instance.client;
-  final _handler = SupabaseHandler();
 
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -73,6 +69,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
     if (file != null) {
       final bytes = await file.readAsBytes();
+      if (!mounted) return;
       setState(() {
         _profilePhoto = file;
         _profilePhotoBytes = bytes;
@@ -89,6 +86,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
     if (file != null) {
       final bytes = await file.readAsBytes();
+      if (!mounted) return;
       setState(() {
         _uploadedDocs[docKey] = file;
         _uploadedDocBytes[docKey] = bytes;
@@ -100,27 +98,27 @@ class _RegistrationPageState extends State<RegistrationPage> {
     if (_emailCtrl.text.trim().isEmpty ||
         _passwordCtrl.text.trim().isEmpty ||
         _nameCtrl.text.trim().isEmpty) {
-      _showError("Please fill in all required fields.");
+      _showError('Please fill in all required fields.');
       return;
     }
 
     if (_selectedRole == 'patient' && _phoneCtrl.text.trim().isEmpty) {
-      _showError("Patients must provide a phone number.");
+      _showError('Patients must provide a phone number.');
       return;
     }
 
     if (_isProfessional && _licenseCtrl.text.trim().isEmpty) {
-      _showError("Please enter your registration / license number.");
+      _showError('Please enter your registration / license number.');
       return;
     }
 
     if (!_allRequiredDocsUploaded) {
-      _showError("Please upload all required documents before registering.");
+      _showError('Please upload all required documents before registering.');
       return;
     }
 
     if (!_allConsentsGiven) {
-      _showError("Please accept all required consents to continue.");
+      _showError('Please accept all required consents to continue.');
       return;
     }
 
@@ -131,119 +129,48 @@ class _RegistrationPageState extends State<RegistrationPage> {
       final password = _passwordCtrl.text.trim();
       final fullName = _nameCtrl.text.trim();
 
-      // FIX: Do NOT silently sign in when a user is "already registered".
-      // This was a credential-stuffing / account-takeover vector.
-      // Now we surface the error clearly and let the user go to the login page.
       final res = await _supabase.auth.signUp(
         email: email,
         password: password,
+        emailRedirectTo: kIsWeb ? Uri.base.origin : 'swasthall://login-callback/',
         data: {
           'full_name': fullName,
           'role': _selectedRole,
         },
       );
 
-      final user = res.user;
-
-      if (user == null) {
-        // Supabase returns a null user (with no error) when email confirmation
-        // is required. Handle both cases gracefully.
-        throw "Registration submitted. Please check your email to confirm your account.";
+      if (res.user == null) {
+        throw 'We could not start verification. Please try again.';
       }
 
-      String? avatarUrl;
-      if (_profilePhoto != null) {
-        final ext = _profilePhoto!.path.split('.').last;
-        avatarUrl = await _handler.uploadImage(
-          _profilePhoto!,
-          'avatars',
-          '${user.id}_avatar.$ext',
-        );
-      }
+      if (!mounted) return;
 
-      final Map<String, String> docUrls = {};
-      if (_isProfessional) {
-        for (final doc in _requiredDocs) {
-          final key = doc['key'] as String;
-          final file = _uploadedDocs[key];
-          if (file != null) {
-            final ext = file.path.split('.').last;
-            final url = await _handler.uploadImage(
-              file,
-              'provider-docs',
-              '${user.id}/$key.$ext',
-            );
-            if (url != null) {
-              docUrls[key] = url;
-            }
-          }
-        }
-      }
-
-      await _supabase.from('profiles').upsert(
-        {
-          'id': user.id,
-          'email': email,
-          'full_name': fullName,
-          'role': _selectedRole,
-          'phone_number':
-              _selectedRole == 'patient' ? _phoneCtrl.text.trim() : null,
-          'license_number': _isProfessional ? _licenseCtrl.text.trim() : null,
-          'avatar_url': avatarUrl,
-          'is_verified':
-              (_selectedRole == 'patient' || kAdminRoles.contains(_selectedRole)),
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        onConflict: 'id',
-      );
-
-      if (_isProfessional && docUrls.isNotEmpty) {
-        final docRows = docUrls.entries.map((e) {
-          return {
-            'provider_id': user.id,
-            'document_type': e.key,
-            'document_url': e.value,
-            'verification_status': 'pending',
-            'uploaded_at': DateTime.now().toIso8601String(),
-          };
-        }).toList();
-
-        await _supabase.from('provider_documents').upsert(
-          docRows,
-          onConflict: 'provider_id,document_type',
-        );
-      }
-
-      await _supabase.from('user_consents').upsert(
-        {
-          'user_id': user.id,
-          'terms_version': _termsVersion,
-          'terms_accepted_at': DateTime.now().toIso8601String(),
-          'privacy_version': _privacyVersion,
-          'privacy_accepted_at': DateTime.now().toIso8601String(),
-          'telemedicine_version': _telemedicineVersion,
-          'telemedicine_accepted_at': DateTime.now().toIso8601String(),
-        },
-        onConflict: 'user_id',
-      );
-
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => NavigationWrapper(userRole: _selectedRole),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EmailSignupOtpScreen(
+            data: PendingRegistrationData(
+              selectedRole: _selectedRole,
+              email: email,
+              password: password,
+              fullName: fullName,
+              phoneNumber: _selectedRole == 'patient' ? _phoneCtrl.text.trim() : null,
+              licenseNumber: _isProfessional ? _licenseCtrl.text.trim() : null,
+              profilePhoto: _profilePhoto,
+              uploadedDocs: Map<String, XFile>.from(_uploadedDocs),
+              termsVersion: _termsVersion,
+              privacyVersion: _privacyVersion,
+              telemedicineVersion: _telemedicineVersion,
+            ),
           ),
-        );
-      }
+        ),
+      );
     } on AuthException catch (e) {
-      // Surface auth errors clearly — including "already registered"
       final msg = e.message.toLowerCase();
       if (msg.contains('already') || msg.contains('registered') || msg.contains('taken')) {
-        _showError(
-          "This email is already registered. Please go to the login page.",
-        );
+        _showError('This email is already registered. Please go to the login page.');
       } else {
-        _showError("Registration failed: ${e.message}");
+        _showError('Registration failed: ${e.message}');
       }
     } catch (e) {
       _showError(e.toString());
@@ -317,7 +244,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                       ),
                     )
                   : Text(
-                      "CREATE MY ACCOUNT",
+                      'CREATE MY ACCOUNT',
                       style: TextStyle(
                         color: AppColors.cardBg(context),
                         fontWeight: FontWeight.bold,
@@ -332,9 +259,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              "Accept all 3 legal agreements above to enable registration",
-              style: TextStyle(
-                color: const Color(0xFF94A3B8),
+              'Accept all 3 legal agreements above to enable registration',
+              style: const TextStyle(
+                color: Color(0xFF94A3B8),
                 fontSize: 11,
                 fontStyle: FontStyle.italic,
               ),
@@ -348,10 +275,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
   @override
   Widget build(BuildContext context) {
     final licenseLabel = _selectedRole == 'technician'
-        ? "Lab Certificate Number"
+        ? 'Lab Certificate Number'
         : kAdminRoles.contains(_selectedRole)
-            ? "Institution Registration Number"
-            : "License / Registration Number";
+            ? 'Institution Registration Number'
+            : 'License / Registration Number';
 
     return Scaffold(
       backgroundColor: AppColors.cardBg(context),
@@ -367,7 +294,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Create Account",
+                'Create Account',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -380,8 +307,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 style: TextStyle(color: AppColors.textMuted(context), fontSize: 13),
               ),
               const SizedBox(height: 28),
-
-              const SectionLabel("I am a..."),
+              const SectionLabel('I am a...'),
               const SizedBox(height: 12),
               RoleChips(
                 selectedRole: _selectedRole,
@@ -394,30 +320,28 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 },
               ),
               const SizedBox(height: 28),
-
-              const SectionLabel("Profile Photo (Optional)"),
+              const SectionLabel('Profile Photo (Optional)'),
               const SizedBox(height: 10),
               ProfilePhotoUpload(
                 profilePhotoBytes: _profilePhotoBytes,
                 onTap: _pickProfilePhoto,
               ),
               const SizedBox(height: 24),
-
-              const SectionLabel("Basic Information"),
+              const SectionLabel('Basic Information'),
               const SizedBox(height: 12),
               SharedRegistrationField(
-                label: "Full Name",
+                label: 'Full Name',
                 icon: Icons.person_outline,
                 controller: _nameCtrl,
               ),
               SharedRegistrationField(
-                label: "Email Address",
+                label: 'Email Address',
                 icon: Icons.email_outlined,
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
               ),
               SharedRegistrationField(
-                label: "Password",
+                label: 'Password',
                 icon: Icons.lock_outline,
                 controller: _passwordCtrl,
                 isPassword: true,
@@ -428,16 +352,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
               ),
               if (_selectedRole == 'patient')
                 SharedRegistrationField(
-                  label: "Phone Number",
+                  label: 'Phone Number',
                   icon: Icons.phone_outlined,
                   controller: _phoneCtrl,
                   keyboardType: TextInputType.phone,
                 ),
-
               if (_isProfessional) ...[
                 const SizedBox(height: 10),
                 const Divider(height: 32),
-                const SectionLabel("Professional Credentials"),
+                const SectionLabel('Professional Credentials'),
                 const SizedBox(height: 4),
                 ProfessionalHintBox(selectedRole: _selectedRole),
                 const SizedBox(height: 14),
@@ -451,10 +374,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   requiredDocs: _requiredDocs,
                   uploadedDocBytes: _uploadedDocBytes,
                   uploadedDocs: _uploadedDocs,
-                  onPickDocument: (key) => _pickDocument(key),
+                  onPickDocument: _pickDocument,
                 ),
               ],
-
               const SizedBox(height: 10),
               const Divider(height: 32),
               LegalSection(
@@ -462,24 +384,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 privacyAccepted: _privacyAccepted,
                 telemedicineAccepted: _telemedicineAccepted,
                 allConsentsGiven: _allConsentsGiven,
-                onTermsChanged: (v) {
-                  setState(() => _termsAccepted = v!);
-                },
-                onPrivacyChanged: (v) {
-                  setState(() => _privacyAccepted = v!);
-                },
-                onTelemedicineChanged: (v) {
-                  setState(() => _telemedicineAccepted = v!);
-                },
+                onTermsChanged: (v) => setState(() => _termsAccepted = v ?? false),
+                onPrivacyChanged: (v) => setState(() => _privacyAccepted = v ?? false),
+                onTelemedicineChanged: (v) => setState(() => _telemedicineAccepted = v ?? false),
                 openTerms: () => _openLegalDoc(LegalDocType.terms),
                 openPrivacy: () => _openLegalDoc(LegalDocType.privacy),
-                openTelemedicine: () =>
-                    _openLegalDoc(LegalDocType.telemedicine),
+                openTelemedicine: () => _openLegalDoc(LegalDocType.telemedicine),
                 openEmergency: () => _openLegalDoc(LegalDocType.emergency),
-                openMedicalDisclaimer: () =>
-                    _openLegalDoc(LegalDocType.medicalDisclaimer),
+                openMedicalDisclaimer: () => _openLegalDoc(LegalDocType.medicalDisclaimer),
               ),
-
               const SizedBox(height: 24),
               _buildRegisterButton(),
               const SizedBox(height: 40),

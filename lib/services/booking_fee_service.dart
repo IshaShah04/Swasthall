@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,15 +67,9 @@ class BookingFeeService {
       );
 
       if (result == null) {
-        // RPC not yet deployed — return safe defaults so the app doesn't crash
-        debugPrint('BookingFeeService: RPC returned null, using fallback defaults');
-        return BookingFeeBreakdown(
-          baseAmount:       baseAmount,
-          convenienceFee:   30,
-          commissionRate:   0,
-          commissionAmount: 0,
-          totalPayable:     baseAmount + 30,
-          hospitalPayout:   baseAmount,
+        // RPC returned null — do NOT fall back to client-side calculation.
+        throw const BookingFeeException(
+          'Fee calculation failed: RPC returned null. Cannot proceed.',
         );
       }
 
@@ -89,19 +82,10 @@ class BookingFeeService {
         totalPayable:     _d(data['total_payable']),
         hospitalPayout:   _d(data['hospital_payout']),
       );
-    } on BookingFeeException {
-      rethrow;
     } catch (e) {
-      debugPrint('BookingFeeService error: $e — using fallback defaults');
-      // Graceful fallback: NPR 30 convenience fee, no commission
-      return BookingFeeBreakdown(
-        baseAmount:       baseAmount,
-        convenienceFee:   30,
-        commissionRate:   0,
-        commissionAmount: 0,
-        totalPayable:     baseAmount + 30,
-        hospitalPayout:   baseAmount,
-      );
+      // Do NOT fall back to client-side calculation — rethrow so
+      // the caller can show a proper error to the user.
+      throw BookingFeeException('Fee calculation failed: $e');
     }
   }
 

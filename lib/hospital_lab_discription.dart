@@ -16,7 +16,7 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
   String searchQuery = "";
   int _currentImageIndex = 0; // Track gallery position
 
-  late final Stream<List<Map<String, dynamic>>> _bookingStream;
+  late Future<List<Map<String, dynamic>>> _bookingFuture;
 
   @override
   void initState() {
@@ -24,11 +24,18 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
     // SYNC: Ensure the ID is parsed correctly for the stream filter
     final dynamic rawId = widget.test['id'];
     
-    _bookingStream = supabase
+    _bookingFuture = _fetchBookings(rawId);
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchBookings(dynamic rawId) async {
+    final data = await supabase
         .from('bookings')
-        .stream(primaryKey: ['id'])
-        .eq('test_id', rawId) // Matches the ID type from the lab_tests table
+        .select()
+        .eq('test_id', rawId)
         .order('created_at', ascending: false);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
   }
 
   @override
@@ -49,8 +56,8 @@ class _LabTestDetailScreenState extends State<LabTestDetailScreen> {
         centerTitle: true,
         iconTheme: IconThemeData(color: AppColors.textPrimary(context)),
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _bookingStream,
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _bookingFuture,
         builder: (context, snapshot) {
           if (snapshot.hasError) return const Center(child: Text("Error loading bookings"));
           

@@ -12,20 +12,33 @@ class InsuranceSubscription extends StatefulWidget {
 
 class _InsuranceSubscriptionState extends State<InsuranceSubscription> {
   final supabase = Supabase.instance.client;
-  late final Stream<List<Map<String, dynamic>>> _plansStream;
+  late Future<List<Map<String, dynamic>>> _plansFuture;
 
   @override
   void initState() {
     super.initState();
-    _plansStream = supabase
-        .from('insurance_plans')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false)
-        .limit(2);
+    _plansFuture = _fetchPlans();
   }
 
-  /// Resolves icon_url: if it's already a full URL use it directly,
-  /// otherwise treat it as a Supabase storage path and get a signed URL.
+  Future<List<Map<String, dynamic>>> _fetchPlans() async {
+    final data = await supabase
+        .from('insurance_plans')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(2);
+    return (data as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<void> _refreshPlans() async {
+    final future = _fetchPlans();
+    if (mounted) {
+      setState(() => _plansFuture = future);
+    }
+    await future;
+  }
+
   Future<String?> _resolveIconUrl(String? raw) async {
     if (raw == null || raw.trim().isEmpty) return null;
     if (raw.startsWith('http')) return raw;
@@ -40,8 +53,8 @@ class _InsuranceSubscriptionState extends State<InsuranceSubscription> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _plansStream,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _plansFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildLoadingPlaceholder();
@@ -64,13 +77,12 @@ class _InsuranceSubscriptionState extends State<InsuranceSubscription> {
     final String? rawIconUrl = plan['icon_url']?.toString();
 
     return GestureDetector(
-      // ✅ Opens PlanDetailsScreen with the tapped plan's data
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => PlanDetailsScreen(plan: plan),
         ),
-      ),
+      ).then((_) => _refreshPlans()),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         width: double.infinity,
@@ -89,7 +101,6 @@ class _InsuranceSubscriptionState extends State<InsuranceSubscription> {
         ),
         child: Row(
           children: [
-            // ✅ FIX 2: icon_url resolved via signed URL so broken images are fixed
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: FutureBuilder<String?>(
@@ -118,7 +129,8 @@ class _InsuranceSubscriptionState extends State<InsuranceSubscription> {
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 16)),
                   Text('Suggested for you',
-                      style: TextStyle(color: AppColors.textMuted(context), fontSize: 12)),
+                      style: TextStyle(
+                          color: AppColors.textMuted(context), fontSize: 12)),
                 ],
               ),
             ),

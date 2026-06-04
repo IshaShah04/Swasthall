@@ -1,10 +1,12 @@
 // lib/notification_screen.dart
 //
-// Works for all roles: patient, doctor, nurse, hospital, admin
+// Works for all roles: patient, doctor, nurse, hospital, admin, technician
 // - Shows notification history with unread badge
 // - Mark all as read button
 // - Hospital role: shows + FAB to compose broadcast notification
 // - Tapping a notification marks it read
+// - 🔐 NEW: 'security' type shows login-device details in a bottom sheet
+//           (from notify-new-login edge function data field)
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -46,8 +48,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   Future<void> _markOneRead(String id) async {
     await _supabase
         .from('notifications')
-        .update({'is_read': true})
-        .eq('id', id);
+        .update({'is_read': true}).eq('id', id);
   }
 
   @override
@@ -75,6 +76,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       ),
       floatingActionButton: _isHospital
           ? FloatingActionButton(
+              heroTag: 'notification_broadcast',
               backgroundColor: _indigo,
               onPressed: _openBroadcastSheet,
               tooltip: 'Send notification to all patients',
@@ -85,7 +87,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         stream: _notifStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: _indigo));
+            return const Center(
+                child: CircularProgressIndicator(color: _indigo));
           }
 
           final notifs = snapshot.data ?? [];
@@ -105,13 +108,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           fontWeight: FontWeight.w500)),
                   const SizedBox(height: 6),
                   Text('You\'ll see booking updates and announcements here',
-                      style: TextStyle(fontSize: 13, color: const Color(0xFF94A3B8))),
+                      style:
+                          TextStyle(fontSize: 13, color: const Color(0xFF94A3B8))),
                 ],
               ),
             );
           }
 
-          final unreadCount = notifs.where((n) => n['is_read'] == false).length;
+          final unreadCount =
+              notifs.where((n) => n['is_read'] == false).length;
 
           return Column(
             children: [
@@ -119,7 +124,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 Container(
                   width: double.infinity,
                   color: _indigo.withValues(alpha: 0.06),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
                   child: Text(
                     '$unreadCount unread notification${unreadCount > 1 ? 's' : ''}',
                     style: const TextStyle(
@@ -134,10 +140,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   itemCount: notifs.length,
                   separatorBuilder: (_, __) =>
                       const Divider(height: 1, indent: 64),
-                  itemBuilder: (context, i) =>
-                      _NotifTile(
+                  itemBuilder: (context, i) => _NotifTile(
                     notif: notifs[i],
-                    onTap: () => _markOneRead(notifs[i]['id']),
+                    onTap: () async {
+                      await _markOneRead(notifs[i]['id']);
+                      // 🔐 Security notifications open login detail sheet
+                      if (notifs[i]['type'] == 'security' && mounted) {
+                        _showLoginDetailSheet(notifs[i]);
+                      }
+                    },
                   ),
                 ),
               ),
@@ -145,6 +156,196 @@ class _NotificationScreenState extends State<NotificationScreen> {
           );
         },
       ),
+    );
+  }
+
+  // ── 🔐 Login detail bottom sheet ─────────────────────────────────────────
+  void _showLoginDetailSheet(Map<String, dynamic> notif) {
+    // data column is a jsonb map: {device, platform, location, loginTime}
+    final raw = notif['data'];
+    final Map<String, dynamic> data =
+        (raw is Map) ? Map<String, dynamic>.from(raw) : {};
+
+    final device    = data['device']?.toString()    ?? notif['body'] ?? 'Unknown device';
+    final platform  = data['platform']?.toString()  ?? '';
+    final location  = data['location']?.toString()  ?? 'Location unavailable';
+    final loginTime = data['loginTime']?.toString() ?? notif['created_at']?.toString() ?? '';
+    final dt        = loginTime.isNotEmpty ? DateTime.tryParse(loginTime) : null;
+
+        final bool isAndroid = platform.toLowerCase().contains('android');
+    final bool isIOS     = platform.toLowerCase().contains('ios');
+    final bool isWeb     = platform.toLowerCase().contains('web');
+
+    IconData deviceIcon;
+    if (isAndroid) {
+      deviceIcon = Icons.phone_android_rounded;
+    } else if (isIOS) {
+      deviceIcon = Icons.phone_iphone_rounded;
+    } else if (isWeb) {
+      deviceIcon = Icons.language_rounded;
+    } else {
+      deviceIcon = Icons.devices_rounded;
+    }
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.cardBg(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Icon + title
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.security_rounded,
+                  color: Color(0xFFEF4444), size: 28),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'New Login Detected',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Your account was accessed from a new device.',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+
+            // Detail rows
+            _detailRow(Icons.devices_rounded, deviceIcon, 'Device', device),
+            const SizedBox(height: 12),
+            _detailRow(Icons.phone_android_rounded, null, 'Platform', platform.isNotEmpty ? platform : 'Unknown'),
+            const SizedBox(height: 12),
+            _detailRow(Icons.location_on_rounded, null, 'Approximate Location', location),
+            const SizedBox(height: 12),
+            _detailRow(
+              Icons.access_time_rounded,
+              null,
+              'Time',
+              dt != null ? timeago.format(dt) : loginTime,
+            ),
+
+            const SizedBox(height: 28),
+
+            // Action buttons
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: const Text('Was me'),
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.lock_reset_rounded, size: 16),
+                    label: const Text("Wasn't me"),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      // Show password change prompt
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          title: const Text('Secure Your Account'),
+                          content: const Text(
+                            'We recommend changing your password immediately '
+                            'to protect your account.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('Later'),
+                            ),
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFFEF4444)),
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                Navigator.pushNamed(context, '/reset-password');
+                              },
+                              child: const Text('Change Password'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFEF4444),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, IconData? overrideIcon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFF6366F1).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(overrideIcon ?? icon,
+              color: const Color(0xFF6366F1), size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3)),
+              const SizedBox(height: 2),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -165,7 +366,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Notification tile
+// Notification tile — now with 'security' and 'expired_lab' types
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _NotifTile extends StatelessWidget {
@@ -178,51 +379,81 @@ class _NotifTile extends StatelessWidget {
 
   IconData _iconFor(String? type) {
     switch (type) {
-      case 'booking':              return Icons.calendar_today_rounded;
-      case 'insurance':            return Icons.shield_rounded;
-      case 'lab':                  return Icons.science_rounded;
+      case 'booking':               return Icons.calendar_today_rounded;
+      case 'insurance':             return Icons.shield_rounded;
+      case 'lab':                   return Icons.science_rounded;
       case 'hospital_announcement': return Icons.campaign_rounded;
-      case 'system':               return Icons.info_rounded;
-      default:                     return Icons.notifications_rounded;
+      case 'system':                return Icons.info_rounded;
+      case 'security':              return Icons.security_rounded;       // 🔐 NEW
+      case 'expired_lab':           return Icons.event_busy_rounded;     // 🔐 NEW
+      default:                      return Icons.notifications_rounded;
     }
   }
 
   Color _colorFor(String? type) {
     switch (type) {
-      case 'booking':              return const Color(0xFF6366F1);
-      case 'insurance':            return const Color(0xFF10B981);
-      case 'lab':                  return const Color(0xFF0EA5E9);
+      case 'booking':               return const Color(0xFF6366F1);
+      case 'insurance':             return const Color(0xFF10B981);
+      case 'lab':                   return const Color(0xFF0EA5E9);
       case 'hospital_announcement': return const Color(0xFFEF4444);
-      case 'system':               return const Color(0xFF8B5CF6);
-      default:                     return Colors.grey;
+      case 'system':                return const Color(0xFF8B5CF6);
+      case 'security':              return const Color(0xFFEF4444);      // 🔐 NEW — red
+      case 'expired_lab':           return const Color(0xFF94A3B8);      // 🔐 NEW — grey
+      default:                      return Colors.grey;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isUnread = notif['is_read'] == false;
-    final String? type = notif['type'];
-    final color = _colorFor(type);
-    final createdAt = notif['created_at'] != null
+    final String? type  = notif['type'];
+    final color         = _colorFor(type);
+    final createdAt     = notif['created_at'] != null
         ? DateTime.tryParse(notif['created_at'])
         : null;
+
+    // 🔐 Security notifications get a subtle red tint background
+    final Color rowBg = isUnread
+        ? (type == 'security'
+            ? const Color(0xFFEF4444).withValues(alpha: 0.04)
+            : _indigo.withValues(alpha: 0.04))
+        : Colors.transparent;
 
     return InkWell(
       onTap: onTap,
       child: Container(
-        color: isUnread ? _indigo.withValues(alpha: 0.04) : Colors.transparent,
+        color: rowBg,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(_iconFor(type), color: color, size: 20),
+            Stack(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(_iconFor(type), color: color, size: 20),
+                ),
+                // 🔐 Red dot on security notifications
+                if (type == 'security' && isUnread)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -243,7 +474,7 @@ class _NotifTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (isUnread)
+                      if (isUnread && type != 'security')
                         Container(
                           width: 8,
                           height: 8,
@@ -264,10 +495,27 @@ class _NotifTile extends StatelessWidget {
                   ),
                   if (createdAt != null) ...[
                     const SizedBox(height: 6),
-                    Text(
-                      timeago.format(createdAt),
-                      style: TextStyle(
-                          fontSize: 11, color: const Color(0xFF94A3B8)),
+                    Row(
+                      children: [
+                        Text(
+                          timeago.format(createdAt),
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                        // 🔐 "Tap to review" hint on security notifications
+                        if (type == 'security') ...[
+                          const Text(' · ',
+                              style: TextStyle(
+                                  fontSize: 11, color: Color(0xFF94A3B8))),
+                          const Text(
+                            'Tap to review',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFEF4444),
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ],
@@ -282,7 +530,7 @@ class _NotifTile extends StatelessWidget {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Broadcast sheet — hospital only
+// Broadcast sheet — hospital only (UNCHANGED)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _BroadcastSheet extends StatefulWidget {
@@ -303,10 +551,10 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
   static const Color _indigo = Color(0xFF6366F1);
 
   final List<Map<String, String>> _templates = [
-    {'title': 'Blood Donation Camp', 'body': 'We are organizing a blood donation camp on [date] at [location]. All blood groups needed. Please register at the reception.'},
-    {'title': 'Dental Check-up Camp', 'body': 'Free dental check-up camp on [date]. Bring your family for free consultation and screening.'},
-    {'title': 'Health Awareness Campaign', 'body': 'Join us for a free health awareness session on [topic] on [date] at [location].'},
-    {'title': 'Vaccination Drive', 'body': 'Upcoming vaccination drive on [date]. Available vaccines: [list]. Register in advance at our front desk.'},
+    {'title': 'Blood Donation Camp',     'body': 'We are organizing a blood donation camp on [date] at [location]. All blood groups needed. Please register at the reception.'},
+    {'title': 'Dental Check-up Camp',    'body': 'Free dental check-up camp on [date]. Bring your family for free consultation and screening.'},
+    {'title': 'Health Awareness Campaign','body': 'Join us for a free health awareness session on [topic] on [date] at [location].'},
+    {'title': 'Vaccination Drive',        'body': 'Upcoming vaccination drive on [date]. Available vaccines: [list]. Register in advance at our front desk.'},
   ];
 
   @override
@@ -344,7 +592,7 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to send: $e'),
+          content: const Text('Failed to send notification. Please try again.'),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ),
@@ -374,11 +622,9 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle
               Center(
                 child: Container(
-                  width: 40,
-                  height: 4,
+                  width: 40, height: 4,
                   decoration: BoxDecoration(
                     color: const Color(0xFFCBD5E1),
                     borderRadius: BorderRadius.circular(2),
@@ -386,17 +632,17 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-
               const Text('Send notification to all patients',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
-              Text('All ${_supabase.auth.currentUser?.email ?? ''} patients will receive this',
-                  style: TextStyle(fontSize: 12, color: const Color(0xFF64748B))),
+              Text(
+                'Patients linked to this hospital will receive this',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              ),
               const SizedBox(height: 20),
-
-              // Templates
               Text('Quick templates',
-                  style: TextStyle(fontSize: 12,
+                  style: TextStyle(
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppColors.textMuted(context))),
               const SizedBox(height: 8),
@@ -428,8 +674,6 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                 )).toList(),
               ),
               const SizedBox(height: 20),
-
-              // Title field
               TextFormField(
                 controller: _titleCtrl,
                 decoration: InputDecoration(
@@ -447,8 +691,6 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                 maxLength: 80,
               ),
               const SizedBox(height: 12),
-
-              // Body field
               TextFormField(
                 controller: _bodyCtrl,
                 decoration: InputDecoration(
@@ -468,8 +710,6 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                 maxLength: 300,
               ),
               const SizedBox(height: 20),
-
-              // Send button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -483,8 +723,7 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                   ),
                   icon: _isSending
                       ? SizedBox(
-                          width: 18,
-                          height: 18,
+                          width: 18, height: 18,
                           child: CircularProgressIndicator(
                               color: AppColors.cardBg(context), strokeWidth: 2))
                       : Icon(Icons.send_rounded,

@@ -20,8 +20,14 @@ dependencies:
   barcode_widget: ^2.0.4
 
   # Payment Gateway
-  esewa_flutter: ^3.0.1
+  # NOTE: local SDK path; keep this only if the SDK directory is committed or
+  # provided in each build environment.
+  esewa_flutter_sdk:
+    path: ./esewa_flutter_sdk
   crypto: ^3.0.6
+  # NOTE: Khalti currently publishes prerelease builds on pub.dev.
+  khalti_checkout_flutter: ^1.0.0-dev.9
+
   
   # Maps & Location
   flutter_map: ^8.2.2
@@ -35,16 +41,16 @@ dependencies:
   meta: ^1.17.0
   
   # ZEGO Cloud & Backend
-  zego_uikit_prebuilt_call: ^4.22.2
+  zego_uikit_prebuilt_call: ^4.22.4
   permission_handler: ^12.0.1
   supabase_flutter: ^2.12.0
   intl: ^0.20.2
   zego_uikit_signaling_plugin: ^2.8.20
-  zego_uikit: ^2.28.41
+  zego_uikit: ^2.28.44
   image_picker: ^1.2.1
   path: ^1.9.1
   file_picker: ^10.3.8
-  flutter_local_notifications: ^21.0.0-dev.2
+  flutter_local_notifications: ^21.0.0
   timezone: ^0.11.0
   syncfusion_flutter_pdfviewer: ^31.1.21
   flutter_pdfview: ^1.4.4
@@ -63,11 +69,17 @@ dependencies:
   firebase_core: ^4.5.0
   firebase_messaging: ^16.1.2
   app_links: ^7.0.0
+
+  # 🔐 Login notifications + OTA config (NEW)
+  device_info_plus: ^11.5.0
+  package_info_plus: ^8.1.0
   google_mlkit_translation: ^0.13.1
   uuid: ^4.5.3
   timeago: ^3.7.1
   firebase_crashlytics: ^5.0.8
   zego_express_engine: ^3.23.0
+  zego_zim: 2.27.0
+  flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
   flutter_test:
@@ -106,7 +118,6 @@ flutter:
     - assets/data/nepal_medicinesDI.json
     - assets/data/drug_interactions.json
     - assets/data/nepal_brand_aliases.json
-    - env.json
     - assets/swasthall_logo.png
     - assets/swasthall_icon.png
     - assets/swasthall_logo_white.png

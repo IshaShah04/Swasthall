@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'lab_offer.dart';
 import 'order_success_screen.dart';
@@ -19,7 +20,6 @@ class LabTestScreen extends StatefulWidget {
 
 class _LabTestScreenState extends State<LabTestScreen> {
   final Color primaryIndigo = const Color(0xFF6366F1);
-  final Color bgLight = const Color(0xFFF8FAFC);
   final supabase = Supabase.instance.client;
 
   final VoiceService _voiceService = VoiceService();
@@ -31,17 +31,25 @@ class _LabTestScreenState extends State<LabTestScreen> {
 
   // Track speaking state to update UI icons
   String? _currentlySpeakingId;
+  Future<List<Map<String, dynamic>>>? _bookingsFuture;
+  Future<List<Map<String, dynamic>>>? _labsFuture;
 
   @override
   void initState() {
     super.initState();
     _currentSearchQuery = widget.searchQuery ?? "";
     _searchController = TextEditingController(text: _currentSearchQuery);
+    _bookingsFuture = _fetchMyBookings();
+    _labsFuture = _fetchLabs();
     _initVoice();
   }
 
-  void _initVoice() async {
-    await _voiceService.initTts();
+  Future<void> _initVoice() async {
+    try {
+      await _voiceService.initTts();
+    } catch (e) {
+      debugPrint('TTS initialization failed: $e');
+    }
   }
 
   @override
@@ -113,6 +121,87 @@ class _LabTestScreenState extends State<LabTestScreen> {
     if (mounted) setState(() => _currentlySpeakingId = null);
   }
 
+
+  Future<void> _openBookingDetails(Map<String, dynamic> booking) async {
+    _voiceService.stop();
+
+    final hospitalId = (booking['hospital_id'] ?? '').toString().trim();
+    Map<String, dynamic> resolvedLabData = {};
+    String resolvedStoreName = 'Lab Center';
+
+    if (hospitalId.isNotEmpty && hospitalId != 'null') {
+      try {
+        final profile = await supabase
+            .from('profiles')
+            .select('id, full_name, role, location, address, avatar_url, facility_image_url')
+            .eq('id', hospitalId)
+            .maybeSingle();
+
+        if (profile != null) {
+          resolvedLabData = {
+            ...Map<String, dynamic>.from(profile),
+            'hospital_id': hospitalId,
+          };
+          resolvedStoreName = (profile['full_name'] ?? 'Lab Center').toString();
+        }
+      } catch (e) {
+        debugPrint('Booking detail lab resolve error: $e');
+      }
+    }
+
+    if (resolvedLabData.isEmpty) {
+      resolvedLabData = {
+        'id': hospitalId,
+        'hospital_id': hospitalId,
+        'full_name': booking['lab_name'] ?? 'Lab Center',
+      };
+      resolvedStoreName = (booking['lab_name'] ?? 'Lab Center').toString();
+    }
+
+    String formattedDate = (booking['appointment_date'] ?? '').toString().trim();
+    try {
+      if (formattedDate.isNotEmpty) {
+        formattedDate = DateFormat('dd MMM yyyy').format(DateTime.parse(formattedDate));
+      }
+    } catch (e, st) {
+      debugPrint('Failed to parse formattedDate: $formattedDate | $e | $st');
+    }
+
+    final paymentStatus = (booking['payment_status'] ?? '').toString().trim().toLowerCase();
+    final paymentMethod = (booking['payment_method'] ?? '').toString().trim().toLowerCase();
+
+    String paymentLabel;
+    if (paymentStatus == 'paid') {
+      paymentLabel = 'Paid';
+    } else if (paymentMethod == 'cash' || paymentStatus == 'pending') {
+      paymentLabel = 'Pay at Lab';
+    } else {
+      paymentLabel = 'Pending';
+    }
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OrderSuccessScreen(
+          itemLabel: (booking['test_names'] ?? 'Lab Test').toString(),
+          amount: (booking['total_amount'] ?? '0').toString(),
+          storeName: resolvedStoreName,
+          type: 'Lab',
+          labData: resolvedLabData,
+          extraDetails: {
+            'date': formattedDate.isEmpty ? 'N/A' : formattedDate,
+            'time': (booking['appointment_time'] ?? 'N/A').toString(),
+            'appointment_id': booking['id']?.toString(),
+            'status': paymentLabel,
+            'appointment_status': (booking['status'] ?? 'scheduled').toString(),
+          },
+        ),
+      ),
+    );
+  }
+
   // --- UI SECTIONS ---
 
   Widget _buildSearchTrigger() {
@@ -147,17 +236,53 @@ class _LabTestScreenState extends State<LabTestScreen> {
     );
   }
 
+  Future<List<Map<String, dynamic>>> _fetchMyBookings() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return const [];
+
+    final data = await supabase
+        .from('lab_appointments')
+        .select()
+        .eq('user_id', user.id)
+        .order('appointment_date', ascending: true);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .where((row) {
+          final status = (row['status'] ?? '').toString().toLowerCase().trim();
+          final isExpired = row['is_expired'] == true;
+          return !isExpired &&
+              status != 'cancelled' &&
+              status != 'completed';
+        })
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchLabs() async {
+    final data = await supabase
+        .from('profiles')
+        .select('*, lab_tests!fk_lab_provider(id, name)')
+        .or('role.ilike.hospital,role.ilike.clinic');
+    final allData = (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+    final hasTests = allData
+        .where((p) => (p['lab_tests'] as List?)?.isNotEmpty == true)
+        .toList();
+    _allLabs = hasTests;
+    return hasTests;
+  }
+
   Widget _buildMyBookingsSection() {
     final user = supabase.auth.currentUser;
     if (user == null) return const SizedBox.shrink();
 
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: supabase
-          .from('lab_appointments')
-          .stream(primaryKey: ['id'])
-          .eq('user_id', user.id)
-          .order('created_at', ascending: false),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _bookingsFuture,
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          debugPrint('Bookings fetch error: ${snapshot.error}');
+          return const SizedBox.shrink();
+        }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const SizedBox.shrink();
         }
@@ -212,24 +337,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => OrderSuccessScreen(
-                    itemLabel: booking['test_names'] ?? "Lab Test",
-                    amount: booking['total_amount']?.toString() ?? "0",
-                    storeName: "Lab Appointment",
-                    type: "Lab",
-                    labData: booking,
-                    extraDetails: {
-                      'date': booking['appointment_date'],
-                      'time': booking['appointment_time'],
-                      'appointment_id': booking['id'],
-                      'status': booking['status'],
-                    },
-                  ),
-                ),
-              ),
+              onTap: () => _openBookingDetails(booking),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -241,7 +349,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   Text(
-                    "${booking['appointment_date']} | ${booking['appointment_time']}",
+                    _buildBookingScheduleLabel(booking),
                     style: TextStyle(fontSize: 11, color: AppColors.textMuted(context)),
                   ),
                 ],
@@ -254,10 +362,20 @@ class _LabTestScreenState extends State<LabTestScreen> {
     );
   }
 
+
+  String _buildBookingScheduleLabel(Map<String, dynamic> booking) {
+    final date = (booking['appointment_date'] ?? '').toString().trim();
+    final time = (booking['appointment_time'] ?? '').toString().trim();
+    if (date.isNotEmpty && time.isNotEmpty) return '$date | $time';
+    if (date.isNotEmpty) return date;
+    if (time.isNotEmpty) return time;
+    return 'Schedule unavailable';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgLight,
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: Text("Labs & Diagnostics",
             style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary(context))),
@@ -270,7 +388,12 @@ class _LabTestScreenState extends State<LabTestScreen> {
           _buildSearchTrigger(),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () async => setState(() {}),
+              onRefresh: () async {
+                setState(() {
+                  _bookingsFuture = _fetchMyBookings();
+                  _labsFuture = _fetchLabs();
+                });
+              },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Column(
@@ -301,10 +424,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
 
   Widget _buildLiveLabList() {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: supabase
-          .from('profiles')
-          .select('*, lab_tests!fk_lab_provider(id, name)')
-          .or('role.ilike.hospital,role.ilike.clinic'),
+      future: _labsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -314,18 +434,14 @@ class _LabTestScreenState extends State<LabTestScreen> {
         }
 
         final List<Map<String, dynamic>> allData = snapshot.data ?? [];
-        final List<Map<String, dynamic>> hasTests =
-            allData.where((p) => (p['lab_tests'] as List?)?.isNotEmpty == true).toList();
         final String cleanQuery = _currentSearchQuery.trim().toLowerCase();
-        final filteredLabs = hasTests.where((lab) {
+        final filteredLabs = allData.where((lab) {
           if (cleanQuery.isEmpty) return true;
           return (lab['full_name'] ?? "")
               .toString()
               .toLowerCase()
               .contains(cleanQuery);
         }).toList();
-
-        _allLabs = filteredLabs;
 
         if (filteredLabs.isEmpty) {
           return const Center(

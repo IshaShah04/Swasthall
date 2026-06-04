@@ -148,6 +148,11 @@ class _WebVideoCallPageState extends State<WebVideoCallPage> {
       final accessToken = session?.accessToken;
       debugPrint('[WebCall] Session user=${session?.user.id} token_len=${accessToken?.length}');
 
+      if (accessToken == null || accessToken.isEmpty) {
+        debugPrint('[WebCall] Missing auth token; cannot request call token');
+        return null;
+      }
+
       // Use raw http.post instead of functions.invoke() — Flutter Web's
       // Supabase client ignores the headers param and sends a stale JWT.
       // Raw HTTP with explicit headers is reliable on all platforms.
@@ -159,9 +164,7 @@ class _WebVideoCallPageState extends State<WebVideoCallPage> {
         headers: {
           'Content-Type':  'application/json',
           'apikey':        anonKey,
-          'Authorization': accessToken != null
-              ? 'Bearer $accessToken'
-              : 'Bearer $anonKey',
+          'Authorization': 'Bearer $accessToken',
         },
         body: jsonEncode({
           'room_id':        roomId,
@@ -248,16 +251,24 @@ class _WebVideoCallPageState extends State<WebVideoCallPage> {
     if (_ending) return;
     _ending = true;
 
-    final status = widget.professionalRole.toLowerCase() == 'nurse'
-        ? 'confirmed'
-        : 'completed';
+    final role = widget.professionalRole.toLowerCase();
 
     try {
-      await SupabaseHandler().client.from('bookings').update({
-        'status': status,
-        'caller_role': widget.professionalRole.toLowerCase(),
-      }).eq('id', widget.bookingId);
-    } catch (_) {}
+      if (role == 'nurse') {
+        await SupabaseHandler().client.rpc(
+          'mark_nurse_triaged',
+          params: {'p_booking_id': widget.bookingId},
+        );
+      } else {
+        await SupabaseHandler().client.rpc(
+          'mark_booking_completed',
+          params: {'p_booking_id': widget.bookingId},
+        );
+      }
+    } catch (_) {
+      // Keep call cleanup non-blocking. The queue can be refreshed manually if
+      // the network drops exactly when the call ends.
+    }
 
     await RealtimeCallService().endCall(widget.callID);
     await _leaveAndDestroy();

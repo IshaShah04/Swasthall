@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-import 'shared_widgets.dart';import 'theme_colors.dart';
- // Ensure viewPatientHistory and FileViewPage are defined here
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'shared_widgets.dart';
+import 'theme_colors.dart';
 
 class PatientRecordsScreen extends StatefulWidget {
-  const PatientRecordsScreen({super.key});
+  final String? targetPatientId;
+  const PatientRecordsScreen({super.key, this.targetPatientId});
 
   @override
   State<PatientRecordsScreen> createState() => _PatientRecordsScreenState();
@@ -15,40 +17,165 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
   final supabase = Supabase.instance.client;
   final Color primaryColor = const Color(0xFF6366F1);
   final Color backgroundColor = const Color(0xFFF8FAFC);
-  
-  String _searchQuery = "";
+
+  String _searchQuery = '';
   DateTimeRange? _selectedDateRange;
   final TextEditingController _searchController = TextEditingController();
 
   Map<String, dynamic>? userMetadata;
+  Future<List<Map<String, dynamic>>>? _recordsFuture;
 
   @override
   void initState() {
     super.initState();
     userMetadata = supabase.auth.currentUser?.userMetadata;
+    _recordsFuture = _fetchRecords();
   }
 
-  /// Real-time stream from medical_records — filtered to current provider
-  Stream<List<Map<String, dynamic>>> _getFilteredStream() {
-    final user = supabase.auth.currentUser;
-    final role = userMetadata?['role'] ?? '';
-    final userId = user?.id ?? '';
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
-    // Nurses see records from their assigned doctor via bookings
-    // Doctors/pharmacists/technicians see records where they are the provider
-    if (role == 'nurse') {
-      // Nurse sees all records from their hospital — grouped by date
-      return supabase
-          .from('medical_records')
-          .stream(primaryKey: ['id'])
-          .order('appointment_date', ascending: false);
-    } else {
-      return supabase
-          .from('medical_records')
-          .stream(primaryKey: ['id'])
-          .eq('provider_id', userId)
-          .order('appointment_date', ascending: false);
+  String _normalizedRole() {
+    final raw = (userMetadata?['role'] ??
+            supabase.auth.currentUser?.userMetadata?['role'] ??
+            '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    return raw;
+  }
+
+  Future<User?> _getReadyUser() async {
+    var user = supabase.auth.currentUser;
+    if (user != null) return user;
+
+    for (int i = 0; i < 10; i++) {
+      await Future.delayed(const Duration(milliseconds: 250));
+      user = supabase.auth.currentUser;
+      if (user != null) return user;
     }
+    return null;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchRecords() async {
+    final user = await _getReadyUser();
+    if (user == null) {
+      throw Exception('User session not ready. Please reopen this screen.');
+    }
+
+    userMetadata = user.userMetadata;
+    final role = _normalizedRole();
+
+    dynamic query = supabase.from('medical_records').select(
+          'id, patient_id, provider_id, appointment_id, file_url, file_name, '
+          'provider_role, patient_name, doctor_name, summary, diagnosis, '
+          'appointment_date, appointment_time, created_at',
+        );
+
+    // Important:
+    // For provider/professional screens, always filter by targetPatientId
+    // to prevent unscoped access to all medical records.
+    if (role == 'patient') {
+      query = query.eq('patient_id', user.id);
+    } else {
+      final patientId = widget.targetPatientId;
+      if (patientId == null || patientId.isEmpty) {
+        throw Exception(
+          'targetPatientId required for provider medical_records access',
+        );
+      }
+      query = query.eq('patient_id', patientId);
+    }
+
+    query = query
+        .order('appointment_date', ascending: false)
+        .order('created_at', ascending: false);
+
+    final raw = await query;
+    final records = (raw as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+
+    await _hydrateMissingNames(records);
+    return records;
+  }
+
+  Future<void> _hydrateMissingNames(List<Map<String, dynamic>> records) async {
+    final patientIds = <String>{};
+    final providerIds = <String>{};
+
+    for (final record in records) {
+      final patientName = (record['patient_name'] ?? '').toString().trim();
+      final patientId = (record['patient_id'] ?? '').toString().trim();
+      if (patientName.isEmpty && patientId.isNotEmpty) {
+        patientIds.add(patientId);
+      }
+
+      final doctorName = (record['doctor_name'] ?? '').toString().trim();
+      final providerId = (record['provider_id'] ?? '').toString().trim();
+      if (doctorName.isEmpty && providerId.isNotEmpty) {
+        providerIds.add(providerId);
+      }
+    }
+
+    final Map<String, String> profileNames = {};
+
+    if (patientIds.isNotEmpty) {
+      final patientRows = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .inFilter('id', patientIds.toList());
+
+      for (final row in patientRows as List) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = (map['id'] ?? '').toString();
+        final fullName = (map['full_name'] ?? '').toString().trim();
+        if (id.isNotEmpty && fullName.isNotEmpty) {
+          profileNames[id] = fullName;
+        }
+      }
+    }
+
+    if (providerIds.isNotEmpty) {
+      final providerRows = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .inFilter('id', providerIds.toList());
+
+      for (final row in providerRows as List) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = (map['id'] ?? '').toString();
+        final fullName = (map['full_name'] ?? '').toString().trim();
+        if (id.isNotEmpty && fullName.isNotEmpty) {
+          profileNames[id] = fullName;
+        }
+      }
+    }
+
+    for (final record in records) {
+      final patientName = (record['patient_name'] ?? '').toString().trim();
+      final patientId = (record['patient_id'] ?? '').toString().trim();
+      if (patientName.isEmpty && patientId.isNotEmpty) {
+        record['patient_name'] = profileNames[patientId] ?? 'Unknown Patient';
+      }
+
+      final doctorName = (record['doctor_name'] ?? '').toString().trim();
+      final providerId = (record['provider_id'] ?? '').toString().trim();
+      if (doctorName.isEmpty && providerId.isNotEmpty) {
+        record['doctor_name'] = profileNames[providerId] ?? 'Provider';
+      }
+    }
+  }
+
+  Future<void> _refreshRecords() async {
+    final future = _fetchRecords();
+    if (mounted) {
+      setState(() => _recordsFuture = future);
+    }
+    await future;
   }
 
   @override
@@ -57,8 +184,11 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
       backgroundColor: backgroundColor,
       appBar: AppBar(
         title: Text(
-          "Clinical History",
-          style: TextStyle(color: AppColors.textPrimary(context), fontWeight: FontWeight.bold),
+          'Clinical History',
+          style: TextStyle(
+            color: AppColors.textPrimary(context),
+            fontWeight: FontWeight.bold,
+          ),
         ),
         backgroundColor: AppColors.cardBg(context),
         elevation: 0,
@@ -67,39 +197,63 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
           child: _buildHeaderSearchAndFilter(),
         ),
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _getFilteredStream(),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _recordsFuture,
         builder: (context, snapshot) {
-          if (snapshot.hasError) return _buildErrorState(snapshot.error.toString());
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) {
+            return _buildErrorState();
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
           final allRecords = snapshot.data!;
-          
           final filteredRecords = allRecords.where((record) {
-            final nameMatch = record['patient_name']
-                .toString()
+            final patientName = (record['patient_name'] ?? '').toString();
+            final nameMatch = patientName
                 .toLowerCase()
-                .contains(_searchQuery.toLowerCase());
-            
+                .contains(_searchQuery.toLowerCase().trim());
+
             bool dateMatch = true;
             if (_selectedDateRange != null && record['appointment_date'] != null) {
               try {
-                DateTime apptDate = DateTime.parse(record['appointment_date'].toString());
-                dateMatch = apptDate.isAfter(_selectedDateRange!.start.subtract(const Duration(days: 1))) &&
-                           apptDate.isBefore(_selectedDateRange!.end.add(const Duration(days: 1)));
-              } catch (e) {
+                final apptDate =
+                    DateTime.parse(record['appointment_date'].toString());
+                dateMatch = apptDate.isAfter(
+                        _selectedDateRange!.start.subtract(const Duration(days: 1))) &&
+                    apptDate.isBefore(
+                        _selectedDateRange!.end.add(const Duration(days: 1)));
+              } catch (_) {
                 dateMatch = false;
               }
             }
             return nameMatch && dateMatch;
           }).toList();
 
-          if (filteredRecords.isEmpty) return _buildEmptyState();
+          if (filteredRecords.isEmpty) {
+            return RefreshIndicator(
+              onRefresh: _refreshRecords,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: _buildEmptyState(),
+                  ),
+                ],
+              ),
+            );
+          }
 
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            itemCount: filteredRecords.length,
-            itemBuilder: (context, index) => _buildTimelineTile(filteredRecords[index]),
+          return RefreshIndicator(
+            onRefresh: _refreshRecords,
+            child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              itemCount: filteredRecords.length,
+              itemBuilder: (context, index) =>
+                  _buildTimelineTile(filteredRecords[index]),
+            ),
           );
         },
       ),
@@ -115,17 +269,17 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
             controller: _searchController,
             onChanged: (val) => setState(() => _searchQuery = val),
             decoration: InputDecoration(
-              hintText: "Search patient name...",
+              hintText: 'Search patient name...',
               prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: _searchQuery.isNotEmpty 
-                ? IconButton(
-                    icon: const Icon(Icons.clear), 
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = "");
-                    },
-                  ) 
-                : null,
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
               filled: true,
               fillColor: AppColors.inputFill(context),
               border: OutlineInputBorder(
@@ -138,15 +292,15 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
           Row(
             children: [
               ActionChip(
-                backgroundColor: _selectedDateRange != null 
-                    ? primaryColor.withValues(alpha: 0.1) 
+                backgroundColor: _selectedDateRange != null
+                    ? primaryColor.withValues(alpha: 0.1)
                     : Colors.white,
-                side: BorderSide(color: const Color(0xFFE2E8F0)),
+                side: const BorderSide(color: Color(0xFFE2E8F0)),
                 avatar: Icon(Icons.calendar_today, size: 14, color: primaryColor),
                 label: Text(
-                  _selectedDateRange == null 
-                    ? "Select Interval" 
-                    : "${DateFormat('MMM d').format(_selectedDateRange!.start)} - ${DateFormat('MMM d').format(_selectedDateRange!.end)}",
+                  _selectedDateRange == null
+                      ? 'Select Interval'
+                      : '${DateFormat('MMM d').format(_selectedDateRange!.start)} - ${DateFormat('MMM d').format(_selectedDateRange!.end)}',
                   style: const TextStyle(fontSize: 12),
                 ),
                 onPressed: _showDateRangePicker,
@@ -155,10 +309,16 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () => setState(() => _selectedDateRange = null),
-                  child: const Text("Reset", 
-                    style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600)),
+                  child: const Text(
+                    'Reset',
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ]
+              ],
             ],
           ),
         ],
@@ -167,10 +327,10 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
   }
 
   Widget _buildTimelineTile(Map<String, dynamic> record) {
-    bool isNurse = userMetadata?['role'] == 'nurse';
-    String rawDate = record['appointment_date'] ?? "";
-    String formattedDate = "N/A";
-    
+    final isNurse = _normalizedRole() == 'nurse';
+    final rawDate = (record['appointment_date'] ?? '').toString();
+    var formattedDate = 'N/A';
+
     try {
       if (rawDate.isNotEmpty) {
         formattedDate = DateFormat('EEE, MMM d').format(DateTime.parse(rawDate));
@@ -190,10 +350,10 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.shadow(context), 
+                    color: AppColors.shadow(context),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
-                  )
+                  ),
                 ],
               ),
               child: Column(
@@ -204,9 +364,15 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
                     children: [
                       Text(
                         formattedDate,
-                        style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor, fontSize: 13),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                          fontSize: 13,
+                        ),
                       ),
-                      _buildStatusChip(record['appointment_time'] ?? "Day"),
+                      _buildStatusChip(
+                        (record['appointment_time'] ?? 'Day').toString(),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -214,22 +380,28 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        "Assisted: Dr. ${record['doctor_name'] ?? 'Provider'}",
+                        'Assisted: Dr. ${(record['doctor_name'] ?? 'Provider').toString()}',
                         style: TextStyle(
-                          fontSize: 12, 
-                          color: primaryColor.withValues(alpha: 0.8), 
+                          fontSize: 12,
+                          color: primaryColor.withValues(alpha: 0.8),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   Text(
-                    record['patient_name'] ?? "Unknown Patient",
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                    (record['patient_name'] ?? 'Unknown Patient').toString(),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "Diagnosis: ${record['diagnosis'] ?? 'Clinical evaluation'}",
-                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                    'Diagnosis: ${(record['diagnosis'] ?? 'Clinical evaluation').toString()}',
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 13,
+                    ),
                   ),
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
@@ -238,15 +410,15 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
                   Row(
                     children: [
                       _actionButton(
-                        Icons.history, 
-                        "View History", 
+                        Icons.history,
+                        'View History',
                         () => _navigateToPatientDetail(record),
                       ),
                       const Spacer(),
                       _actionButton(
-                        Icons.folder_open, 
-                        "Files", 
-                        () => _handleFileView(record)
+                        Icons.folder_open,
+                        'Files',
+                        () => _handleFileView(record),
                       ),
                     ],
                   ),
@@ -265,16 +437,17 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
       child: Column(
         children: [
           Container(
-            width: 12, height: 12,
+            width: 12,
+            height: 12,
             decoration: BoxDecoration(
-              color: primaryColor, 
+              color: primaryColor,
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
             ),
           ),
           Expanded(
             child: Container(
-              width: 2, 
+              width: 2,
               color: primaryColor.withValues(alpha: 0.15),
             ),
           ),
@@ -290,68 +463,76 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
         color: AppColors.surfaceBg(context),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF475569),
+        ),
+      ),
     );
   }
 
   void _navigateToPatientDetail(Map<String, dynamic> record) {
     final patientId = record['patient_id']?.toString();
-    final patientName = record['patient_name'] ?? "Patient";
+    final patientName = (record['patient_name'] ?? 'Patient').toString();
 
-    if (patientId == null) {
+    if (patientId == null || patientId.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Error: Patient ID not found.")),
+        const SnackBar(content: Text('Error: Patient ID not found.')),
       );
       return;
     }
-    
-    final role = userMetadata?['role'] ?? 'nurse';
+
+    final role = _normalizedRole().isEmpty ? 'nurse' : _normalizedRole();
     viewPatientHistory(context, patientId, patientName, userRole: role);
   }
 
   void _handleFileView(Map<String, dynamic> record) {
-    // Replace 'file_url' with your actual column name in Supabase
-    final String? filePath = record['file_url'];
+    final String filePath = (record['file_url'] ?? '').toString();
 
-    if (filePath == null || filePath.isEmpty) {
+    if (filePath.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("No documents attached to this record."),
+          content: Text('No documents attached to this record.'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    // This calls the viewer widget you should have in shared_widgets.dart
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => FileViewPage(
           url: filePath,
-          title: "${record['patient_name']}'s Report",
+          title: "${(record['patient_name'] ?? 'Patient').toString()}'s Report",
         ),
       ),
     );
   }
 
   Future<void> _showDateRangePicker() async {
-    final DateTimeRange? result = await showDateRangePicker(
+    final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: _selectedDateRange,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(primary: primaryColor),
+            colorScheme:
+                Theme.of(context).colorScheme.copyWith(primary: primaryColor),
           ),
           child: child!,
         );
       },
     );
-    if (result != null) {
-      setState(() => _selectedDateRange = result);
+
+    if (picked != null) {
+      setState(() => _selectedDateRange = picked);
     }
   }
 
@@ -366,7 +547,14 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
           children: [
             Icon(icon, size: 16, color: primaryColor),
             const SizedBox(width: 4),
-            Text(label, style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+            Text(
+              label,
+              style: TextStyle(
+                color: primaryColor,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       ),
@@ -380,17 +568,27 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
         children: [
           Icon(Icons.assignment_outlined, size: 64, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          Text("No records found", style: TextStyle(color: AppColors.textMuted(context), fontWeight: FontWeight.w500)),
+          Text(
+            'No records found',
+            style: TextStyle(
+              color: AppColors.textMuted(context),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildErrorState(String error) {
+  Widget _buildErrorState() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Text("Connection Error: $error", textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent)),
+        child: Text(
+          'Failed to load records. Please try again.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.textMuted(context)),
+        ),
       ),
     );
   }

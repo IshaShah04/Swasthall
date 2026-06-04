@@ -13,28 +13,32 @@ class PlanDetailsScreen extends StatefulWidget {
 }
 
 class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
-  late final Stream<List<Map<String, dynamic>>> _planStream;
+  late Future<Map<String, dynamic>> _planFuture;
 
   @override
   void initState() {
     super.initState();
+    _planFuture = _fetchPlan();
+  }
+
+  Future<Map<String, dynamic>> _fetchPlan() async {
     final supabase = Supabase.instance.client;
-    _planStream = supabase
+    final data = await supabase
         .from('insurance_plans')
-        .stream(primaryKey: ['id'])
-        .eq('id', widget.plan['id']);
+        .select()
+        .eq('id', widget.plan['id'])
+        .maybeSingle();
+    return data == null ? Map<String, dynamic>.from(widget.plan) : Map<String, dynamic>.from(data);
   }
 
   @override
   Widget build(BuildContext context) {
     const Color brandIndigo = Color(0xFF6366F1);
 
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _planStream,
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _planFuture,
       builder: (context, snapshot) {
-        final data = (snapshot.hasData && snapshot.data!.isNotEmpty)
-            ? snapshot.data!.first
-            : widget.plan;
+        final data = snapshot.data ?? widget.plan;
 
         final double price =
             double.tryParse(data['price']?.toString() ?? '0') ?? 0.0;

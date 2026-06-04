@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'supabase_handler.dart';
 import 'services/offline_booking_queue.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
@@ -21,14 +20,20 @@ import 'config/env_config.dart';
 import 'navigation_wrapper.dart';
 import 'login_page.dart';
 import 'registration_page.dart';
+import 'registration_completion_screen.dart';
+import 'auth_onboarding_helper.dart';
 import 'services/voice_service.dart';
 import 'services/account_service.dart';
 import 'services/realtime_call_service.dart'; // BUG-21: use ONLY services/ path — delete lib/realtime_call_service.dart
 import 'services/app_cache.dart';
+import 'services/remote_config_service.dart'; // 🔧 OTA feature flags & force-update
+import 'services/esewa_callback_handler.dart'; // eSewa browser payment deep link bridge
+import 'services/queue_widget_service.dart';
 import 'call_landing_page.dart';
 
 import 'physical.dart';
 import 'verification_pending_screen.dart';
+import 'reset_password_screen.dart';
 import 'theme_notifier.dart';
 import 'web_video_call_page.dart';
 
@@ -65,6 +70,93 @@ class IncomingInvite {
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
+// Guards for process-wide SDK setup. These prevent duplicate native engine/plugin
+// initialization during hot reload, auth refreshes, and account switches.
+bool _zegoSystemUiPrepared = false;
+bool _fcmBackgroundHandlerRegistered = false;
+bool _homeWidgetCallbackRegistered = false;
+
+Future<void> _recordFatalError(Object error, StackTrace stack) async {
+  debugPrint('Uncaught app error: $error');
+  if (!kIsWeb && Firebase.apps.isNotEmpty) {
+    try {
+      await FirebaseCrashlytics.instance.recordError(
+        error,
+        stack,
+        fatal: true,
+      );
+    } catch (_) {}
+  }
+}
+
+void _configureCrashlytics() {
+  if (kIsWeb || Firebase.apps.isEmpty) return;
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+
+    final String msg = details.exceptionAsString();
+    if (msg.contains('Invalid state transition') &&
+        msg.contains('AppLifecycleState')) {
+      FirebaseCrashlytics.instance.recordError(
+        details.exception,
+        details.stack,
+        reason: 'ZegoSystemService lifecycle ordering (non-fatal)',
+        fatal: false,
+      );
+      return;
+    }
+
+    FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+  };
+
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    final String msg = error.toString();
+    if (msg.contains('Invalid state transition') &&
+        msg.contains('AppLifecycleState')) {
+      FirebaseCrashlytics.instance.recordError(
+        error,
+        stack,
+        reason: 'ZegoSystemService lifecycle ordering (non-fatal)',
+        fatal: false,
+      );
+      return true;
+    }
+
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+}
+
+Future<void> _prepareZegoSystemCallingUiOnce() async {
+  if (kIsWeb || _zegoSystemUiPrepared) return;
+
+  _zegoSystemUiPrepared = true;
+  try {
+    ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
+    await ZegoUIKit().initLog();
+    await ZegoUIKitPrebuiltCallInvitationService()
+        .useSystemCallingUI([ZegoUIKitSignalingPlugin()]);
+  } catch (e, stack) {
+    _zegoSystemUiPrepared = false;
+    debugPrint('Zego system calling UI setup failed: $e');
+    if (!kIsWeb && Firebase.apps.isNotEmpty) {
+      await FirebaseCrashlytics.instance.recordError(
+        e,
+        stack,
+        reason: 'Zego system calling UI setup failed',
+        fatal: false,
+      );
+    }
+  }
+}
+
+void _registerFcmBackgroundHandlerOnce() {
+  if (kIsWeb || _fcmBackgroundHandlerRegistered) return;
+  FirebaseMessaging.onBackgroundMessage(_handleFcmBackground);
+  _fcmBackgroundHandlerRegistered = true;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HomeWidget background callback
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,34 +187,33 @@ Future<void> callbackDispatcher(Uri? uri) async {
     }
 
     final bool isDone = action == 'done' || action == 'completed';
-    final String newStatus = isDone ? 'completed' : 'missed';
 
-    // ── FIXED: Always use RPCs — never direct .update() ──────────────────────
-    // Direct .update() for 'missed' is blocked by RLS (no policy allows it).
-    // advance_queue_safely has SECURITY DEFINER so it bypasses RLS correctly.
-    // Fallback: mark_booking_missed RPC (also SECURITY DEFINER) handles missed
-    // specifically with a time-guard so only past appointments are affected.
-    // ─────────────────────────────────────────────────────────────────────────
     try {
-      await Supabase.instance.client.rpc(
-        'advance_queue_safely',
-        params: {
-          'target_booking_id': bookingId,
-          'new_status': newStatus,
-        },
-      );
+      if (isDone) {
+        await Supabase.instance.client.rpc(
+          'mark_booking_completed',
+          params: {'p_booking_id': bookingId},
+        );
+      } else {
+        await Supabase.instance.client.rpc(
+          'mark_booking_missed',
+          params: {'p_booking_id': bookingId},
+        );
+      }
     } catch (primaryError) {
-      debugPrint('advance_queue_safely failed: $primaryError — trying fallback RPC');
+      debugPrint('Widget action RPC failed: $primaryError — trying fallback');
       try {
         if (isDone) {
-          // Fallback for completed — use direct handler
           await Supabase.instance.client
               .from('bookings')
-              .update({'status': 'completed', 'updated_at': DateTime.now().toIso8601String()})
-              .eq('id', bookingId)
-              .eq('status', 'confirmed'); // only update if still confirmed, safe
+              .update({
+                'status': 'completed',
+                'completed_at': DateTime.now().toIso8601String(),
+                'is_expired': false,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', bookingId);
         } else {
-          // Fallback for missed — MUST use RPC, direct update blocked by RLS
           await Supabase.instance.client.rpc(
             'mark_booking_missed',
             params: {'p_booking_id': bookingId},
@@ -130,7 +221,6 @@ Future<void> callbackDispatcher(Uri? uri) async {
         }
       } catch (fallbackError) {
         debugPrint('Fallback also failed for $bookingId: $fallbackError');
-        // Do not rethrow — widget should still update even if status fails
       }
     }
 
@@ -148,17 +238,13 @@ Future<void> callbackDispatcher(Uri? uri) async {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Background preloader — runs during splash animation, results go into AppCache.
-// Safe to fail silently: if network is slow the cache just stays empty and
-// screens fetch normally. Never blocks the UI.
+// Background preloader
 // ─────────────────────────────────────────────────────────────────────────────
 Future<void> _preloadCommonData() async {
   try {
     final client = Supabase.instance.client;
-    // Only preload if a session exists (logged-in user gets faster first screen)
     if (client.auth.currentSession == null) return;
 
-    // Fire all 3 fetches in parallel — total time = slowest single query
     final results = await Future.wait([
       client.from('hospitals').select('id, name, location, avatar_url, rating')
           .timeout(const Duration(seconds: 5)),
@@ -166,7 +252,7 @@ Future<void> _preloadCommonData() async {
           .timeout(const Duration(seconds: 5)),
       client.from('insurance_plans').select('id, name, hospital_id, icon_url')
           .timeout(const Duration(seconds: 5)),
-    ], eagerError: false);   // eagerError: false → one failure won't cancel others
+    ], eagerError: false);
 
     AppCache.set('hospitals_list',      results[0], ttl: const Duration(minutes: 10));
     AppCache.set('lab_tests_list',      results[1], ttl: const Duration(minutes: 10));
@@ -176,7 +262,7 @@ Future<void> _preloadCommonData() async {
                'labs=${(results[1] as List).length} '
                'plans=${(results[2] as List).length}');
   } catch (e) {
-    debugPrint('Preload skipped: $e'); // non-fatal
+    debugPrint('Preload skipped: $e');
   }
 }
 
@@ -185,86 +271,46 @@ Future<void> _preloadCommonData() async {
 // ─────────────────────────────────────────────────────────────────────────────
 @pragma('vm:entry-point')
 Future<void> _handleFcmBackground(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+  } catch (e) {
+    debugPrint('FCM background Firebase init skipped/failed: $e');
+  }
+
   debugPrint('FCM background: ${message.data}');
 }
 
 Future<void> main() async {
-  final WidgetsBinding widgetsBinding =
-      WidgetsFlutterBinding.ensureInitialized();
+  await runZonedGuarded<Future<void>>(() async {
+    final WidgetsBinding widgetsBinding =
+        WidgetsFlutterBinding.ensureInitialized();
 
-  // Fail fast in debug builds if any required --dart-define value is missing.
-  // This catches missing secrets before any network call is made.
-  EnvConfig.validate();
+    if (!kIsWeb) {
+      FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+    }
 
-  await loadSavedTheme();
+    EnvConfig.validate();
+    await loadSavedTheme();
 
-  // ── Step 1: Zego system-calling UI (mobile only, must be very first) ───────
-  if (!kIsWeb) {
-    ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
-    await ZegoUIKit().initLog();
-    await ZegoUIKitPrebuiltCallInvitationService()
-        .useSystemCallingUI([ZegoUIKitSignalingPlugin()]);
-  }
+    if (!kIsWeb) {
+      await Firebase.initializeApp();
+      _configureCrashlytics();
+      _registerFcmBackgroundHandlerOnce();
+    }
 
-  // ── Step 2: Firebase + Supabase init ───────────────────────────────────────
-  // These are sequential (Supabase may depend on Firebase auth token on mobile)
-  if (!kIsWeb) {
-    await Firebase.initializeApp();
-    // Catch all Flutter framework errors → Crashlytics
-    // Filter: the ZegoSystemService "Invalid state transition paused→inactive"
-    // assertion is a known ZEGO/Android-14 lifecycle ordering issue triggered
-    // by FCM waking the process while the screen is locked. It is non-fatal
-    // (the call still connects) and is fixed at root by removing the
-    // LiveActivityFirebaseMessagingService from the manifest. Log it as
-    // non-fatal so we can track frequency without polluting crash counts.
-    FlutterError.onError = (FlutterErrorDetails details) {
-      final String msg = details.exceptionAsString();
-      if (msg.contains('Invalid state transition') &&
-          msg.contains('AppLifecycleState')) {
-        // Known ZEGO+Android lifecycle ordering issue — log non-fatally
-        FirebaseCrashlytics.instance.recordError(
-          details.exception,
-          details.stack,
-          reason: 'ZegoSystemService lifecycle ordering (non-fatal)',
-          fatal: false,
-        );
-        return;
-      }
-      // All other Flutter errors are fatal
-      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
-    };
-    // Catch async errors outside Flutter (platform channels, isolates)
-    PlatformDispatcher.instance.onError = (error, stack) {
-      final String msg = error.toString();
-      if (msg.contains('Invalid state transition') &&
-          msg.contains('AppLifecycleState')) {
-        FirebaseCrashlytics.instance.recordError(
-          error, stack,
-          reason: 'ZegoSystemService lifecycle ordering (non-fatal)',
-          fatal: false,
-        );
-        return true;
-      }
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-      return true;
-    };
-  }
-  await Supabase.initialize(
-    url: EnvConfig.supabaseUrl,
-    anonKey: EnvConfig.supabaseAnonKey,
-  );
+    await Supabase.initialize(
+      url: EnvConfig.supabaseUrl,
+      anonKey: EnvConfig.supabaseAnonKey,
+    );
 
-  // ── Step 3: Preserve native splash on mobile ───────────────────────────────
-  if (!kIsWeb) {
-    FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-  }
+    unawaited(_preloadCommonData());
 
-  // ── Step 4: Kick off background preload immediately — DO NOT await ─────────
-  // This runs concurrently with the Flutter splash animation.
-  // By the time the 1600ms animation finishes, common data is already cached.
-  _preloadCommonData(); // intentionally unawaited
-
-  runApp(const HealthApp());
+    runApp(const HealthApp());
+  }, _recordFatalError);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -304,8 +350,6 @@ class _SwasthallSplashScreenState extends State<SwasthallSplashScreen>
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
           if (!kIsWeb) FlutterNativeSplash.remove();
-          // Preload was already kicked off in main() before runApp().
-          // No need to call it again here — the cache is already filling.
           _controller.forward().then((_) => _navigateToNext());
         }
       });
@@ -484,7 +528,6 @@ class _HealthAppState extends State<HealthApp> {
           navigatorKey: navigatorKey,
           debugShowCheckedModeBanner: false,
           title: 'Swasthall',
-          // ── Light theme ────────────────────────────────────────────────
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,
@@ -495,7 +538,6 @@ class _HealthAppState extends State<HealthApp> {
             ),
             scaffoldBackgroundColor: const Color(0xFFF8FAFC),
           ),
-          // ── Dark theme ─────────────────────────────────────────────────
           darkTheme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.dark,
@@ -517,13 +559,26 @@ class _HealthAppState extends State<HealthApp> {
               unselectedItemColor: Color(0xFF64748B),
             ),
           ),
-          // ── Controlled by user preference ──────────────────────────────
           themeMode: themeMode,
           home: const SwasthallSplashScreen(nextScreen: AuthGate()),
           routes: {
             '/login': (context) => const LoginPage(),
             '/register': (context) => const RegistrationPage(),
           },
+          onUnknownRoute: (settings) => MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('Page unavailable')),
+              body: const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'This page is not available in this build.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+          ),
         );
       },
     );
@@ -544,12 +599,18 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   String? _userRole;
   bool _isLoadingRole = false;
   String? _lastCheckedUserId;
+  bool _registrationComplete = true;
+  bool _consentsCompleted = true;
+  bool _docsSubmitted = true;
+  bool _requiresProfessionalVerification = false;
+  String? _resolvedFullName;
 
   bool _isZegoInitialized = false;
   String? _zegoInitializedUserId;
   bool _isInitializingZego = false;
 
   static bool _hasAnnouncedThisSession = false;
+  static bool _isShowingResetScreen = false;
 
   final VoiceService _voiceService = VoiceService();
 
@@ -557,9 +618,28 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   StreamSubscription<Uri>? _linkSub;
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<IncomingCallPayload>? _realtimeCallSub;
+  StreamSubscription<RemoteMessage>? _fcmOnMessageSub;
+  StreamSubscription<RemoteMessage>? _fcmOpenAppSub;
+
+  bool _isShowingIncomingCallOverlay = false;
+  String? _activeIncomingCallId;
+  String? _realtimeListenerUserId;
+  bool _isRealtimeListenerStarting = false;
 
   String? _lastWelcomedUserId;
   String? _lastFetchScheduledUserId;
+  String? _lastAuthTrackedUserId;
+  String? _permissionsRequestedForUserId;
+  bool _signedOutCleanupScheduled = false;
+
+  StreamSubscription<List<Map<String, dynamic>>>? _patientWidgetBookingSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _patientWidgetQueueSub;
+  String? _patientWidgetUserId;
+  String? _patientWidgetBookingId;
+  String? _patientWidgetProviderId;
+  String _patientWidgetDoctorName = 'Doctor';
+  int _patientWidgetOriginalQueue = 0;
+  bool _isHandlingPendingWidgetLaunch = false;
 
   @override
   void initState() {
@@ -571,15 +651,20 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!kIsWeb) {
-        await VoiceService().initTts();
         await HomeWidget.setAppGroupId('group.com.raunak.swasthall');
-        HomeWidget.registerInteractivityCallback(callbackDispatcher);
+        if (!_homeWidgetCallbackRegistered) {
+          HomeWidget.registerInteractivityCallback(callbackDispatcher);
+          _homeWidgetCallbackRegistered = true;
+        }
         if (mounted) FlutterNativeSplash.remove();
       } else {
         if (mounted) FlutterNativeSplash.remove();
       }
-      // Start Realtime call listener after frame is rendered — safe on both platforms
-      if (mounted) _setupRealtimeCallListener();
+
+      if (mounted) unawaited(_consumePendingWidgetLaunch());
+
+      // 🔧 Fetch remote feature flags (maintenance, force-update, feature toggles)
+      if (mounted) unawaited(RemoteConfigService.fetchAndApply(context));
     });
   }
 
@@ -587,19 +672,344 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
       (data) async {
         final event = data.event;
+        final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
         if (event == AuthChangeEvent.signedIn ||
             event == AuthChangeEvent.tokenRefreshed ||
             event == AuthChangeEvent.userUpdated) {
+          final bool userChanged =
+              currentUserId != null && currentUserId != _lastAuthTrackedUserId;
+
+          if (userChanged) {
+            await _clearFcmTokenForUser(_lastAuthTrackedUserId);
+            await _resetCallIdentityForAccountChange();
+          }
+
+          _lastAuthTrackedUserId = currentUserId;
           await AccountService.saveCurrentAccount();
-          // Re-subscribe Realtime listener for the newly signed-in user
           _setupRealtimeCallListener();
+
+          if (!kIsWeb && currentUserId != null && currentUserId.isNotEmpty) {
+            await _saveFcmToken(currentUserId);
+          }
         }
+
         if (event == AuthChangeEvent.signedOut) {
-          _realtimeCallSub?.cancel();
-          RealtimeCallService().dispose();
+          final oldUserId = _lastAuthTrackedUserId;
+          _lastAuthTrackedUserId = null;
+          await _clearFcmTokenForUser(oldUserId);
+          await _realtimeCallSub?.cancel();
+          _realtimeCallSub = null;
+          _fcmOnMessageSub?.cancel();
+          _fcmOnMessageSub = null;
+          _fcmOpenAppSub?.cancel();
+          _fcmOpenAppSub = null;
+          await _stopPatientWidgetSync(clearPatientWidget: true);
+          await _resetCallIdentityForAccountChange();
+          // Invalidate remote config so it re-fetches on next login
+          RemoteConfigService.invalidate();
+        }
+
+        if (event == AuthChangeEvent.passwordRecovery &&
+            !_isShowingResetScreen) {
+          _isShowingResetScreen = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final nav = navigatorKey.currentState;
+            if (nav == null) {
+              _isShowingResetScreen = false;
+              return;
+            }
+            nav.push(
+              MaterialPageRoute(
+                builder: (_) => const ResetPasswordScreen(recoveryFlowHint: true),
+              ),
+            ).whenComplete(() => _isShowingResetScreen = false);
+          });
         }
       },
     );
+  }
+
+  Future<void> _clearFcmTokenForUser(String? userId) async {
+    if (kIsWeb || userId == null || userId.isEmpty) return;
+    try {
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'fcm_token': null})
+          .eq('id', userId);
+      debugPrint('Cleared FCM token for user: $userId');
+    } catch (e) {
+      debugPrint('FCM token clear error for $userId: $e');
+    }
+  }
+
+  Future<void> _resetCallIdentityForAccountChange() async {
+    await _cancelRealtimeCallListener(disposeService: true);
+
+    incomingInvite.value = null;
+    _isShowingIncomingCallOverlay = false;
+    _activeIncomingCallId = null;
+    activeCallBookingId = null;
+    activeCallIsNurse = false;
+
+    if (!kIsWeb) {
+      try {
+        ZegoUIKitPrebuiltCallInvitationService().uninit();
+      } catch (_) {}
+    }
+
+    _isZegoInitialized = false;
+    _zegoInitializedUserId = null;
+    _isInitializingZego = false;
+    _userRole = null;
+    _registrationComplete = true;
+    _consentsCompleted = true;
+    _docsSubmitted = true;
+    _requiresProfessionalVerification = false;
+    _resolvedFullName = null;
+    _lastCheckedUserId = null;
+    _lastFetchScheduledUserId = null;
+    _lastWelcomedUserId = null;
+    _hasAnnouncedThisSession = false;
+    _permissionsRequestedForUserId = null;
+  }
+
+
+  Future<void> _cancelRealtimeCallListener({bool disposeService = false}) async {
+    try {
+      await _realtimeCallSub?.cancel();
+    } catch (_) {}
+    _realtimeCallSub = null;
+    _realtimeListenerUserId = null;
+    _isRealtimeListenerStarting = false;
+    if (disposeService) {
+      RealtimeCallService().dispose();
+    }
+  }
+
+  Future<void> _consumePendingWidgetLaunch() async {
+    if (kIsWeb || _isHandlingPendingWidgetLaunch) return;
+    _isHandlingPendingWidgetLaunch = true;
+
+    try {
+      final data = await QueueWidgetService.getWidgetLaunchData();
+      if (!mounted || data == null) return;
+
+      switch (data.route) {
+        case '/widget_action':
+          await QueueWidgetService.handleWidgetAction(data);
+          if (!mounted) return;
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(builder: (_) => const BookingSuccessScreenLauncher()),
+          );
+          return;
+        case '/widget_nurse_action':
+          await QueueWidgetService.handleWidgetAction(data);
+          if (!mounted) return;
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(builder: (_) => const PhysicalQueuePage(userRole: 'nurse')),
+          );
+          return;
+        case '/nurse_tasks':
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(builder: (_) => const PhysicalQueuePage(userRole: 'nurse')),
+          );
+          return;
+        case '/patient_queue':
+        case '/booking':
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(builder: (_) => const BookingSuccessScreenLauncher()),
+          );
+          return;
+      }
+    } catch (e) {
+      debugPrint('Widget launch handling error: $e');
+    } finally {
+      _isHandlingPendingWidgetLaunch = false;
+    }
+  }
+
+  bool _isWidgetEligibleBooking(Map<String, dynamic> booking) {
+    final status = (booking['status'] ?? '').toString().toLowerCase();
+    final type = (booking['type'] ?? '').toString().toLowerCase();
+    final isExpired = booking['is_expired'] == true;
+
+    return !isExpired &&
+        type == 'physical' &&
+        const [
+          'pending',
+          'confirmed',
+          'scheduled',
+          'in_progress',
+          'calling',
+          'consulting',
+          'nurse_calling',
+        ].contains(status);
+  }
+
+  int _parseQueueValue(dynamic value) => int.tryParse(value?.toString() ?? '0') ?? 0;
+
+  Future<String> _resolveDoctorNameForWidget(
+    Map<String, dynamic> booking,
+    String providerId,
+  ) async {
+    final inline = (booking['doctor_name'] ?? booking['provider_name'] ?? '')
+        .toString()
+        .trim();
+    if (inline.isNotEmpty) return inline;
+
+    if (providerId.isEmpty) return 'Doctor';
+
+    try {
+      final staffRow = await Supabase.instance.client
+          .from('staff')
+          .select('full_name')
+          .eq('id', providerId)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 4));
+      final staffName = staffRow?['full_name']?.toString().trim() ?? '';
+      if (staffName.isNotEmpty) return staffName;
+    } catch (_) {}
+
+    try {
+      final profileRow = await Supabase.instance.client
+          .from('profiles')
+          .select('full_name')
+          .eq('id', providerId)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 4));
+      final profileName = profileRow?['full_name']?.toString().trim() ?? '';
+      if (profileName.isNotEmpty) return profileName;
+    } catch (_) {}
+
+    return 'Doctor';
+  }
+
+  Future<void> _cancelPatientWidgetQueueStream() async {
+    try {
+      await _patientWidgetQueueSub?.cancel();
+    } catch (_) {}
+    _patientWidgetQueueSub = null;
+    _patientWidgetProviderId = null;
+  }
+
+  Future<void> _startPatientWidgetQueueStream(String providerId) async {
+    await _cancelPatientWidgetQueueStream();
+    if (providerId.isEmpty) return;
+
+    _patientWidgetProviderId = providerId;
+    _patientWidgetQueueSub = Supabase.instance.client
+        .from('staff_queues')
+        .stream(primaryKey: ['staff_id'])
+        .eq('staff_id', providerId)
+        .listen((rows) {
+      final servingNow = rows.isNotEmpty
+          ? _parseQueueValue(rows.first['currently_serving'])
+          : 0;
+
+      if (_patientWidgetBookingId == null || _patientWidgetBookingId!.isEmpty) {
+        return;
+      }
+
+      unawaited(QueueWidgetService.updatePatientRealtimeWidget(
+        appointmentId: _patientWidgetBookingId!,
+        doctorName: _patientWidgetDoctorName,
+        originalQueueNumber: _patientWidgetOriginalQueue,
+        currentlyServing: servingNow,
+      ));
+    }, onError: (Object e, StackTrace stackTrace) {
+      debugPrint('Patient widget queue stream error: $e');
+    });
+  }
+
+  Future<void> _handlePatientWidgetBookings(List<Map<String, dynamic>> rows) async {
+    final active = rows.where(_isWidgetEligibleBooking).toList()
+      ..sort((a, b) {
+        final dateA = (a['appointment_date'] ?? '').toString();
+        final dateB = (b['appointment_date'] ?? '').toString();
+        final cmpDate = dateA.compareTo(dateB);
+        if (cmpDate != 0) return cmpDate;
+
+        final queueA = _parseQueueValue(a['queue_number']);
+        final queueB = _parseQueueValue(b['queue_number']);
+        if (queueA != queueB) return queueA.compareTo(queueB);
+
+        final createdA = (a['created_at'] ?? '').toString();
+        final createdB = (b['created_at'] ?? '').toString();
+        return createdA.compareTo(createdB);
+      });
+
+    if (active.isEmpty) {
+      _patientWidgetBookingId = null;
+      _patientWidgetOriginalQueue = 0;
+      _patientWidgetDoctorName = 'Doctor';
+      await _cancelPatientWidgetQueueStream();
+      await QueueWidgetService.clearPatientWidget();
+      return;
+    }
+
+    final booking = active.first;
+    final bookingId = booking['id']?.toString().trim() ?? '';
+    final providerId = (booking['provider_id'] ?? booking['staff_id'] ?? booking['doctor_id'])
+            ?.toString()
+            .trim() ??
+        '';
+    final originalQueue = _parseQueueValue(booking['queue_number']);
+    final doctorName = await _resolveDoctorNameForWidget(booking, providerId);
+
+    final shouldRestartQueue = providerId != _patientWidgetProviderId;
+
+    _patientWidgetBookingId = bookingId;
+    _patientWidgetOriginalQueue = originalQueue;
+    _patientWidgetDoctorName = doctorName;
+
+    await QueueWidgetService.updatePatientRealtimeWidget(
+      appointmentId: bookingId,
+      doctorName: doctorName,
+      originalQueueNumber: originalQueue,
+      currentlyServing: 0,
+    );
+
+    if (shouldRestartQueue) {
+      await _startPatientWidgetQueueStream(providerId);
+    }
+  }
+
+  Future<void> _stopPatientWidgetSync({bool clearPatientWidget = false}) async {
+    try {
+      await _patientWidgetBookingSub?.cancel();
+    } catch (_) {}
+    _patientWidgetBookingSub = null;
+    _patientWidgetUserId = null;
+    _patientWidgetBookingId = null;
+    _patientWidgetOriginalQueue = 0;
+    _patientWidgetDoctorName = 'Doctor';
+    await _cancelPatientWidgetQueueStream();
+
+    if (clearPatientWidget) {
+      await QueueWidgetService.clearPatientWidget();
+    }
+  }
+
+  Future<void> _startPatientWidgetSync(User user) async {
+    if (kIsWeb) return;
+    if (_patientWidgetUserId == user.id && _patientWidgetBookingSub != null) {
+      return;
+    }
+
+    await _stopPatientWidgetSync(clearPatientWidget: false);
+    _patientWidgetUserId = user.id;
+
+    _patientWidgetBookingSub = Supabase.instance.client
+        .from('bookings')
+        .stream(primaryKey: ['id'])
+        .eq('patient_id', user.id)
+        .order('appointment_date', ascending: true)
+        .listen((rows) {
+      unawaited(_handlePatientWidgetBookings(rows));
+    }, onError: (Object e, StackTrace stackTrace) {
+      debugPrint('Patient widget booking stream error: $e');
+    });
   }
 
   void _setupDeepLinks() {
@@ -618,6 +1028,25 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       if (!mounted || uri == null) return;
       _handleIncomingDeepLink(uri);
     });
+  }
+
+
+  Future<void> _handleLoginCallback(Uri uri) async {
+    debugPrint('Google login callback received: $uri');
+
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      debugPrint('Google login callback received but currentUser is still null');
+      setState(() {});
+      return;
+    }
+
+    debugPrint('Google login callback session ready for user: ${user.id}');
+    _checkInitialSession();
+    setState(() {});
   }
 
   void _handleIncomingDeepLink(Uri uri) {
@@ -640,37 +1069,87 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
           ),
         );
         break;
+      case 'login-callback':
+        unawaited(_handleLoginCallback(uri));
+        break;
+      case 'reset-password':
+        if (!_AuthGateState._isShowingResetScreen) {
+          _AuthGateState._isShowingResetScreen = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final nav = navigatorKey.currentState;
+            if (nav == null) {
+              _AuthGateState._isShowingResetScreen = false;
+              return;
+            }
+            nav.push(
+              MaterialPageRoute(
+                builder: (_) => const ResetPasswordScreen(recoveryFlowHint: true),
+              ),
+            ).whenComplete(() => _AuthGateState._isShowingResetScreen = false);
+          });
+        }
+        break;
+
+      // ── eSewa browser payment callbacks ──────────────────────────────────
+      // Fired when eSewa redirects to swasthall://esewa-success?data=BASE64
+      // or swasthall://esewa-failure after payment attempt.
+      case 'esewa-success':
+      case 'esewa-failure':
+        EsewaCallbackHandler.complete(uri);
+        break;
     }
   }
 
-  /// Listens for incoming Realtime call signals on BOTH web and mobile.
-  /// On mobile, Zego push handles it while the app is in background.
-  /// This covers: web callers → mobile patients and web callers → web patients.
   void _setupRealtimeCallListener() {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
+    if (_isRealtimeListenerStarting) return;
+    if (_realtimeListenerUserId == user.id && _realtimeCallSub != null) return;
 
     debugPrint('📡 Setting up Realtime call listener for uid: ${user.id}');
+    _isRealtimeListenerStarting = true;
 
-    try {
-      _realtimeCallSub?.cancel();
+    Future<void>(() async {
+      await _cancelRealtimeCallListener(disposeService: true);
+      if (!mounted) return;
+
+      _realtimeListenerUserId = user.id;
       _realtimeCallSub = RealtimeCallService()
           .listenForCalls(user.id)
           .listen((IncomingCallPayload payload) {
         debugPrint('📲 Incoming call dialog triggered: callId=${payload.callId}, caller=${payload.callerName}');
         if (!mounted) return;
+        if (_activeIncomingCallId == payload.callId) return;
         unawaited(_showIncomingCallDialog(payload));
+      }, onError: (Object error, StackTrace stackTrace) {
+        debugPrint('RealtimeCall listener stream error: $error');
       });
+
       debugPrint('📡 Realtime call listener active');
-    } catch (e) {
+    }).catchError((Object e, StackTrace stack) {
       debugPrint('RealtimeCall listener setup error: $e');
-    }
+    }).whenComplete(() {
+      _isRealtimeListenerStarting = false;
+    });
   }
 
   Future<void> _showIncomingCallDialog(IncomingCallPayload payload) async {
     final nav = navigatorKey.currentState;
     final user = Supabase.instance.client.auth.currentUser;
     if (nav == null || user == null) return;
+    if (_isShowingIncomingCallOverlay && _activeIncomingCallId == payload.callId) {
+      return;
+    }
+
+    // On mobile, Zego's invitation service shows its own system calling UI
+    // and fires onIncomingCallReceived which sets incomingInvite.value, causing
+    // BookingSuccessScreen to show _buildIncomingCallUI. Give it 200 ms to fire.
+    // If it did, stacking _IncomingCallOverlay on top creates the double screen.
+    if (!kIsWeb) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
+      if (incomingInvite.value != null) return;
+    }
 
     final myZegoUid = await _getMyZegoUid(user);
     if (myZegoUid == null || myZegoUid.trim().isEmpty) {
@@ -683,6 +1162,9 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
             ? user.userMetadata!['full_name'].toString().trim()
             : 'Patient';
 
+    _isShowingIncomingCallOverlay = true;
+    _activeIncomingCallId = payload.callId;
+
     nav.push(
       PageRouteBuilder(
         opaque: false,
@@ -690,17 +1172,28 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
         barrierDismissible: false,
         pageBuilder: (ctx, _, __) => _IncomingCallOverlay(
           payload: payload,
-          myUserId: myZegoUid.trim(),
+          myZegoUid: myZegoUid.trim(),
           myUserName: myUserName,
         ),
       ),
-    );
+    ).whenComplete(() {
+      _isShowingIncomingCallOverlay = false;
+      if (_activeIncomingCallId == payload.callId) {
+        _activeIncomingCallId = null;
+      }
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Android 14+ lifecycle: resumed -> inactive -> hidden -> paused
+    // Android 16 (SDK 36) with Zego sometimes skips 'hidden', causing a
+    // non-fatal assertion in AppLifecycleListener — that's the Zego bug in logs.
+    // Already caught as non-fatal in FlutterError.onError.
+    // Handle all three exit states so voice stops correctly on all Android versions.
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
       _voiceService.stop();
     }
     if (state == AppLifecycleState.resumed) {
@@ -712,8 +1205,10 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   void dispose() {
     _authSub?.cancel();
     _linkSub?.cancel();
-    _realtimeCallSub?.cancel();
-    RealtimeCallService().dispose();
+    _fcmOnMessageSub?.cancel();
+    _fcmOpenAppSub?.cancel();
+    unawaited(_cancelRealtimeCallListener(disposeService: true));
+    unawaited(_stopPatientWidgetSync(clearPatientWidget: false));
     WidgetsBinding.instance.removeObserver(this);
     _voiceService.stop();
     super.dispose();
@@ -742,54 +1237,63 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
-    final name = user.userMetadata?['full_name'] ?? 'User';
+    _lastAuthTrackedUserId ??= user.id;
+    unawaited(AccountService.saveCurrentAccount());
+    _setupRealtimeCallListener();
 
-    _getMyZegoUid(user).then((zegoUid) async {
-      if (!mounted) return;
-      if (zegoUid == null || zegoUid.trim().isEmpty) {
-        debugPrint('ZEGO init skipped: profiles.zego_uid missing for ${user.id}');
-        return;
-      }
-      await _initOrReinitZego(zegoUid.trim(), name);
-    });
-
-    // Save FCM token so web callers can send push notifications
     if (!kIsWeb) {
-      _saveFcmToken(user.id);
+      unawaited(_saveFcmToken(user.id));
     }
   }
 
   Future<void> _saveFcmToken(String userId) async {
     try {
+      if (Firebase.apps.isEmpty) return;
+
       final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission();
-      final token = await messaging.getToken();
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint('FCM permission denied by user');
+        return;
+      }
+
+      final token = await messaging.getToken().timeout(const Duration(seconds: 8));
       if (token == null) return;
       debugPrint('FCM token: ${token.substring(0, 20)}...');
       await Supabase.instance.client
           .from('profiles')
+          .update({'fcm_token': null})
+          .eq('fcm_token', token)
+          .neq('id', userId);
+
+      await Supabase.instance.client
+          .from('profiles')
           .update({'fcm_token': token})
           .eq('id', userId);
-      debugPrint('FCM token saved to profiles');
+      debugPrint('FCM token saved to profiles and removed from other accounts');
 
-      // Listen for incoming call FCM data messages (web→phone background)
-      FirebaseMessaging.onMessage.listen(_handleFcmMessage);
-      FirebaseMessaging.onBackgroundMessage(_handleFcmBackground);
+      _fcmOnMessageSub ??= FirebaseMessaging.onMessage.listen(_handleFcmMessage);
 
-      // App opened from a tapped notification while backgrounded
-      FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+      _fcmOpenAppSub ??= FirebaseMessaging.onMessageOpenedApp.listen((msg) {
         debugPrint('FCM onMessageOpenedApp: ${msg.data}');
         if (msg.data['type'] == 'incoming_call') {
           _handleIncomingCallFcm(msg.data);
         }
+        // 🔐 App opened by tapping new_login notification — go to notification screen
+        if (msg.data['type'] == 'new_login') {
+          navigatorKey.currentState?.pushNamed('/notifications');
+        }
       });
 
-      // App cold-started (killed) by tapping a notification — user already accepted
       final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
       debugPrint('FCM launch message: ${initialMessage?.data}');
       if (initialMessage != null &&
           initialMessage.data['type'] == 'incoming_call') {
-        // Delay until the widget tree + ZEGO are ready, then auto-accept
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _handleKilledAppAccept(initialMessage.data);
         });
@@ -799,8 +1303,6 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     }
   }
 
-  /// Called when the app was KILLED and user tapped Accept on the notification.
-  /// The dialog is skipped — navigate directly to the call page.
   void _handleKilledAppAccept(Map<String, dynamic> data) async {
     final channelName = data['channel_name'] ?? '';
     final callerName  = data['caller_name']  ?? 'Doctor';
@@ -810,7 +1312,6 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
     debugPrint('[KilledAccept] channel=$channelName caller=$callerName');
 
-    // Wait for auth + zego_uid to be ready (up to 8 seconds)
     String? myZegoUid;
     String  myName = 'Patient';
     for (int i = 0; i < 16; i++) {
@@ -828,7 +1329,6 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       return;
     }
 
-    // Signal accept so the doctor knows we're joining
     await RealtimeCallService().acceptCall(channelName);
 
     final nav = navigatorKey.currentState;
@@ -850,17 +1350,24 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     ));
   }
 
+  // ── FCM foreground message handler ─────────────────────────────────────
   void _handleFcmMessage(RemoteMessage message) {
     debugPrint('FCM foreground message: ${message.data}');
+
     if (message.data['type'] == 'incoming_call') {
       _handleIncomingCallFcm(message.data);
+    }
+
+    // 🔐 New device login — show in-app snackbar while user is active
+    if (message.data['type'] == 'new_login') {
+      _handleNewLoginFcm(message.data);
     }
   }
 
   void _handleIncomingCallFcm(Map<String, dynamic> data) {
     final payload = IncomingCallPayload(
       callId:     data['channel_name'] ?? '',
-      callerId:   data['caller_id'] ?? '',   // the doctor who placed the call
+      callerId:   data['caller_id'] ?? '',
       callerName: data['caller_name'] ?? 'Doctor',
       bookingId:  data['booking_id'] ?? '',
     );
@@ -868,19 +1375,89 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     unawaited(_showIncomingCallDialog(payload));
   }
 
+  /// 🔐 Shows a security snackbar when user is active and logs in on another device.
+  /// The notification is also saved to the DB (by the edge function) so it
+  /// appears in notification_screen.dart automatically via realtime stream.
+  void _handleNewLoginFcm(Map<String, dynamic> data) {
+    final device   = data['device']   ?? 'Unknown device';
+    final location = data['location'] ?? 'Unknown location';
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null || !ctx.mounted) return;
+
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        backgroundColor: const Color(0xFF1F2937),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Row(
+          children: [
+            const Icon(Icons.security_rounded, color: Color(0xFF6366F1), size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'New Login Detected',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontSize: 13),
+                  ),
+                  Text(
+                    '$device • $location',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'View',
+          textColor: const Color(0xFF818CF8),
+          onPressed: () {
+            // Navigate to notification screen — security notification is already
+            // stored in the DB by the edge function and will appear there
+            navigatorKey.currentState?.pushNamed('/notifications');
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> requestPermissions() async {
     if (kIsWeb) return;
-    await [
+
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId != null &&
+        _permissionsRequestedForUserId == currentUserId) {
+      return;
+    }
+
+    final permissions = <Permission>[
       Permission.camera,
       Permission.microphone,
       Permission.notification,
-    ].request();
+    ];
 
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      final status = await Permission.systemAlertWindow.status;
-      if (!status.isGranted) {
-        await Permission.systemAlertWindow.request();
+    try {
+      await permissions.request();
+
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final status = await Permission.systemAlertWindow.status;
+        if (!status.isGranted) {
+          await Permission.systemAlertWindow.request();
+        }
       }
+
+      _permissionsRequestedForUserId = currentUserId;
+    } catch (e) {
+      debugPrint('Permission request skipped/failed: $e');
     }
   }
 
@@ -888,10 +1465,15 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     if (_hasAnnouncedThisSession) return;
     _hasAnnouncedThisSession = true;
 
-    _voiceService.enableGreetingOnce();
-    await _voiceService.speakWithSavedLanguage(
-      "Welcome to Swasthall. Your family's health, always.",
-    );
+    try {
+      await _voiceService.initTts();
+      _voiceService.enableGreetingOnce();
+      await _voiceService.speakWithSavedLanguage(
+        "Welcome to Swasthall. Your family's health, always.",
+      );
+    } catch (e) {
+      debugPrint('Welcome voice skipped: $e');
+    }
   }
 
   Future<void> _initOrReinitZego(String zegoUserId, String userName) async {
@@ -903,6 +1485,8 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     _isInitializingZego = true;
 
     try {
+      await _prepareZegoSystemCallingUiOnce();
+
       if (_isZegoInitialized && _zegoInitializedUserId != zegoUserId) {
         try {
           ZegoUIKitPrebuiltCallInvitationService().uninit();
@@ -915,7 +1499,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
       await ZegoUIKitPrebuiltCallInvitationService().init(
         appID: EnvConfig.zegoAppId,
-        appSign: EnvConfig.zegoAppSign,
+        appSign: '', // Security: token-based auth via zego-token edge function
         userID: zegoUserId,
         userName: userName,
         plugins: [ZegoUIKitSignalingPlugin()],
@@ -935,7 +1519,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
           ),
         ),
         events: ZegoUIKitPrebuiltCallEvents(
-          onCallEnd: (ZegoCallEndEvent event, VoidCallback defaultAction) {
+          onCallEnd: (ZegoCallEndEvent event, VoidCallback defaultAction) async {
             defaultAction();
 
             final String? bid = activeCallBookingId;
@@ -943,8 +1527,30 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
               final bool asNurse = activeCallIsNurse;
               activeCallBookingId = null;
               activeCallIsNurse = false;
-              SupabaseHandler().endConsultation(bid, nurse: asNurse);
-              switchToCompletedTab.value = !switchToCompletedTab.value;
+
+              try {
+                if (asNurse) {
+                  await Supabase.instance.client.rpc(
+                    'mark_nurse_triaged',
+                    params: {'p_booking_id': bid},
+                  );
+                } else {
+                  await Supabase.instance.client.rpc(
+                    'mark_booking_completed',
+                    params: {'p_booking_id': bid},
+                  );
+                }
+              } catch (e) {
+                debugPrint('mark_booking finalize failed, queuing for retry: $e');
+                await OfflineBookingQueue.submit(
+                  rpcParams: {'p_booking_id': bid},
+                  rpcName: asNurse ? 'mark_nurse_triaged' : 'mark_booking_completed',
+                );
+              }
+
+              if (!asNurse) {
+                switchToCompletedTab.value = !switchToCompletedTab.value;
+              }
             }
           },
         ),
@@ -1015,39 +1621,38 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
   Future<void> _fetchRole(User user) async {
     if (_isLoadingRole || _lastCheckedUserId == user.id) return;
-    if (_userRole == null && mounted) {
+    if (mounted) {
       setState(() => _isLoadingRole = true);
     }
 
     _lastCheckedUserId = user.id;
 
     try {
-      final data = await Supabase.instance.client
-          .from('profiles')
-          .select('role, full_name, is_verified')
-          .eq('id', user.id)
-          .maybeSingle()
-          .timeout(const Duration(seconds: 4));
+      final status = await AuthOnboardingHelper.resolve(
+        Supabase.instance.client,
+        user,
+      );
 
       if (!mounted) return;
 
-      final String fetchedRole =
-          data?['role'] ?? user.userMetadata?['role'] ?? 'patient';
-      final bool isVerified = data?['is_verified'] ?? true;
-
-      final List<String> professionalRoles = [
-        'doctor', 'nurse', 'technician', 'pharmacist'
-      ];
-      final bool needsVerification =
-          professionalRoles.contains(fetchedRole.toLowerCase()) && !isVerified;
+      final fetchedRole =
+          status.role ?? user.userMetadata?['role']?.toString() ?? 'patient';
 
       setState(() {
-        _userRole = needsVerification ? '__pending__' : fetchedRole;
+        _userRole = fetchedRole;
+        _registrationComplete = status.isComplete;
+        _consentsCompleted = status.consentsCompleted;
+        _docsSubmitted = status.docsSubmitted;
+        _requiresProfessionalVerification = status.requiresProfessionalVerification;
+        _resolvedFullName = status.fullName;
         _isLoadingRole = false;
       });
 
-      final name =
-          data?['full_name'] ?? user.userMetadata?['full_name'] ?? 'User';
+      if (!_registrationComplete) {
+        return;
+      }
+
+      final name = status.fullName;
 
       await requestPermissions();
       final zegoUid = await _getMyZegoUid(user);
@@ -1062,11 +1667,12 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       if (!mounted) return;
       if (_userRole == null) {
         setState(() {
-          final metaRole = user.userMetadata?['role'] ?? 'patient';
-          const professionalRoles = ['doctor', 'nurse', 'technician', 'pharmacist'];
-          _userRole = professionalRoles.contains(metaRole.toLowerCase())
-              ? 'patient'
-              : metaRole;
+          _userRole = user.userMetadata?['role']?.toString() ?? 'patient';
+          _registrationComplete = false;
+          _consentsCompleted = false;
+          _docsSubmitted = false;
+          _requiresProfessionalVerification = false;
+          _resolvedFullName = user.userMetadata?['full_name']?.toString() ?? user.email?.split('@').first ?? 'User';
           _isLoadingRole = false;
         });
       } else {
@@ -1099,6 +1705,18 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
         }
       });
     }
+
+    final normalizedRole = (_userRole ?? '').toLowerCase();
+    if (normalizedRole == 'patient' && _registrationComplete) {
+      unawaited(_startPatientWidgetSync(user));
+    } else if (normalizedRole.isNotEmpty) {
+      unawaited(_stopPatientWidgetSync(clearPatientWidget: false));
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_consumePendingWidgetLaunch());
+    });
   }
 
   void _resetSessionState() {
@@ -1108,14 +1726,39 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       } catch (_) {}
     }
 
+    unawaited(_cancelRealtimeCallListener(disposeService: true));
+    unawaited(_stopPatientWidgetSync(clearPatientWidget: true));
+
+    incomingInvite.value = null;
+    _isShowingIncomingCallOverlay = false;
+    _activeIncomingCallId = null;
+    activeCallBookingId = null;
+    activeCallIsNurse = false;
+
     _isZegoInitialized = false;
     _zegoInitializedUserId = null;
     _isInitializingZego = false;
     _userRole = null;
+    _registrationComplete = true;
+    _consentsCompleted = true;
+    _docsSubmitted = true;
+    _requiresProfessionalVerification = false;
+    _resolvedFullName = null;
     _lastCheckedUserId = null;
     _lastFetchScheduledUserId = null;
     _lastWelcomedUserId = null;
+    _permissionsRequestedForUserId = null;
     _hasAnnouncedThisSession = false;
+  }
+
+  void _scheduleSignedOutCleanup() {
+    if (_signedOutCleanupScheduled) return;
+    _signedOutCleanupScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _signedOutCleanupScheduled = false;
+      _resetSessionState();
+    });
   }
 
   @override
@@ -1129,17 +1772,19 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
           );
         }
 
-        final session = snapshot.data?.session;
+        final session = snapshot.data?.session ??
+            Supabase.instance.client.auth.currentSession;
 
         if (session == null) {
-          _resetSessionState();
+          _scheduleSignedOutCleanup();
           return const LoginPage();
         }
 
-        _userRole ??= session.user.userMetadata?['role'];
+        // Do not route from auth metadata alone. Fetch onboarding status first so
+        // incomplete registration or pending verification cannot briefly enter the app.
         _scheduleSessionWork(snapshot.data, session.user);
 
-        if (_userRole == null) {
+        if (_userRole == null || _isLoadingRole) {
           return const Scaffold(
             body: Center(
               child: CircularProgressIndicator(color: Color(0xFF6366F1)),
@@ -1147,11 +1792,21 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
           );
         }
 
-        if (_userRole == '__pending__') {
-          final user = session.user;
+        if (!_registrationComplete) {
+          return RegistrationCompletionScreen(
+            key: ValueKey('complete-${session.user.id}-${_userRole ?? 'patient'}-${_consentsCompleted ? 1 : 0}-${_docsSubmitted ? 1 : 0}'),
+            initialEmail: session.user.email ?? '',
+            initialFullName: _resolvedFullName ?? session.user.userMetadata?['full_name']?.toString() ?? session.user.email?.split('@').first ?? 'User',
+            initialRole: _userRole,
+            lockEmail: true,
+            allowRoleChange: true,
+          );
+        }
+
+        if (_requiresProfessionalVerification) {
           return VerificationPendingScreen(
-            role: user.userMetadata?['role'] ?? 'professional',
-            fullName: user.userMetadata?['full_name'],
+            role: _userRole ?? session.user.userMetadata?['role'] ?? 'professional',
+            fullName: _resolvedFullName ?? session.user.userMetadata?['full_name'],
           );
         }
 
@@ -1169,7 +1824,6 @@ class BookingSuccessScreenLauncher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // BUG-11 fix: was a blank placeholder — now routes to booking list
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -1213,7 +1867,7 @@ class _BookingDeepLinkBodyState extends State<_BookingDeepLinkBody> {
       final data = await Supabase.instance.client
           .from('bookings')
           .select('id, appointment_date, appointment_time, type, status, staff_id')
-          .or('patient_id.eq.\${user.id},user_id.eq.\${user.id}')
+          .or('patient_id.eq.${user.id},user_id.eq.${user.id}')
           .order('appointment_date', ascending: false)
           .limit(20);
       if (mounted) setState(() { _bookings = List<Map<String, dynamic>>.from(data); _loading = false; });
@@ -1258,19 +1912,18 @@ class _BookingDeepLinkBodyState extends State<_BookingDeepLinkBody> {
     );
   }
 }
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Incoming call overlay — shown on BOTH web and mobile when a Realtime
-// call signal arrives (i.e. caller is on web). On mobile, if the caller
-// used the normal Zego invitation, Zego's own UI handles it instead.
+// Incoming call overlay
 // ─────────────────────────────────────────────────────────────────────────────
 class _IncomingCallOverlay extends StatefulWidget {
   final IncomingCallPayload payload;
-  final String myUserId;
+  final String myZegoUid;
   final String myUserName;
 
   const _IncomingCallOverlay({
     required this.payload,
-    required this.myUserId,
+    required this.myZegoUid,
     required this.myUserName,
   });
 
@@ -1286,7 +1939,6 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
   @override
   void initState() {
     super.initState();
-    // Countdown + auto-decline if patient doesn't respond
     _autoDeclineTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
       setState(() => _remaining--);
@@ -1306,32 +1958,29 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
   void _accept() {
     _autoDeclineTimer.cancel();
     RealtimeCallService().acceptCall(widget.payload.callId);
-    Navigator.of(context).pop(); // pop overlay
+    Navigator.of(context).pop();
 
-    // Web uses ZegoExpressEngine directly (UIKit uses Platform.isAndroid → crashes web).
-    // Mobile uses UIKit Prebuilt as before.
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => kIsWeb
-            ? WebVideoCallPage(
-                callID:           widget.payload.callId,
-                userID:           widget.myUserId,
-                userName:         widget.myUserName,
-                patientID:        widget.payload.callerId,
-                patientName:      widget.payload.callerName,
-                professionalRole: 'patient',
-                bookingId:        widget.payload.bookingId,
-              )
-            : PatientVideoCallPage(
-                callID:           widget.payload.callId,
-                userID:           widget.myUserId,
-                userName:         widget.myUserName,
-                professionalName: widget.payload.callerName,
-                bookingId:        widget.payload.bookingId,
-                professionalId:   widget.payload.callerId,
-              ),
-      ),
-    );
+    if (kIsWeb) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => WebVideoCallPage(
+            callID:           widget.payload.callId,
+            userID:           widget.myZegoUid,
+            userName:         widget.myUserName,
+            patientID:        widget.payload.callerId,
+            patientName:      widget.payload.callerName,
+            professionalRole: 'patient',
+            bookingId:        widget.payload.bookingId,
+          ),
+        ),
+      );
+    } else {
+      // On mobile the Zego invitation service owns the call session.
+      // Accepting through it (instead of pushing PatientVideoCallPage directly)
+      // prevents the "call ends in milliseconds" race where a pending
+      // unaccepted Zego invitation conflicts with a directly-joined room.
+      ZegoUIKitPrebuiltCallInvitationService().accept();
+    }
   }
 
   void _decline() {
@@ -1345,10 +1994,12 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Center(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 32),
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
@@ -1359,10 +2010,9 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Pulse avatar
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
               Container(
                 width: 80,
                 height: 80,
@@ -1402,46 +2052,61 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
               const SizedBox(height: 28),
-              Row(
-                children: [
-                  // Decline
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _decline,
-                      icon: const Icon(Icons.call_end_rounded, size: 20),
-                      label: const Text('Decline'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEF4444),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final actionButtons = <Widget>[
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _decline,
+                        icon: const Icon(Icons.call_end_rounded, size: 20),
+                        label: const Text(
+                          'Decline',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
-                        elevation: 0,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFEF4444),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Accept
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _accept,
-                      icon: const Icon(Icons.videocam_rounded, size: 20),
-                      label: const Text('Accept'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                    const SizedBox(width: 12, height: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _accept,
+                        icon: const Icon(Icons.videocam_rounded, size: 20),
+                        label: const Text(
+                          'Accept',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
-                        elevation: 0,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ];
+
+                  if (constraints.maxWidth < 330) {
+                    return Column(children: actionButtons);
+                  }
+
+                  return Row(children: actionButtons);
+                },
               ),
             ],
+            ),
           ),
         ),
       ),

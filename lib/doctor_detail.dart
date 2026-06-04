@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'shared_widgets.dart';
+import 'health_vault_screen.dart';
 import 'theme_colors.dart';
 
 class DoctorDetailScreen extends StatefulWidget {
@@ -15,6 +16,18 @@ class DoctorDetailScreen extends StatefulWidget {
 class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   final supabase = Supabase.instance.client;
   final Color brandColor = const Color(0xFF6366F1);
+
+  late Future<List<Map<String, dynamic>>> _bookingsFuture;
+  Future<Map<String, dynamic>?>? _assignedNurseFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _bookingsFuture = _fetchBookings();
+    if (widget.staff['role']?.toString().toLowerCase() == 'doctor') {
+      _assignedNurseFuture = _fetchAssignedNurse();
+    }
+  }
 
   /// Helper to fetch the nurse assigned to this doctor via staff_pairings table
   Future<Map<String, dynamic>?> _fetchAssignedNurse() async {
@@ -41,6 +54,27 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     }
   }
 
+
+  Future<List<Map<String, dynamic>>> _fetchBookings() async {
+    final result = await supabase
+        .from('bookings')
+        .select('id, patient_id, user_id, patient_name, queue_number, appointment_time, type')
+        .eq('provider_id', widget.staff['id'])
+        .order('queue_number', ascending: true)
+        .limit(120);
+    return List<Map<String, dynamic>>.from(result);
+  }
+
+  Future<void> _refreshBookings() async {
+    final future = _fetchBookings();
+    if (mounted) {
+      setState(() {
+        _bookingsFuture = future;
+      });
+    }
+    await future;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -49,7 +83,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
         title: const Text("Staff Details", style: TextStyle(fontSize: 18)),
         elevation: 0,
         backgroundColor: AppColors.cardBg(context),
-        foregroundColor: Colors.black,
+        foregroundColor: AppColors.textPrimary(context),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -72,13 +106,15 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildDoctorHeaderGrid(),
-            _buildCredentialsSection(),
-            _buildCapacityBanner(), 
-            _buildAppointmentQueue(), 
+      body: RefreshIndicator(
+        onRefresh: _refreshBookings,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(child: _buildDoctorHeaderGrid()),
+            SliverToBoxAdapter(child: _buildCredentialsSection()),
+            SliverToBoxAdapter(child: _buildCapacityBanner()),
+            SliverToBoxAdapter(child: _buildAppointmentQueue()),
           ],
         ),
       ),
@@ -133,7 +169,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 ),
                 if (isDoctor)
                   FutureBuilder<Map<String, dynamic>?>(
-                    future: _fetchAssignedNurse(),
+                    future: _assignedNurseFuture,
                     builder: (context, snapshot) {
                       if (snapshot.hasData && snapshot.data != null) {
                         return Padding(
@@ -147,7 +183,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                                 "Asst: ${snapshot.data!['name']}",
                                 style: TextStyle(
                                     fontSize: 12,
-                                    color: const Color(0xFF334155),
+                                    color: AppColors.textMuted(context),
                                     fontWeight: FontWeight.w500),
                               ),
                             ],
@@ -245,6 +281,9 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
         final int currentlyServing = (snapshot.hasData && snapshot.data!.isNotEmpty)
             ? (snapshot.data!.first['currently_serving'] ?? 0)
             : 0;
+        final int dailyBookings = (snapshot.hasData && snapshot.data!.isNotEmpty)
+            ? (snapshot.data!.first['daily_bookings'] ?? widget.staff['daily_bookings'] ?? 0)
+            : (widget.staff['daily_bookings'] ?? 0);
 
         return Container(
           margin: const EdgeInsets.all(16),
@@ -287,7 +326,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                         style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Text(
-                      "${widget.staff['daily_bookings'] ?? 0}",
+                      "$dailyBookings",
                       style: TextStyle(color: AppColors.cardBg(context), fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -323,28 +362,30 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              StreamBuilder<List<Map<String, dynamic>>>(
-                stream: supabase
-                    .from('bookings')
-                    .stream(primaryKey: ['id'])
-                    .eq('provider_id', widget.staff['id'])
-                    .order('queue_number', ascending: true),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _bookingsFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator()));
                   }
+                  if (snapshot.hasError) {
+                    debugPrint('Bookings error: ${snapshot.error}');
+                    return const Center(
+                      child: Text('Unable to load appointments. Please try again.'),
+                    );
+                  }
                   final bookings = snapshot.data ?? [];
                   if (bookings.isEmpty) {
-                    return _buildEmptyState();
+                    return const SizedBox(
+                      height: 120,
+                      child: Center(child: Text('No appointments in queue')),
+                    );
                   }
 
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: bookings.length,
-                    itemBuilder: (context, index) {
-                      return _buildPatientCard(bookings[index], servingNow);
-                    },
+                  return Column(
+                    children: bookings
+                        .map((booking) => _buildPatientCard(booking, servingNow))
+                        .toList(),
                   );
                 },
               ),
@@ -438,8 +479,16 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                     if (pid != null && pid.isNotEmpty) {
                       final role = supabase.auth.currentUser
                               ?.userMetadata?['role']?.toString() ?? 'doctor';
-                      viewPatientHistory(context, pid,
-                          booking['patient_name'] ?? "Patient", userRole: role);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => HealthVaultScreen(
+                            forceUploadMode: true,
+                            activePatientId: pid,
+                            userRole: role,
+                          ),
+                        ),
+                      );
                     }
                   },
                   child: const Text("Health Vault", style: TextStyle(fontSize: 10)),
@@ -449,15 +498,6 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(color: AppColors.cardBg(context), borderRadius: BorderRadius.circular(15)),
-      child: Center(child: Text("No bookings for today.", style: TextStyle(color: AppColors.textMuted(context)))),
     );
   }
 
@@ -476,7 +516,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: isPrice ? FontWeight.w600 : FontWeight.normal,
-                color: isPrice ? Colors.green : Colors.black87,
+                color: isPrice ? Colors.green : AppColors.textPrimary(context),
               ),
             ),
           ),

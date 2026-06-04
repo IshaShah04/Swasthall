@@ -74,6 +74,7 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
   }
 
   Future<void> _savePlan() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
     
     if ((kIsWeb && _webImage == null) || (!kIsWeb && _imageFile == null)) {
@@ -84,6 +85,19 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
     }
 
     setState(() => _isSaving = true);
+
+    final priceValue = double.tryParse(_priceController.text.trim());
+    final discountValue = _discountController.text.trim().isEmpty
+        ? 0.0
+        : double.tryParse(_discountController.text.trim());
+
+    if (priceValue == null || discountValue == null) {
+      if (mounted) setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter valid numeric values")),
+      );
+      return;
+    }
 
     try {
       final String? uploadedUrl = await _uploadImage();
@@ -97,11 +111,11 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
 
       await supabase.from('insurance_plans').insert({
         'name': _nameController.text,
-        'hospital_name': _hospitalController.text.isEmpty ? 'General Health' : _hospitalController.text,
+        'hospital_name': _hospitalController.text.trim(),
         'description': _descController.text,
         'benefits': benefitsList,
-        'price': double.parse(_priceController.text),
-        'discount': _discountController.text.isEmpty ? 0 : double.parse(_discountController.text),
+        'price': priceValue,
+        'discount': discountValue,
         'icon_url': uploadedUrl,
         'type': _selectedType.name,
         'created_at': DateTime.now().toIso8601String(),
@@ -115,11 +129,21 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
     } catch (e) {
       if (!mounted) return; 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+        const SnackBar(content: Text("Could not publish plan. Please try again.")),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descController.dispose();
+    _priceController.dispose();
+    _discountController.dispose();
+    _hospitalController.dispose();
+    super.dispose();
   }
 
   @override
@@ -159,7 +183,7 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
                     const SizedBox(height: 12),
                     _buildTypeSelector(brandBlue),
                     const SizedBox(height: 30),
-                    _buildField(_hospitalController, "Hospital Brand Name", Icons.account_balance_rounded, true),
+                    _buildField(_hospitalController, "Hospital Brand Name", Icons.account_balance_rounded, false),
                     _buildField(_nameController, "Insurance/Plan Name", Icons.badge_outlined, true),
                     _buildField(
                         _descController, 

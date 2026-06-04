@@ -1,9 +1,15 @@
+import 'dart:async' show unawaited;
 import 'dart:math';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'registration_page.dart';
 import 'navigation_wrapper.dart';
+import 'registration_completion_screen.dart';
+import 'verification_pending_screen.dart';
+import 'auth_onboarding_helper.dart';
 import 'services/account_service.dart';
+import 'services/login_notification_service.dart'; // 🔐 New device login alerts
 import 'theme_colors.dart';
 
 class LoginPage extends StatefulWidget {
@@ -24,6 +30,14 @@ class _LoginPageState extends State<LoginPage>
 
   bool _isLoading = false;
   bool _isPhoneLogin = false;
+
+  // ── Forgot password rate limit (client-side) ────────────────────────────
+  // Prevents rapid email spam before Supabase server limits kick in.
+  // Max 3 requests per 5 minutes per app session.
+  int _resetAttempts = 0;
+  DateTime? _firstResetAttempt;
+  static const int _maxResetAttempts = 3;
+  static const int _resetWindowMinutes = 5;
   bool _isOtpSent = false;
   bool _passwordVisible = false;
 
@@ -73,6 +87,111 @@ class _LoginPageState extends State<LoginPage>
 
   // ── ALL LOGIC UNCHANGED ─────────────────────────────────────────────────
 
+  String _buildPasswordResetRedirectUrl() {
+    if (!kIsWeb) return 'swasthall://reset-password';
+
+    final baseUri = Uri.base;
+    final path = baseUri.path.isEmpty ? '/' : baseUri.path;
+    final cleanUri = baseUri.hasPort
+        ? Uri(
+            scheme: baseUri.scheme,
+            host: baseUri.host,
+            port: baseUri.port,
+            path: path,
+          )
+        : Uri(
+            scheme: baseUri.scheme,
+            host: baseUri.host,
+            path: path,
+          );
+    return cleanUri.toString();
+  }
+
+
+  String _buildAuthRedirectUrl() {
+    if (kIsWeb) {
+      final origin = Uri.base.origin;
+      return origin.isNotEmpty ? origin : 'https://swasthall.com';
+    }
+    return 'swasthall://login-callback/';
+  }
+
+  Future<void> _routeSignedInUser(User user) async {
+    await _supabase.auth.refreshSession();
+
+    final status = await AuthOnboardingHelper.resolve(_supabase, user);
+    final userRole = status.role ?? 'patient';
+
+    try {
+      await AccountService.saveCurrentAccount().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {},
+      );
+    } catch (_) {}
+
+    unawaited(LoginNotificationService.recordLoginAndNotify());
+
+    if (!mounted) return;
+
+    if (!status.isComplete) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RegistrationCompletionScreen(
+            initialEmail: user.email ?? '',
+            initialFullName: status.fullName,
+            initialRole: status.role,
+            lockEmail: true,
+            allowRoleChange: true,
+          ),
+        ),
+        (route) => false,
+      );
+      return;
+    }
+
+    if (status.requiresProfessionalVerification) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VerificationPendingScreen(
+            role: userRole,
+            fullName: status.fullName,
+          ),
+        ),
+        (route) => false,
+      );
+      return;
+    }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NavigationWrapper(userRole: userRole),
+      ),
+      (route) => false,
+    );
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      debugPrint('Starting Google OAuth with redirect: ${_buildAuthRedirectUrl()}');
+      await _supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: _buildAuthRedirectUrl(),
+        authScreenLaunchMode: LaunchMode.externalApplication,
+      );
+    } catch (e) {
+      debugPrint('Google login failed: $e');
+      _showMessage('Google login failed: ${e.toString()}', isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _handleLogin() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
@@ -113,44 +232,30 @@ class _LoginPageState extends State<LoginPage>
       }
 
       if (res.user != null) {
-        await _supabase.auth.refreshSession();
-
-        final profileData = await _supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', res.user!.id)
-            .maybeSingle()
-            .timeout(const Duration(seconds: 5), onTimeout: () => null);
-
-        final String userRole = profileData?['role'] ??
-            res.user!.userMetadata?['role'] ??
-            'patient';
-
-
-        try {
-          await AccountService.saveCurrentAccount().timeout(
-            const Duration(seconds: 3),
-            onTimeout: () {},
-          );
-        } catch (_) {
-          // AccountService failure is non-fatal — session is already valid.
-        }
-
-        if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => NavigationWrapper(userRole: userRole),
-            ),
-            (route) => false,
-          );
-        }
+        await _routeSignedInUser(res.user!);
       }
     } catch (e) {
       _showMessage("Login Failed: ${e.toString()}", isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  bool _isForgotPasswordRateLimited() {
+    final now = DateTime.now();
+    if (_firstResetAttempt == null) {
+      _firstResetAttempt = now;
+      _resetAttempts = 1;
+      return false;
+    }
+    final elapsed = now.difference(_firstResetAttempt!).inMinutes;
+    if (elapsed >= _resetWindowMinutes) {
+      _firstResetAttempt = now;
+      _resetAttempts = 1;
+      return false;
+    }
+    _resetAttempts++;
+    return _resetAttempts > _maxResetAttempts;
   }
 
   Future<void> _handleForgotPassword() async {
@@ -160,6 +265,7 @@ class _LoginPageState extends State<LoginPage>
     // Otherwise show a dialog to enter email
     if (email.isEmpty) {
       final TextEditingController dialogEmailController = TextEditingController();
+      try {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -201,6 +307,9 @@ class _LoginPageState extends State<LoginPage>
       );
       if (confirmed != true) return;
       email = dialogEmailController.text.trim();
+      } finally {
+        dialogEmailController.dispose();
+      }
     }
 
     if (email.isEmpty) {
@@ -208,9 +317,28 @@ class _LoginPageState extends State<LoginPage>
       return;
     }
 
+    // Basic email format check before consuming a rate-limit attempt
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+    if (!emailRegex.hasMatch(email)) {
+      _showMessage('Please enter a valid email address', isError: true);
+      return;
+    }
+
+    // Client-side rate limit — blocks rapid requests before Supabase does
+    if (_isForgotPasswordRateLimited()) {
+      _showMessage(
+        'Too many reset requests. Please wait a few minutes.',
+        isError: true,
+      );
+      return;
+    }
+
     try {
       setState(() => _isLoading = true);
-      await _supabase.auth.resetPasswordForEmail(email);
+      await _supabase.auth.resetPasswordForEmail(
+        email,
+        redirectTo: _buildPasswordResetRedirectUrl(),
+      );
       _showMessage('Password reset link sent to $email');
     } catch (e) {
       _showMessage('Error: ${e.toString()}', isError: true);
@@ -237,15 +365,14 @@ class _LoginPageState extends State<LoginPage>
     return Scaffold(
       backgroundColor: _bgColor,
       body: Container(
-        // ── BACKGROUND: soft indigo fade matching app theme ──
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFEEF2FF), // _brandLight — top
-              Color(0xFFF8FAFC), // _bgColor — middle
-              Color(0xFFEEF2FF), // _brandLight — bottom
+              Color(0xFFEEF2FF),
+              Color(0xFFF8FAFC),
+              Color(0xFFEEF2FF),
             ],
             stops: [0.0, 0.5, 1.0],
           ),
@@ -332,11 +459,11 @@ class _LoginPageState extends State<LoginPage>
                             ),
                           ),
                           child: _isLoading
-                              ? SizedBox(
+                              ? const SizedBox(
                                   height: 24,
                                   width: 24,
                                   child: CircularProgressIndicator(
-                                    color: AppColors.cardBg(context),
+                                    color: Colors.white,
                                     strokeWidth: 2,
                                   ),
                                 )
@@ -354,6 +481,41 @@ class _LoginPageState extends State<LoginPage>
                         ),
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'or',
+                        style: TextStyle(color: AppColors.textMuted(context)),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _handleGoogleLogin,
+                    icon: const Icon(Icons.g_mobiledata_rounded, size: 28),
+                    label: const Text(
+                      'Continue with Google',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _textDark,
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      backgroundColor: Colors.white,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -385,7 +547,6 @@ class _LoginPageState extends State<LoginPage>
                   ],
                 ),
                 const SizedBox(height: 16),
-                // ── TAGLINE ──
                 const Text(
                   "Healthy for All",
                   style: TextStyle(
@@ -408,7 +569,6 @@ class _LoginPageState extends State<LoginPage>
   Widget _buildHeader() {
     return Column(
       children: [
-        // Animated S + Heartbeat logo
         AnimatedBuilder(
           animation: _logoController,
           builder: (context, child) {
@@ -429,7 +589,6 @@ class _LoginPageState extends State<LoginPage>
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // S — reveals top to bottom
                   ClipRect(
                     child: Align(
                       alignment: Alignment.topCenter,
@@ -445,7 +604,6 @@ class _LoginPageState extends State<LoginPage>
                       ),
                     ),
                   ),
-                  // Heartbeat line
                   CustomPaint(
                     size: const Size(90, 90),
                     painter: _LoginHeartbeatPainter(
@@ -462,7 +620,6 @@ class _LoginPageState extends State<LoginPage>
 
         const SizedBox(height: 20),
 
-        // App name
         const Text(
           "Swasthall",
           style: TextStyle(
@@ -475,7 +632,6 @@ class _LoginPageState extends State<LoginPage>
 
         const SizedBox(height: 6),
 
-        // Subtitle
         const Text(
           "Your family's health, always",
           style: TextStyle(
@@ -487,7 +643,7 @@ class _LoginPageState extends State<LoginPage>
     );
   }
 
-  // ── TOGGLE (unchanged logic, updated active color) ──────────────────────
+  // ── TOGGLE ──────────────────────────────────────────────────────────────
 
   Widget _buildLoginTypeToggle() {
     return Container(
@@ -518,8 +674,7 @@ class _LoginPageState extends State<LoginPage>
     );
   }
 
-  Widget _buildToggleItem(
-      String title, bool isActive, VoidCallback onTap) {
+  Widget _buildToggleItem(String title, bool isActive, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -550,7 +705,7 @@ class _LoginPageState extends State<LoginPage>
     );
   }
 
-  // ── TEXT FIELD (unchanged) ───────────────────────────────────────────────
+  // ── TEXT FIELD ───────────────────────────────────────────────────────────
 
   Widget _buildTextField({
     required TextEditingController controller,
@@ -575,7 +730,8 @@ class _LoginPageState extends State<LoginPage>
                   color: AppColors.textMuted(context),
                   size: 20,
                 ),
-                onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
+                onPressed: () =>
+                    setState(() => _passwordVisible = !_passwordVisible),
               )
             : null,
         filled: true,
@@ -665,7 +821,6 @@ class _LoginHeartbeatPainter extends CustomPainter {
 
     canvas.drawPath(path, paint);
 
-    // Glowing tip dot
     if (progress < 1.0) {
       final int tipIndex = min(fullPoints, totalPoints - 2);
       final Offset from = fullPath[tipIndex];
@@ -685,6 +840,5 @@ class _LoginHeartbeatPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_LoginHeartbeatPainter old) =>
-      old.progress != progress;
+  bool shouldRepaint(_LoginHeartbeatPainter old) => old.progress != progress;
 }

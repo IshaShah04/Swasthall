@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'supabase_handler.dart';
 import 'shared_widgets.dart';
-import 'services/queue_widget_service.dart';
 import 'theme_colors.dart';
 
 class PhysicalQueuePage extends StatefulWidget {
@@ -74,23 +73,6 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
     }
   }
 
-  void _syncWidget(List<Map<String, dynamic>> activeItems) {
-    if (activeItems.isNotEmpty) {
-      final topPatient = activeItems.first;
-      final dynamic rawQueue = topPatient['queue_number'];
-      final int queueNumber = rawQueue is int
-          ? rawQueue
-          : int.tryParse(rawQueue?.toString() ?? '0') ?? 0;
-
-      QueueWidgetService.updateLiveWidget(
-        patientName: topPatient['patient_name'] ?? "Unknown",
-        queueNum: queueNumber.toString(),
-        bookingId: topPatient['id'].toString(),
-      );
-    } else {
-      QueueWidgetService.clearWidget();
-    }
-  }
 
   Future<void> _updateAppointmentStatus(String id, String status) async {
     final success = await SupabaseHandler().updateAppointmentStatus(id, status);
@@ -204,9 +186,6 @@ class _PhysicalQueuePageState extends State<PhysicalQueuePage> {
             return qa.compareTo(qb);
           });
 
-        if (isActiveTab && _searchQuery.isEmpty) {
-          _syncWidget(filteredItems);
-        }
 
         if (filteredItems.isEmpty) return _buildEmptyState(isActiveTab);
 

@@ -40,9 +40,9 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
 
   String? _selectedCategory;
 
-  // Stored once — never recreated in build()
-  late final Stream<List<Map<String, dynamic>>> _vitalsStream;
-  Stream<List<Map<String, dynamic>>>? _recordsStream;
+  // One-time queries for passive/history-style views.
+  late Future<List<Map<String, dynamic>>> _vitalsFuture;
+  Future<List<Map<String, dynamic>>>? _recordsFuture;
 
   final List<Map<String, dynamic>> _categories = [
     {'id': 'Diagnosis', 'name': 'Diagnosis', 'icon': Icons.healing_rounded, 'color': Colors.indigo},
@@ -75,7 +75,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
         _showSnackBar("Saved to device");
       }
     } catch (e) {
-      _showSnackBar("Download failed: $e");
+      _showSnackBar("Download failed. Please try again.");
     }
   }
 
@@ -89,6 +89,11 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
       });
 
       if (!mounted) return;
+      if (mounted) {
+        setState(() {
+          _vitalsFuture = _fetchVitals();
+        });
+      }
       _showSnackBar("$type logged successfully");
       _sysController.clear();
       _diaController.clear();
@@ -96,7 +101,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
       FocusScope.of(context).unfocus();
       setState(() {});
     } catch (e) {
-      _showSnackBar("Log failed: $e");
+      _showSnackBar("Could not save vitals. Please try again.");
     }
   }
 
@@ -201,35 +206,60 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
       }
 
       if (!mounted) return;
+      setState(() {
+        _recordsFuture = _fetchRecordsForSelectedCategory();
+      });
       _showSnackBar("Saved to $category");
     } catch (e) {
       if (!mounted) return;
-      _showSnackBar("Upload failed: $e");
+      _showSnackBar("Upload failed. Please try again.");
     }
   }
 
   @override
   void initState() {
     super.initState();
-    // Vitals stream: scoped to this patient only.
-    _vitalsStream = _supabaseClient
+    _vitalsFuture = _fetchVitals();
+  }
+
+  @override
+  void dispose() {
+    _sysController.dispose();
+    _diaController.dispose();
+    _sugarController.dispose();
+    super.dispose();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchVitals() async {
+    final data = await _supabaseClient
         .from('patient_vitals')
-        .stream(primaryKey: ['id'])
+        .select('id, type, reading, created_at')
         .eq('patient_id', widget.patientId)
-        .order('created_at', ascending: true);
-    // Records stream built on first category selection via _rebuildRecordsStream()
+        .order('created_at', ascending: true)
+        .limit(200);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchRecordsForSelectedCategory() async {
+    if (_selectedCategory == null) return const [];
+    final data = await _supabaseClient
+        .from('medical_records')
+        .select('id, file_name, file_url, provider_role, created_at')
+        .eq('patient_id', widget.patientId)
+        .eq('provider_role', _selectedCategory!)
+        .order('created_at', ascending: false)
+        .limit(200);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
   }
 
   void _rebuildRecordsStream() {
     if (_selectedCategory == null) return;
     setState(() {
-      // Supabase stream() supports only one .eq() filter in this version.
-      // Filter by patient_id at DB level; category filtered client-side in StreamBuilder.
-      _recordsStream = _supabaseClient
-          .from('medical_records')
-          .stream(primaryKey: ['id'])
-          .eq('patient_id', widget.patientId)
-          .order('created_at', ascending: false);
+      _recordsFuture = _fetchRecordsForSelectedCategory();
     });
   }
 
@@ -369,9 +399,8 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
           // ── Chart ─────────────────────────────────────────────────────
           SizedBox(
             height: 150,
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              // ── LOGIC UNCHANGED ──
-              stream: _vitalsStream,
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _vitalsFuture,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(
@@ -380,10 +409,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
                   );
                 }
 
-                // ── LOGIC UNCHANGED ──
-                final data = snapshot.data!
-                    .where((v) => v['patient_id'] == widget.patientId)
-                    .toList();
+                final data = snapshot.data!;
                 List<FlSpot> sysSpots = [];
                 List<FlSpot> sugarSpots = [];
                 for (int i = 0; i < data.length; i++) {
@@ -658,17 +684,12 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   }
 
   Widget _buildRecordsList() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _recordsStream,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _recordsFuture,
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
         final records = snapshot.data!.where((r) {
-          final bool matchesPatient = r['patient_id'] == widget.patientId;
-          final bool matchesCategory = r['provider_role'] == _selectedCategory;
-
-          if (!matchesPatient || !matchesCategory) return false;
-
           if (_filterStart == null) return true;
           final created = DateTime.tryParse(r['created_at'] ?? '');
           return created != null &&
@@ -792,10 +813,13 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
     try {
       await SupabaseHandler().deleteFullRecord(id, fileUrl, bucketName);
       if (!mounted) return;
+      setState(() {
+        _recordsFuture = _fetchRecordsForSelectedCategory();
+      });
       _showSnackBar("Deleted");
     } catch (e) {
       if (!mounted) return;
-      _showSnackBar("Error: $e");
+      _showSnackBar("Could not delete file. Please try again.");
     }
   }
 

@@ -12,31 +12,56 @@ class BloodBank extends StatefulWidget {
 class _BloodBankState extends State<BloodBank> {
   final supabase = Supabase.instance.client;
   bool isHospital = false;
-
+  late Future<List<Map<String, dynamic>>> _inventoryFuture;
 
   @override
   void initState() {
     super.initState();
+    _inventoryFuture = _fetchInventory();
     _checkUserRole();
   }
 
-  /// Checks if the current user is a Hospital to show Management tools
-  void _checkUserRole() async {
-    final user = supabase.auth.currentUser;
-    if (user != null) {
-      // Assuming you have a 'profiles' table or metadata where role is stored
-      final response = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle();
+  Future<void> _checkUserRole() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user != null) {
+        final response = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
 
+        if (mounted) {
+          setState(() {
+            isHospital = response?['role'] == 'hospital';
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to check user role: $e');
       if (mounted) {
         setState(() {
-          isHospital = response?['role'] == 'hospital';
+          isHospital = false;
         });
       }
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchInventory() async {
+    final data = await supabase
+        .from('blood_inventory')
+        .select('hospital_name, blood_group, quantity_ml, status')
+        .order('blood_group')
+        .limit(200);
+    return (data as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<void> _refreshInventory() async {
+    final future = _fetchInventory();
+    if (mounted) setState(() => _inventoryFuture = future);
+    await future;
   }
 
   @override
@@ -48,10 +73,9 @@ class _BloodBankState extends State<BloodBank> {
             style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: AppColors.cardBg(context),
-        foregroundColor: Colors.black,
+        foregroundColor: AppColors.textPrimary(context),
         elevation: 0,
       ),
-      // Only show the + button if the user is a hospital
       floatingActionButton: isHospital
           ? FloatingActionButton.extended(
               onPressed: () => _showAddInventorySheet(context),
@@ -60,39 +84,63 @@ class _BloodBankState extends State<BloodBank> {
               label: const Text("Update Stock"),
             )
           : null,
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        // Streaming from a hypothetical 'blood_inventory' table
-        stream: supabase
-            .from('blood_inventory')
-            .stream(primaryKey: ['id']).order('blood_group'),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _inventoryFuture,
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text('Failed to load inventory'),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: _refreshInventory,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
           final inventory = snapshot.data!;
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: inventory.length,
-            itemBuilder: (context, index) {
-              final item = inventory[index];
-              return _buildBloodStockCard(
-                item['hospital_name'] ?? 'City General Hospital',
-                item['blood_group'] ?? 'O+',
-                item['quantity_ml'] ?? 0,
-                item['status'] ?? 'Available',
-              );
-            },
+          return RefreshIndicator(
+            onRefresh: _refreshInventory,
+            child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              itemCount: inventory.length,
+              itemBuilder: (context, index) {
+                final item = inventory[index];
+                return _buildBloodStockCard(
+                  item['hospital_name'] ?? 'City General Hospital',
+                  item['blood_group'] ?? 'O+',
+                  _parseQuantity(item['quantity_ml']),
+                );
+              },
+            ),
           );
         },
       ),
     );
   }
 
+  int _parseQuantity(dynamic rawQuantity) {
+    if (rawQuantity is int) return rawQuantity;
+    if (rawQuantity is num) return rawQuantity.toInt();
+    if (rawQuantity is String) return int.tryParse(rawQuantity) ?? 0;
+    return 0;
+  }
+
   Widget _buildBloodStockCard(
-      String hospital, String group, int qty, String status) {
-    bool isLow = qty < 500; // Warning if less than 500ml
+      String hospital, String group, int qty) {
+    final isLow = qty < 500;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -169,46 +217,142 @@ class _BloodBankState extends State<BloodBank> {
   }
 
   void _showAddInventorySheet(BuildContext context) {
+    final bloodGroupController = TextEditingController();
+    final quantityController = TextEditingController();
+    bool isSubmitting = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          top: 20,
-          left: 20,
-          right: 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("Update Blood Stock",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            // Example Inputs - You would use TextFormFields here
-            const TextField(
-                decoration:
-                    InputDecoration(labelText: "Blood Group (e.g. A-, AB+)")),
-            const TextField(
-                decoration: InputDecoration(labelText: "Quantity (ml)"),
-                keyboardType: TextInputType.number),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15)),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+            top: 20,
+            left: 20,
+            right: 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Update Blood Stock",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: bloodGroupController,
+                decoration: const InputDecoration(
+                  labelText: "Blood Group (e.g. A-, AB+)",
+                ),
               ),
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Confirm Update"),
-            ),
-            const SizedBox(height: 20),
-          ],
+              TextField(
+                controller: quantityController,
+                decoration: const InputDecoration(labelText: "Quantity (ml)"),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15)),
+                ),
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final group = bloodGroupController.text.trim().toUpperCase();
+                        final quantity = int.tryParse(quantityController.text.trim());
+
+                        if (group.isEmpty || quantity == null) {
+                          ScaffoldMessenger.of(sheetContext).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please enter a valid blood group and quantity.'),
+                            ),
+                          );
+                          return;
+                        }
+
+                        setSheetState(() => isSubmitting = true);
+                        try {
+                          final user = supabase.auth.currentUser;
+                          if (user == null) {
+                            throw Exception('Please sign in again.');
+                          }
+
+                          final profile = await supabase
+                              .from('profiles')
+                              .select('hospital_name, full_name')
+                              .eq('id', user.id)
+                              .maybeSingle();
+
+                          final hospitalName = (profile?['hospital_name'] ?? profile?['full_name'] ?? '').toString().trim();
+                          if (hospitalName.isEmpty) {
+                            throw Exception('Hospital name not found.');
+                          }
+
+                          final existing = await supabase
+                              .from('blood_inventory')
+                              .select('id')
+                              .eq('hospital_name', hospitalName)
+                              .eq('blood_group', group)
+                              .maybeSingle();
+
+                          final payload = {
+                            'hospital_name': hospitalName,
+                            'blood_group': group,
+                            'quantity_ml': quantity,
+                            'status': quantity < 500 ? 'Critical' : 'Stable',
+                          };
+
+                          if (existing != null && existing['id'] != null) {
+                            await supabase
+                                .from('blood_inventory')
+                                .update(payload)
+                                .eq('id', existing['id']);
+                          } else {
+                            await supabase.from('blood_inventory').insert(payload);
+                          }
+
+                          if (sheetContext.mounted) {
+                            Navigator.of(sheetContext).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Blood stock updated successfully.')),
+                            );
+                          }
+                          await _refreshInventory();
+                        } catch (e) {
+                          if (sheetContext.mounted) {
+                            ScaffoldMessenger.of(sheetContext).showSnackBar(
+                              SnackBar(content: Text('Could not update blood stock: $e')),
+                            );
+                          }
+                        } finally {
+                          if (sheetContext.mounted) {
+                            setSheetState(() => isSubmitting = false);
+                          }
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text("Confirm Update"),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
-    );
+    ).whenComplete(() {
+      bloodGroupController.dispose();
+      quantityController.dispose();
+    });
   }
 }

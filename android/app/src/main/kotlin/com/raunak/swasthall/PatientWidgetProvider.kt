@@ -22,7 +22,7 @@ class PatientWidgetProvider : AppWidgetProvider() {
         const val EXTRA_WIDGET_ROUTE   = "widgetRoute"
         const val EXTRA_USER_ID        = "userId"
         const val EXTRA_APPOINTMENT_ID = "appointmentId"
-        const val ROUTE_PATIENT_QUEUE  = "/patient_queue"
+        const val ROUTE_PATIENT_BOOKINGS = "/booking"
     }
 
     override fun onUpdate(
@@ -70,11 +70,11 @@ class PatientWidgetProvider : AppWidgetProvider() {
             if (isNext) android.view.View.VISIBLE else android.view.View.GONE
         )
 
-        // Widget tap → open queue screen in app
+        // Widget tap → open patient bookings screen in app
         val openIntent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_OPEN_QUEUE
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra(EXTRA_WIDGET_ROUTE,   ROUTE_PATIENT_QUEUE)
+            putExtra(EXTRA_WIDGET_ROUTE,   ROUTE_PATIENT_BOOKINGS)
             putExtra(EXTRA_USER_ID,        userId)
             putExtra(EXTRA_APPOINTMENT_ID, appointmentId ?: "")
         }

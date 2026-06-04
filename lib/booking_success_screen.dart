@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'supabase_handler.dart';
 import 'services/voice_service.dart';
+import 'services/queue_widget_service.dart';
 import 'main.dart';
 import 'widgets/app_transitions.dart';
 import 'theme_colors.dart';
@@ -54,10 +55,28 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
+  // Prevent double navigation when Android back, app bar back, close, or
+  // Return Home are tapped quickly after payment success.
+  bool _isNavigatingHome = false;
 
-  late final VoidCallback _inviteListener;
+  VoidCallback? _inviteListener;
 
   int get _safeQueueNumber => widget.queueNumber ?? 0;
+
+  String get _effectiveDoctorName =>
+      (_enrichedDoctor['full_name'] ?? widget.doctorData['full_name'] ?? 'Doctor')
+          .toString();
+
+  Future<void> _syncPatientWidgetFromCurrentState() async {
+    if (kIsWeb || widget.bookingId.trim().isEmpty) return;
+
+    await QueueWidgetService.updatePatientRealtimeWidget(
+      appointmentId: widget.bookingId,
+      doctorName: _effectiveDoctorName,
+      originalQueueNumber: _safeQueueNumber,
+      currentlyServing: _currentlyServing,
+    );
+  }
 
   @override
   void initState() {
@@ -71,7 +90,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _showSnackBar("This appointment record has expired.");
-        _goHome();
+        unawaited(_goHome());
       });
       return;
     }
@@ -80,6 +99,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
     _initNotifications();
     _initVoiceAndAnnounce();
     _bindIncomingInviteNotifier();
+    unawaited(_syncPatientWidgetFromCurrentState());
     _setupQueueListener();
   }
 
@@ -91,7 +111,9 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   Future<void> _fetchDoctorData() async {
     final doctorId = widget.doctorData['id']?.toString();
     if (doctorId == null || doctorId.isEmpty) {
-      setState(() { _enrichedDoctor = Map.from(widget.doctorData); _isDoctorLoading = false; });
+      if (mounted) {
+        setState(() { _enrichedDoctor = Map.from(widget.doctorData); _isDoctorLoading = false; });
+      }
       return;
     }
 
@@ -126,10 +148,12 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       };
 
       if (mounted) setState(() { _enrichedDoctor = merged; _isDoctorLoading = false; });
+      unawaited(_syncPatientWidgetFromCurrentState());
     } catch (e) {
-      debugPrint('BookingSuccess: doctor fetch error: \$e');
+      debugPrint('BookingSuccess: doctor fetch error: $e');
       // Fallback: use whatever was passed in
       if (mounted) setState(() { _enrichedDoctor = Map.from(widget.doctorData); _isDoctorLoading = false; });
+      unawaited(_syncPatientWidgetFromCurrentState());
     }
   }
 
@@ -152,9 +176,12 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       });
 
       await _showCallNotification(_callerRoleLabel, widget.bookingId);
+      if (!mounted) return;
     };
 
-    incomingInvite.addListener(_inviteListener);
+    if (_inviteListener != null) {
+      incomingInvite.addListener(_inviteListener!);
+    }
   }
 
   void _setIncomingInvite(IncomingInvite? value) {
@@ -348,6 +375,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
                 int.tryParse(data.first['currently_serving']?.toString() ?? '0') ?? 0;
             setState(() => _currentlyServing = servingNow);
             _processQueueLogic(servingNow);
+            unawaited(_syncPatientWidgetFromCurrentState());
           }
         },
         onError: (Object e) {
@@ -396,18 +424,39 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
   // Navigation
   // ───────────────────────────────────────────────────────────────────────
 
-  void _goHome() {
+  Future<void> _goHome() async {
+    if (_isNavigatingHome) return;
+    _isNavigatingHome = true;
+
+    try {
+      _inviteAutoExpireTimer?.cancel();
+      incomingInvite.value = null;
+      if (!kIsWeb) {
+        await _notificationsPlugin.cancelAll();
+      }
+    } catch (_) {}
+
     if (!mounted) return;
-    Navigator.of(context).popUntil((route) => route.isFirst);
+
+    // IMPORTANT FIX:
+    // After payment, BookingSuccessScreen can become the first/root route
+    // because payment screens often use pushReplacement/pushAndRemoveUntil.
+    // In that case pop() and popUntil(route.isFirst) do nothing, so the user
+    // feels trapped. Push AuthGate as a clean root; AuthGate detects the
+    // active session and lands the user on the correct home/dashboard.
+    final NavigatorState nav = navigatorKey.currentState ??
+        Navigator.of(context, rootNavigator: true);
+
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthGate()),
+      (Route<dynamic> route) => false,
+    );
   }
 
   void _goBack() {
-    if (!mounted) return;
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      _goHome();
-    }
+    // On a success screen, back should never return to payment/webview.
+    // It should go to the logged-in home/dashboard.
+    unawaited(_goHome());
   }
 
   void _showSnackBar(String message) {
@@ -419,8 +468,15 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
 
   @override
   void dispose() {
-    incomingInvite.removeListener(_inviteListener);
+    if (_inviteListener != null) {
+      incomingInvite.removeListener(_inviteListener!);
+    }
+    _inviteAutoExpireTimer?.cancel();
     _queueSubscription?.cancel();
+    _voiceService.stop();
+    if (!kIsWeb) {
+      _notificationsPlugin.cancelAll();
+    }
     super.dispose();
   }
 
@@ -430,8 +486,15 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (!didPop) {
+          unawaited(_goHome());
+        }
+      },
+      child: Stack(
+        children: [
         Scaffold(
           backgroundColor: AppColors.scaffoldBg(context),
           appBar: _buildAppBar(),
@@ -454,7 +517,8 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
           ),
         ),
         if (_isIncomingCall) _buildIncomingCallUI(),
-      ],
+        ],
+      ),
     );
   }
 
@@ -469,7 +533,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
       automaticallyImplyLeading: false,
       actions: [
         IconButton(
-          onPressed: _goHome,
+          onPressed: () => unawaited(_goHome()),
           icon: Icon(Icons.close, color: AppColors.textMuted(context)),
         ),
       ],
@@ -690,7 +754,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen> {
           Icons.home_filled,
           Colors.white,
           Colors.black87,
-          _goHome,
+          () => unawaited(_goHome()),
         ),
       ],
     );

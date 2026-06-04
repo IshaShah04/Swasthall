@@ -1,22 +1,10 @@
 // lib/services/offline_booking_queue.dart
 //
-// Queues booking attempts locally when the network/DB is unavailable.
+// Queues paid booking attempts locally when the network/DB is unavailable.
 // Retries automatically when connectivity is restored.
-//
-// HOW IT WORKS:
-//   1. consultation_payment_screen.dart calls OfflineBookingQueue.submit()
-//      instead of calling the RPC directly.
-//   2. If the RPC succeeds → booking confirmed normally.
-//   3. If the RPC fails (network/DB down) → saved to secure queue.
-//   4. On next app launch or when connectivity restores → auto-retried.
-//   5. Patient sees "Booking queued — will confirm shortly" instead of error.
-//
-// SECURITY:
-//   - Queue stored in flutter_secure_storage (encrypted on device).
-//   - Booking data contains no sensitive medical info (just slot/time/amount).
-//   - Queue is cleared after successful submission or on logout.
 
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -26,12 +14,14 @@ class QueuedBooking {
   final String idempotencyKey;
   final Map<String, dynamic> params;
   final DateTime queuedAt;
+  final String rpcName;
   int retryCount;
 
   QueuedBooking({
     required this.idempotencyKey,
     required this.params,
     required this.queuedAt,
+    required this.rpcName,
     this.retryCount = 0,
   });
 
@@ -39,6 +29,7 @@ class QueuedBooking {
         'idempotencyKey': idempotencyKey,
         'params': params,
         'queuedAt': queuedAt.toIso8601String(),
+        'rpcName': rpcName,
         'retryCount': retryCount,
       };
 
@@ -46,6 +37,9 @@ class QueuedBooking {
         idempotencyKey: j['idempotencyKey'] as String,
         params: Map<String, dynamic>.from(j['params'] as Map),
         queuedAt: DateTime.parse(j['queuedAt'] as String),
+        rpcName: (j['rpcName'] as String?)?.trim().isNotEmpty == true
+            ? (j['rpcName'] as String).trim()
+            : 'book_appointment_atomic_paid',
         retryCount: (j['retryCount'] as int?) ?? 0,
       );
 }
@@ -54,47 +48,26 @@ class OfflineBookingQueue {
   OfflineBookingQueue._();
 
   static const _storage = FlutterSecureStorage();
-  static const _queueKey = 'offline_booking_queue';
+  static const _queueKey = 'offline_booking_queue_v2';
   static const _maxRetries = 5;
   static const _maxQueueAge = Duration(hours: 24);
   static bool _isRetrying = false;
 
-  // ─────────────────────────────────────────────────────────────────
-  // PUBLIC API
-  // ─────────────────────────────────────────────────────────────────
-
-  /// Submit a booking. Tries immediately; queues if offline/DB down.
-  /// Returns: {'success': true, 'booking': {...}} on success
-  ///          {'success': false, 'queued': true} if queued for retry
-  ///          {'success': false, 'error': '...'} on hard failure
   static Future<Map<String, dynamic>> submit({
     required Map<String, dynamic> rpcParams,
+    String rpcName = 'book_appointment_atomic_paid',
   }) async {
-    // Generate idempotency key — prevents duplicates on retry
-    final key = const Uuid().v4();
+    final existingKey = (rpcParams['p_idempotency_key'] ?? '').toString().trim();
+    final key = existingKey.isNotEmpty ? existingKey : const Uuid().v4();
     final paramsWithKey = {...rpcParams, 'p_idempotency_key': key};
 
     try {
-      final result = await _callRpc(paramsWithKey);
+      final result = await _callRpc(rpcName, paramsWithKey);
       return {'success': true, 'booking': result};
     } catch (e) {
       final errStr = e.toString().toLowerCase();
-
-      // Transient errors → queue for retry
-      final isTransient = errStr.contains('socket') ||
-          errStr.contains('network') ||
-          errStr.contains('timeout') ||
-          errStr.contains('connection') ||
-          errStr.contains('500') ||
-          errStr.contains('503') ||
-          errStr.contains('unavailable');
-
-      // Hard errors → don't queue (slot taken, validation failed etc.)
-      final isHard = errStr.contains('already booked') ||
-          errStr.contains('slot') ||
-          errStr.contains('42p') ||   // Postgres errors
-          errStr.contains('23') ||    // constraint violations
-          errStr.contains('permission');
+      final isTransient = _isTransientError(errStr);
+      final isHard = _isHardError(errStr);
 
       if (isHard) {
         return {'success': false, 'error': e.toString()};
@@ -105,6 +78,7 @@ class OfflineBookingQueue {
           idempotencyKey: key,
           params: paramsWithKey,
           queuedAt: DateTime.now(),
+          rpcName: rpcName,
         ));
         return {'success': false, 'queued': true};
       }
@@ -113,8 +87,6 @@ class OfflineBookingQueue {
     }
   }
 
-  /// Call on app launch and when connectivity restores.
-  /// Retries all queued bookings.
   static Future<void> retryAll() async {
     if (_isRetrying) return;
     _isRetrying = true;
@@ -123,76 +95,77 @@ class OfflineBookingQueue {
       final queue = await _loadQueue();
       if (queue.isEmpty) return;
 
-      final toRemove = <String>[];
-      final updated = <QueuedBooking>[];
+      final kept = <QueuedBooking>[];
 
       for (final booking in queue) {
-        // Discard stale bookings (older than 24 hours)
         if (DateTime.now().difference(booking.queuedAt) > _maxQueueAge) {
-          toRemove.add(booking.idempotencyKey);
           continue;
         }
-
         if (booking.retryCount >= _maxRetries) {
-          toRemove.add(booking.idempotencyKey);
           continue;
         }
 
         try {
-          await _callRpc(booking.params);
-          toRemove.add(booking.idempotencyKey); // success
+          await _callRpc(booking.rpcName, booking.params);
           debugPrint('OfflineQueue: booking ${booking.idempotencyKey} submitted');
         } catch (e) {
           final errStr = e.toString().toLowerCase();
-          // Hard error — discard
-          if (errStr.contains('already booked') ||
-              errStr.contains('23') ||
-              errStr.contains('idempotency')) {
-            toRemove.add(booking.idempotencyKey);
-          } else {
-            // Still transient — keep and increment retry
-            booking.retryCount++;
-            updated.add(booking);
+          if (_isHardError(errStr) || errStr.contains('idempotency')) {
+            continue;
           }
+          booking.retryCount++;
+          kept.add(booking);
         }
       }
 
-      final remaining =
-          queue.where((b) => !toRemove.contains(b.idempotencyKey)).toList();
-      // Merge updated retry counts
-      for (final u in updated) {
-        final idx = remaining.indexWhere((b) => b.idempotencyKey == u.idempotencyKey);
-        if (idx >= 0) remaining[idx] = u;
-      }
-
-      await _saveQueue(remaining);
+      await _saveQueue(kept);
     } finally {
       _isRetrying = false;
     }
   }
 
-  /// How many bookings are waiting in the queue.
   static Future<int> pendingCount() async {
     final q = await _loadQueue();
     return q.length;
   }
 
-  /// Clear queue on logout.
   static Future<void> clear() async {
     await _storage.delete(key: _queueKey);
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // PRIVATE HELPERS
-  // ─────────────────────────────────────────────────────────────────
+  static bool _isTransientError(String errStr) {
+    return errStr.contains('socket') ||
+        errStr.contains('network') ||
+        errStr.contains('timeout') ||
+        errStr.contains('connection') ||
+        errStr.contains('500') ||
+        errStr.contains('502') ||
+        errStr.contains('503') ||
+        errStr.contains('504') ||
+        errStr.contains('unavailable');
+  }
 
-  static Future<dynamic> _callRpc(Map<String, dynamic> params) {
-    return Supabase.instance.client
-        .rpc('book_appointment_atomic', params: params);
+  static bool _isHardError(String errStr) {
+    return errStr.contains('already booked') ||
+        errStr.contains('duplicate active booking') ||
+        errStr.contains('slot') ||
+        errStr.contains('fully booked') ||
+        errStr.contains('42p') ||
+        errStr.contains('42703') ||
+        errStr.contains('42883') ||
+        errStr.contains('permission') ||
+        errStr.contains('invalid payment provider') ||
+        errStr.contains('verified payment transaction not found');
+  }
+
+  static Future<dynamic> _callRpc(String rpcName, Map<String, dynamic> params) {
+    return Supabase.instance.client.rpc(rpcName, params: params);
   }
 
   static Future<void> _enqueue(QueuedBooking booking) async {
     final queue = await _loadQueue();
+    final alreadyExists = queue.any((q) => q.idempotencyKey == booking.idempotencyKey);
+    if (alreadyExists) return;
     queue.add(booking);
     await _saveQueue(queue);
   }
@@ -200,10 +173,10 @@ class OfflineBookingQueue {
   static Future<List<QueuedBooking>> _loadQueue() async {
     try {
       final raw = await _storage.read(key: _queueKey);
-      if (raw == null) return [];
+      if (raw == null || raw.isEmpty) return [];
       final list = jsonDecode(raw) as List<dynamic>;
       return list
-          .map((e) => QueuedBooking.fromJson(e as Map<String, dynamic>))
+          .map((e) => QueuedBooking.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
     } catch (_) {
       return [];

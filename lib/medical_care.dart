@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:alarm/alarm.dart';
 
 import 'theme_colors.dart';
@@ -128,6 +127,26 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
                 _handleFileSelection(false);
               },
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, size: 13, color: Color(0xFF94A3B8)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Your prescription image is sent to Google AI for reading and is not stored by Swasthall. Only the medicine names are saved to your account.',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF94A3B8),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -137,22 +156,19 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
   Future<void> _handleFileSelection(bool isCamera) async {
     Uint8List? fileBytes;
 
-    if (isCamera) {
-      final photo = await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-      );
-      if (photo != null) fileBytes = await photo.readAsBytes();
-    } else {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-        withData: true,
-      );
-      if (result != null && result.files.single.bytes != null) {
-        fileBytes = result.files.single.bytes;
-      }
-    }
+    // maxWidth/maxHeight resize on the platform side before Dart receives bytes.
+    // Prescriptions don't need more than 1024px — this cuts token cost ~60%
+    // and speeds up the OCR without losing any text legibility.
+    const int kMaxDim = 1024;
+    const int kQuality = 80;
+
+    final photo = await ImagePicker().pickImage(
+      source: isCamera ? ImageSource.camera : ImageSource.gallery,
+      imageQuality: kQuality,
+      maxWidth: kMaxDim.toDouble(),
+      maxHeight: kMaxDim.toDouble(),
+    );
+    if (photo != null) fileBytes = await photo.readAsBytes();
 
     if (fileBytes != null) {
       await _scanPrescription(fileBytes);
@@ -160,71 +176,115 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SCAN PRESCRIPTION — single Gemini Vision call
+  // SCAN PRESCRIPTION — single Gemini Vision call with production-grade auth
   //
-  // Sends ONLY the image bytes to Gemini via our edge function.
-  // No patient name, ID, or personal data is included in the API call.
-  // The edge function prompt explicitly instructs Gemini to ignore patient
-  // identifiers and return only clinical medication data.
+  // Auth strategy:
+  //   • First attempt: let SDK attach token automatically (fastest path)
+  //   • On 401: the SDK's auto-refresh rotated the token concurrently.
+  //     Wait 1500ms for it to settle, then read the NEW token from
+  //     currentSession and pass it explicitly. Do NOT call refreshSession()
+  //     in the catch — that consumes the refresh token the SDK just used,
+  //     causing a second 401. Just wait and read.
   // ─────────────────────────────────────────────────────────────────────────
 
-  Future<void> _scanPrescription(Uint8List bytes) async {
-  setState(() {
-    _isAnalyzing = true;
-    _showScanResults = false;
-    _scannedMedicines = [];
-    _interactionAlerts = [];
-  });
 
-  await _ensureDataLoaded();
-
-  try {
-    // Check session exists — functions.invoke() handles token attachment
-    // automatically. Do NOT call refreshSession() manually here: if the
-    // token is expired the Supabase client refreshes it internally, and a
-    // manual refresh before invoke() can create a race condition that sends
-    // a stale JWT, causing "Invalid JWT" 401 errors from the gateway.
+  Future<FunctionResponse> _invokeFunctionWithAuthRetry(
+    String functionName, {
+    required Map<String, dynamic> body,
+  }) async {
     final session = supabase.auth.currentSession;
     if (session == null) {
-      _showSnackBar("Please log in to use prescription scanning.");
-      return;
+      throw StateError('Session expired');
     }
 
-    final base64Image = base64Encode(bytes);
-
-    final response = await supabase.functions.invoke(
-      'gemini-prescription-proxy',
-      body: {
-        'imageBase64': base64Image,
-      },
-    );
-
-    if (!mounted) return;
-
-    if (response.status == 200 && response.data != null) {
-      final data = Map<String, dynamic>.from(response.data as Map);
-      _handleScanResult(data);
-    } else {
-      debugPrint(
-        'Prescription scan failed: ${response.status} ${response.data}',
+    try {
+      return await supabase.functions.invoke(
+        functionName,
+        body: body,
       );
-      _showSnackBar(
-        "Could not read prescription (${response.status}). Please try again.",
+    } on FunctionException catch (e) {
+      final detailsText = e.details?.toString().toLowerCase() ?? '';
+      final isUnauthorized =
+          e.status == 401 ||
+          detailsText.contains('invalid jwt') ||
+          detailsText.contains('unauthorized');
+
+      if (!isUnauthorized) rethrow;
+
+      debugPrint('$functionName 401 — refreshing session explicitly');
+
+      final authResponse = await supabase.auth.refreshSession();
+      final freshToken = authResponse.session?.accessToken ??
+          supabase.auth.currentSession?.accessToken;
+
+      if (freshToken == null || freshToken.isEmpty) {
+        throw StateError('Session expired');
+      }
+
+      return await supabase.functions.invoke(
+        functionName,
+        body: body,
+        headers: {
+          'Authorization': 'Bearer $freshToken',
+        },
       );
     }
-  } catch (e) {
-    debugPrint("Prescription scan error: $e");
-    _showSnackBar("Scan error. Check your connection and try again.");
-  } finally {
-    if (mounted) setState(() => _isAnalyzing = false);
   }
-}
+
+  Future<void> _scanPrescription(Uint8List bytes) async {
+    setState(() {
+      _isAnalyzing = true;
+      _showScanResults = false;
+      _scannedMedicines = [];
+      _interactionAlerts = [];
+    });
+
+    await _ensureDataLoaded();
+
+    try {
+      if (supabase.auth.currentSession == null) {
+        _showSnackBar("Please log in to use prescription scanning.");
+        return;
+      }
+
+      final base64Image = base64Encode(bytes);
+
+      final response = await _invokeFunctionWithAuthRetry(
+        'gemini-prescription-proxy',
+        body: {'imageBase64': base64Image},
+      );
+
+      if (!mounted) return;
+
+      if (response.status == 200 && response.data != null) {
+        final data = Map<String, dynamic>.from(response.data as Map);
+        await _handleScanResult(data);
+      } else {
+        debugPrint(
+          'Prescription scan failed: ${response.status} ${response.data}',
+        );
+        _showSnackBar(
+          "Could not read prescription (${response.status}). Please try again.",
+        );
+      }
+    } on StateError {
+      if (!mounted) return;
+      _showSnackBar("Session expired. Please log in again.");
+    } catch (e) {
+      debugPrint("Prescription scan error: $e");
+      _showSnackBar("Scan error. Check your connection and try again.");
+    } finally {
+      if (mounted) {
+        setState(() => _isAnalyzing = false);
+      }
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // PROCESS SCAN RESULT
   // ─────────────────────────────────────────────────────────────────────────
 
-  void _handleScanResult(Map<String, dynamic> data) {
+  Future<void> _handleScanResult(Map<String, dynamic> data) async {
     final rawMeds = data['medicines'] as List<dynamic>? ?? [];
     final medicines = rawMeds
         .map((m) => Map<String, dynamic>.from(m as Map))
@@ -236,16 +296,14 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
       return;
     }
 
-    // Set reminder time from Gemini's suggestion
     final h = (data['reminder_hour'] as num?)?.toInt() ?? 8;
     final m = (data['reminder_minute'] as num?)?.toInt() ?? 0;
 
-    // Use first medicine for the reminder bar
     final firstMed = medicines.first;
     final firstName = firstMed['name']?.toString() ?? 'Medication';
     final firstDosage = firstMed['dosage']?.toString() ?? '';
 
-    // Enrich each medicine with generic name from our local index
+    // Enrich with local generic name lookup
     final enriched = medicines.map((med) {
       final localMatch = _lookupLocal(med['name']?.toString() ?? '');
       return {
@@ -256,19 +314,129 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
       };
     }).toList();
 
-    // Run interaction check across all pairs
+    // ── 1. Local JSON check (instant, offline) ────────────────────────────
     final alerts = _checkInteractions(enriched);
 
-    setState(() {
-      _currentMed =
-          firstDosage.isNotEmpty ? '$firstName $firstDosage' : firstName;
-      _selectedTime =
-          TimeOfDay(hour: h.clamp(0, 23), minute: m.clamp(0, 59));
-      _scannedMedicines = enriched;
-      _interactionAlerts = alerts;
-      _prescriptionNotes = data['notes']?.toString();
-      _showScanResults = true;
-    });
+    // Show scan results immediately so user sees medicines right away
+    if (mounted) {
+      setState(() {
+        _currentMed =
+            firstDosage.isNotEmpty ? '$firstName $firstDosage' : firstName;
+        _selectedTime =
+            TimeOfDay(hour: h.clamp(0, 23), minute: m.clamp(0, 59));
+        _scannedMedicines = enriched;
+        _interactionAlerts = alerts;
+        _prescriptionNotes = data['notes']?.toString();
+        _showScanResults = true;
+      });
+    }
+
+    // ── 2. AI interaction check (Gemini medical knowledge) ───────────────
+    // Runs after local results are shown — updates the alert list silently.
+    // Non-fatal: if AI fails, local JSON results remain visible.
+    if (enriched.length >= 2) {
+      try {
+        // Use generic names where we have them — AI matches better on generics
+        final names = enriched.map((med) {
+          final generic = med['_local_generic']?.toString() ?? '';
+          final name = med['name']?.toString() ?? '';
+          return generic.isNotEmpty ? generic : name;
+        }).where((n) => n.isNotEmpty).toList();
+        final aiResponse = await _invokeFunctionWithAuthRetry(
+          'drug-interactions-ai',
+          body: {'medicines': names},
+        );
+
+        if (!mounted) return;
+
+        if (aiResponse.status == 200 && aiResponse.data != null) {
+          final aiData = Map<String, dynamic>.from(aiResponse.data as Map);
+          final rawAI = aiData['interactions'] as List<dynamic>? ?? [];
+
+          if (rawAI.isNotEmpty) {
+            // Merge AI results with existing local alerts, dedup by pair
+            final merged = List<_InteractionAlert>.from(alerts);
+            final existingPairs = {
+              for (final a in alerts)
+                ([a.drugA.toLowerCase(), a.drugB.toLowerCase()]..sort()).join('|')
+            };
+
+            for (final item in rawAI) {
+              final ai = Map<String, dynamic>.from(item as Map);
+              final aName = ai['drugA']?.toString() ?? '';
+              final bName = ai['drugB']?.toString() ?? '';
+              if (aName.isEmpty || bName.isEmpty) continue;
+
+              final pairKey =
+                  ([aName.toLowerCase(), bName.toLowerCase()]..sort()).join('|');
+
+              if (!existingPairs.contains(pairKey)) {
+                // New pair — add AI result
+                merged.add(_InteractionAlert(
+                  drugA: aName,
+                  drugB: bName,
+                  severity: ai['severity']?.toString() ?? 'moderate',
+                  effect: ai['effect']?.toString() ?? '',
+                  mechanism: ai['mechanism']?.toString() ?? '',
+                  action: ai['action']?.toString() ?? '',
+                  monitoring: ai['monitoring']?.toString(),
+                  alternative: ai['alternative']?.toString(),
+                ));
+              } else {
+                // Pair already found — replace if AI has higher severity
+                final aiRank = _severityRank(ai['severity']?.toString() ?? 'moderate');
+                final idx = merged.indexWhere((a) {
+                  final k = ([a.drugA.toLowerCase(), a.drugB.toLowerCase()]..sort()).join('|');
+                  return k == pairKey;
+                });
+                if (idx != -1 && aiRank > _severityRank(merged[idx].severity)) {
+                  final local = merged[idx];
+                  final aiEffect = ai['effect']?.toString().trim() ?? '';
+                  final aiMechanism = ai['mechanism']?.toString().trim() ?? '';
+                  final aiAction = ai['action']?.toString().trim() ?? '';
+                  final aiMonitoring = ai['monitoring']?.toString().trim();
+                  final aiAlternative = ai['alternative']?.toString().trim();
+                  merged[idx] = _InteractionAlert(
+                    drugA: aName,
+                    drugB: bName,
+                    severity: ai['severity']?.toString() ?? 'moderate',
+                    effect: aiEffect.isNotEmpty ? aiEffect : local.effect,
+                    mechanism: aiMechanism.isNotEmpty ? aiMechanism : local.mechanism,
+                    action: aiAction.isNotEmpty ? aiAction : local.action,
+                    monitoring: (aiMonitoring != null && aiMonitoring.isNotEmpty)
+                        ? aiMonitoring
+                        : local.monitoring,
+                    alternative: (aiAlternative != null && aiAlternative.isNotEmpty)
+                        ? aiAlternative
+                        : local.alternative,
+                  );
+                }
+              }
+            }
+
+            // Re-sort by severity
+            const order = {'contraindicated': 0, 'major': 1, 'moderate': 2, 'minor': 3};
+            merged.sort((a, b) =>
+                (order[a.severity] ?? 9).compareTo(order[b.severity] ?? 9));
+
+            if (!mounted) return;
+            setState(() => _interactionAlerts = merged);
+          }
+        }
+      } catch (e) {
+        debugPrint('AI interaction check error (non-fatal): $e');
+      }
+    }
+  }
+
+  int _severityRank(String severity) {
+    switch (severity) {
+      case 'contraindicated': return 4;
+      case 'major': return 3;
+      case 'moderate': return 2;
+      case 'minor': return 1;
+      default: return 0;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -319,6 +487,8 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
               effect: rule['effect']?.toString() ?? '',
               mechanism: rule['mechanism']?.toString() ?? '',
               action: rule['action']?.toString() ?? '',
+              monitoring: rule['monitoring']?.toString(),
+              alternative: rule['alternative']?.toString(),
             ));
             break; // one rule per pair is enough
           }
@@ -725,6 +895,22 @@ class _MedicalCareTabState extends State<MedicalCareTab> {
                     'What to do',
                     alert.action,
                     severityColor),
+                if (alert.monitoring != null && alert.monitoring!.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _interactionRow(
+                      Icons.monitor_heart_outlined,
+                      'Monitor',
+                      alert.monitoring!,
+                      const Color(0xFF0891B2)),
+                ],
+                if (alert.alternative != null && alert.alternative!.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _interactionRow(
+                      Icons.swap_horiz_rounded,
+                      'Safer alternative',
+                      alert.alternative!,
+                      const Color(0xFF10B981)),
+                ],
               ],
             ),
           ),
@@ -1261,6 +1447,8 @@ class _InteractionAlert {
   final String effect;     // clinical effect description
   final String mechanism;  // why it happens
   final String action;     // what the patient/doctor should do
+  final String? monitoring; // what to watch for (AI-provided)
+  final String? alternative; // safer substitute (AI-provided)
 
   const _InteractionAlert({
     required this.drugA,
@@ -1269,5 +1457,7 @@ class _InteractionAlert {
     required this.effect,
     required this.mechanism,
     required this.action,
+    this.monitoring,
+    this.alternative,
   });
 }

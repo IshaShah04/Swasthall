@@ -7,7 +7,7 @@ class MockPaymentService {
   // This simulates a network call to a payment gateway
   Future<PaymentStatus> processMockPayment(String method, double amount) async {
     if (kDebugMode) {
-      print("Initiating $method payment for Rs $amount...");
+      debugPrint('Mock payment started: $method');
     }
     
     // Simulate network delay

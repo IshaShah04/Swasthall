@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'plan_details_screen.dart'; 
@@ -15,7 +14,6 @@ class CoverageScreen extends StatefulWidget {
 class _CoverageScreenState extends State<CoverageScreen> {
   final _supabase = Supabase.instance.client;
   final TextEditingController _searchController = TextEditingController();
-  StreamSubscription? _profileSubscription;
   
   // Reusable Color Palette
   final Color primaryTeal = const Color(0xFF134E4A);
@@ -25,10 +23,12 @@ class _CoverageScreenState extends State<CoverageScreen> {
   String? _hospitalId;
   String _searchQuery = "";
   bool _isLoading = true;
+  late Future<List<Map<String, dynamic>>> _plansFuture;
 
   @override
   void initState() {
     super.initState();
+    _plansFuture = _fetchPlans();
     _initializeData();
     
     _searchController.addListener(() {
@@ -76,19 +76,6 @@ class _CoverageScreenState extends State<CoverageScreen> {
         });
       }
 
-      // 3. Real-time stream — keep listening to staff table for changes
-      _profileSubscription = _supabase
-          .from('staff')
-          .stream(primaryKey: ['id'])
-          .eq('email', user.email ?? '')
-          .listen((data) {
-            if (data.isNotEmpty && mounted) {
-              setState(() {
-                _hospitalId = data.first['hospital_id']?.toString();
-              });
-            }
-          }, onError: (err) => debugPrint("Staff Sync Error: $err"));
-
     } catch (e) {
       debugPrint("Data Init Error: $e");
       if (mounted) setState(() => _isLoading = false);
@@ -97,9 +84,31 @@ class _CoverageScreenState extends State<CoverageScreen> {
 
   @override
   void dispose() {
-    _profileSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+
+  Future<List<Map<String, dynamic>>> _fetchPlans() async {
+    final data = await _supabase
+        .from('insurance_plans')
+        .select('id, hospital_id, name, price, icon_url, type, plan_type, category')
+        .order('price')
+        .limit(200);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
+
+  Future<void> _handleRefresh() async {
+    final future = _fetchPlans();
+    await _initializeData();
+    if (mounted) {
+      setState(() {
+        _plansFuture = future;
+      });
+    }
+    await future;
   }
 
   @override
@@ -145,22 +154,24 @@ class _CoverageScreenState extends State<CoverageScreen> {
           ),
 
           Expanded(
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionHeader("Hospital Insurance", "Exclusive rates for your facility"),
-                  const SizedBox(height: 16),
-                  _buildDynamicPlanGrid(type: 'insurance'),
-                  
-                  const SizedBox(height: 32),
-                  _sectionHeader("Professional Subscriptions", "Enhance your practice"),
-                  const SizedBox(height: 16),
-                  _buildDynamicPlanGrid(type: 'subscription'),
-                  const SizedBox(height: 30),
-                ],
+            child: RefreshIndicator(
+              onRefresh: _handleRefresh,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionHeader("Hospital Insurance", "Exclusive rates for your facility"),
+                    const SizedBox(height: 16),
+                    _buildDynamicPlanGrid(type: 'insurance'),
+                    const SizedBox(height: 32),
+                    _sectionHeader("Professional Subscriptions", "Enhance your practice"),
+                    const SizedBox(height: 16),
+                    _buildDynamicPlanGrid(type: 'subscription'),
+                    const SizedBox(height: 30),
+                  ],
+                ),
               ),
             ),
           ),
@@ -178,13 +189,10 @@ class _CoverageScreenState extends State<CoverageScreen> {
       );
     }
 
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _supabase
-          .from('insurance_plans')
-          .stream(primaryKey: ['id'])
-          .order('price'),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _plansFuture,
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Text('Error: ${snapshot.error}');
+        if (snapshot.hasError) return const Text('Could not load plans. Please try again.');
         if (!snapshot.hasData) return const Center(child: LinearProgressIndicator());
 
         final plans = snapshot.data!.where((p) {
@@ -216,13 +224,13 @@ class _CoverageScreenState extends State<CoverageScreen> {
             childAspectRatio: 0.72,
           ),
           itemCount: plans.length,
-          itemBuilder: (context, index) => _buildPlanCard(plans[index]),
+          itemBuilder: (context, index) => _buildPlanCard(plans[index], index),
         );
       },
     );
   }
 
-  Widget _buildPlanCard(Map<String, dynamic> plan) {
+  Widget _buildPlanCard(Map<String, dynamic> plan, int index) {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
@@ -246,7 +254,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Hero(
-              tag: 'plan_icon_${plan['id']}',
+              tag: 'plan_icon_${plan['id'] ?? index}',
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -270,7 +278,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
             ),
             const SizedBox(height: 2),
             Text(
-              "Rs. ${plan['price']}",
+              "Rs. ${plan['price'] ?? '-'}",
               style: TextStyle(color: healingGreen, fontWeight: FontWeight.bold, fontSize: 15),
             ),
             Text(

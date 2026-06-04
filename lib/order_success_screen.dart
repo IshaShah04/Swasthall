@@ -36,7 +36,6 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
 
   // SYNCED BRAND COLORS
   final Color primaryIndigo = const Color(0xFF6366F1);
-  final Color bgLight = const Color(0xFFF1F5F9);
 
   bool _canModify() {
     try {
@@ -76,10 +75,15 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
     setState(() => _isProcessing = true);
 
     try {
-      await Supabase.instance.client
-          .from('lab_appointments')
-          .update({'status': 'cancelled'})
-          .eq('id', appointmentId);
+      final parsedId = int.tryParse(appointmentId);
+      if (parsedId == null) {
+        throw Exception('Invalid appointment id');
+      }
+
+      await Supabase.instance.client.rpc(
+        'cancel_my_lab_appointment',
+        params: {'p_lab_appointment_id': parsedId},
+      );
 
       if (!mounted) return;
 
@@ -95,9 +99,11 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
       );
       Navigator.popUntil(context, (route) => route.isFirst);
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      debugPrint('Cancel appointment error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to cancel appointment. Please try again.')),
+      );
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -152,7 +158,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
                 pw.Bullet(text: "Amount Paid: Rs. ${widget.amount}"),
                 pw.Bullet(
                   text:
-                      "Schedule: ${widget.extraDetails?['date']} at ${widget.extraDetails?['time']}",
+                      "Schedule: ${widget.extraDetails?['date'] ?? 'N/A'} at ${widget.extraDetails?['time'] ?? 'N/A'}",
                 ),
                 pw.SizedBox(height: 40),
                 pw.Container(
@@ -199,7 +205,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
     final bool modificationAllowed = _canModify();
 
     return Scaffold(
-      backgroundColor: bgLight,
+      backgroundColor: AppColors.scaffoldBg(context),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -529,8 +535,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
               fontWeight: FontWeight.w500,
             ),
           ),
-          // Replace the isStatus logic in _infoRow with this:
-      isStatus
+          isStatus
         ? Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(

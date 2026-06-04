@@ -1,14 +1,25 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'theme_colors.dart';
 
 // Conditional import for mobile-only File class
 import 'dart:io' as io show File;
+
+
+
+class _PickedLabImage {
+  final XFile file;
+  final Uint8List? webBytes;
+
+  const _PickedLabImage({
+    required this.file,
+    this.webBytes,
+  });
+}
 
 class NewLabScreen extends StatefulWidget {
   final Map<String, dynamic>? existingTest;
@@ -23,6 +34,8 @@ class _NewLabScreenState extends State<NewLabScreen> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   final supabase = Supabase.instance.client;
+  final OnDeviceTranslatorModelManager _translationModelManager =
+      OnDeviceTranslatorModelManager();
 
   // Holds either a String (URL) or an XFile (New Selection)
   final List<dynamic> _displayImages = [];
@@ -62,45 +75,127 @@ class _NewLabScreenState extends State<NewLabScreen> {
     _doController.text = test['do_instructions'] ?? '';
     _dontController.text = test['dont_instructions'] ?? '';
 
-    if (test['images'] != null && test['images'] is List) {
-      _displayImages.addAll(test['images']);
+    final existingImages = test['images'] ?? test['image_url'];
+    if (existingImages != null) {
+      if (existingImages is List) {
+        _displayImages.addAll(existingImages.whereType<String>());
+      } else if (existingImages is String && existingImages.isNotEmpty) {
+        _displayImages.add(existingImages);
+      }
     }
   }
 
-  // ── Translation via Google Translate REST API (no extra package) ──────────
-  // Uses the free unofficial endpoint — same one the old `translator` package
-  // used internally, but called directly so there's no dependency needed.
-  Future<String> _translateText(String text, String targetLang) async {
+  Future<String> _translateText(
+    String text,
+    TranslateLanguage targetLang,
+  ) async {
     if (text.trim().isEmpty) return '';
+    if (kIsWeb) return text;
+
+    OnDeviceTranslator? translator;
     try {
-      final uri = Uri.parse(
-        'https://translate.googleapis.com/translate_a/single'
-        '?client=gtx&sl=en&tl=$targetLang&dt=t&q=${Uri.encodeComponent(text)}',
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
-      if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
-        // Response shape: [[[translatedText, originalText, ...], ...], ...]
-        final parts = decoded[0] as List;
-        return parts
-            .map((p) => (p as List).first?.toString() ?? '')
-            .join('');
+      final sourceCode = TranslateLanguage.english.bcpCode;
+      final targetCode = targetLang.bcpCode;
+
+      if (!await _translationModelManager.isModelDownloaded(sourceCode)) {
+        await _translationModelManager.downloadModel(sourceCode);
       }
+      if (!await _translationModelManager.isModelDownloaded(targetCode)) {
+        await _translationModelManager.downloadModel(targetCode);
+      }
+
+      translator = OnDeviceTranslator(
+        sourceLanguage: TranslateLanguage.english,
+        targetLanguage: targetLang,
+      );
+      final translated = await translator.translateText(text);
+      return translated.trim().isEmpty ? text : translated;
     } catch (e) {
-      debugPrint('Translation error ($targetLang): $e');
+      debugPrint('Translation error (${targetLang.name}): $e');
+      return text;
+    } finally {
+      translator?.close();
     }
-    // Fallback: return original text so the field is never blank
-    return text;
   }
 
   Future<Map<String, String>> _translateInstruction(String text) async {
     if (text.isEmpty) return {'ne': '', 'hi': ''};
-    // Run both translations in parallel
-    final results = await Future.wait([
-      _translateText(text, 'ne'),
-      _translateText(text, 'hi'),
-    ]);
-    return {'ne': results[0], 'hi': results[1]};
+
+    // ML Kit translation does not currently expose a Nepali enum in this package
+    // version, so keep the original text for Nepali until a supported provider
+    // is added. Hindi translation still runs on-device.
+    final hindiText = await _translateText(text, TranslateLanguage.hindi);
+    return {
+      'ne': text,
+      'hi': hindiText,
+    };
+  }
+
+  String? _sanitizeNullableId(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty || text.toLowerCase() == 'null') {
+      return null;
+    }
+    return text;
+  }
+
+  Future<Map<String, String?>> _resolveLabOwnership() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      return {'provider_id': null, 'hospital_id': null};
+    }
+
+    try {
+      final profile = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final role = (profile?['role'] ?? '').toString().trim().toLowerCase();
+      if (role == 'hospital' || role == 'clinic') {
+        return {'provider_id': user.id, 'hospital_id': user.id};
+      }
+
+      String? hospitalId;
+
+      final staffByUser = await supabase
+          .from('staff')
+          .select('hospital_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      hospitalId = _sanitizeNullableId(staffByUser?['hospital_id']);
+
+      if ((hospitalId == null || hospitalId.isEmpty) &&
+          (user.email?.trim().isNotEmpty ?? false)) {
+        final staffByEmail = await supabase
+            .from('staff')
+            .select('hospital_id')
+            .eq('email', user.email!.trim())
+            .maybeSingle();
+        hospitalId = _sanitizeNullableId(staffByEmail?['hospital_id']);
+      }
+
+      return {
+        'provider_id': hospitalId ?? user.id,
+        'hospital_id': hospitalId,
+      };
+    } catch (e) {
+      debugPrint('Error resolving lab ownership: $e');
+      return {'provider_id': user.id, 'hospital_id': null};
+    }
+  }
+
+  String _detectImageContentType(String fileName) {
+    final name = fileName.toLowerCase();
+    if (name.endsWith('.png')) return 'image/png';
+    if (name.endsWith('.gif')) return 'image/gif';
+    if (name.endsWith('.webp')) return 'image/webp';
+    if (name.endsWith('.bmp')) return 'image/bmp';
+    if (name.endsWith('.heic')) return 'image/heic';
+    if (name.endsWith('.heif')) return 'image/heif';
+    if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+    return 'application/octet-stream';
   }
 
   Future<void> _saveLabToSupabase() async {
@@ -110,30 +205,39 @@ class _NewLabScreenState extends State<NewLabScreen> {
       return;
     }
 
+    final price = int.tryParse(_priceController.text.trim()) ?? 0;
+    if (price <= 0) {
+      _showSnackBar('Enter a valid lab test price greater than 0.');
+      return;
+    }
+
     setState(() => _isUploading = true);
 
-    try {
-      List<String> finalImageUrls = [];
+    final uploadedPaths = <String>[];
 
-      for (var item in _displayImages) {
+    try {
+      final finalImageUrls = <String>[];
+
+      for (final item in _displayImages) {
         if (item is String) {
           finalImageUrls.add(item);
-        } else if (item is XFile) {
+        } else if (item is _PickedLabImage) {
           final fileName =
-              '${DateTime.now().millisecondsSinceEpoch}_${item.name}';
+              '${DateTime.now().millisecondsSinceEpoch}_${item.file.name}';
           final path = 'lab_images/$fileName';
 
-          final bytes = await item.readAsBytes();
+          final bytes = item.webBytes ?? await item.file.readAsBytes();
 
           await supabase.storage.from('lab-assets').uploadBinary(
                 path,
                 bytes,
-                fileOptions:
-                    const FileOptions(contentType: 'image/jpeg'),
+                fileOptions: FileOptions(
+                  contentType: _detectImageContentType(item.file.name),
+                ),
               );
 
-          final String publicUrl =
-              supabase.storage.from('lab-assets').getPublicUrl(path);
+          uploadedPaths.add(path);
+          final publicUrl = supabase.storage.from('lab-assets').getPublicUrl(path);
           finalImageUrls.add(publicUrl);
         }
       }
@@ -142,19 +246,28 @@ class _NewLabScreenState extends State<NewLabScreen> {
           await _translateInstruction(_doController.text.trim());
       final dontTrans =
           await _translateInstruction(_dontController.text.trim());
+      final ownership = await _resolveLabOwnership();
+      final hospitalId = ownership['hospital_id'] ??
+          _sanitizeNullableId(widget.existingTest?['hospital_id']);
+      if (hospitalId == null || hospitalId.isEmpty) {
+        throw Exception('Hospital ownership could not be verified for this lab test.');
+      }
 
       final dataMap = {
-        'provider_id': user.id,
+        'provider_id': ownership['provider_id'] ??
+            widget.existingTest?['provider_id'] ??
+            user.id,
+        'hospital_id': hospitalId,
         'name': _nameController.text.trim(),
         'location': _locationController.text.trim(),
-        'price': int.tryParse(_priceController.text.trim()) ?? 0,
+        'price': price,
         'do_instructions': _doController.text.trim(),
         'dont_instructions': _dontController.text.trim(),
         'do_instructions_ne': doTrans['ne'],
         'dont_instructions_ne': dontTrans['ne'],
         'do_instructions_hi': doTrans['hi'],
         'dont_instructions_hi': dontTrans['hi'],
-        'image_url': finalImageUrls,
+        'images': finalImageUrls,
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -176,7 +289,15 @@ class _NewLabScreenState extends State<NewLabScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      _showSnackBar("Error: ${e.toString()}");
+      debugPrint('Save lab test error: $e');
+      if (uploadedPaths.isNotEmpty) {
+        try {
+          await supabase.storage.from('lab-assets').remove(uploadedPaths);
+        } catch (cleanupError) {
+          debugPrint('Failed to cleanup uploaded lab assets: $cleanupError');
+        }
+      }
+      _showSnackBar('Failed to save lab test. Please try again.');
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -184,15 +305,29 @@ class _NewLabScreenState extends State<NewLabScreen> {
 
   Future<void> _pickImages() async {
     if (_displayImages.length >= 5) {
-      _showSnackBar("Maximum 5 images allowed");
+      _showSnackBar('Maximum 5 images allowed');
       return;
     }
-    final List<XFile> images = await _picker.pickMultiImage();
-    if (!mounted) return;
-    setState(() {
+
+    try {
+      final images = await _picker.pickMultiImage();
+      if (!mounted) return;
       final availableSlots = 5 - _displayImages.length;
-      _displayImages.addAll(images.take(availableSlots));
-    });
+      final picked = images.take(availableSlots);
+
+      final wrapped = <_PickedLabImage>[];
+      for (final image in picked) {
+        final bytes = kIsWeb ? await image.readAsBytes() : null;
+        wrapped.add(_PickedLabImage(file: image, webBytes: bytes));
+      }
+
+      setState(() {
+        _displayImages.addAll(wrapped);
+      });
+    } catch (e) {
+      debugPrint('Pick images error: $e');
+      _showSnackBar('Failed to pick images');
+    }
   }
 
   void _removeImage(int index) =>
@@ -373,9 +508,12 @@ class _NewLabScreenState extends State<NewLabScreen> {
 
   ImageProvider _getImageProvider(dynamic source) {
     if (source is String) return NetworkImage(source);
-    if (source is XFile) {
-      if (kIsWeb) return NetworkImage(source.path);
-      return FileImage(io.File(source.path));
+    if (source is _PickedLabImage) {
+      if (kIsWeb) {
+        if (source.webBytes != null) return MemoryImage(source.webBytes!);
+        return const AssetImage('assets/swasthall_icon.png');
+      }
+      return FileImage(io.File(source.file.path));
     }
     return const AssetImage('assets/swasthall_icon.png');
   }

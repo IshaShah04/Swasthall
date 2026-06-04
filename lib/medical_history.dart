@@ -7,8 +7,9 @@ import 'services/voice_service.dart';
 import 'theme_colors.dart';
 
 class MedicalHistoryScreen extends StatefulWidget {
-  // Fixed: patientId is passed in constructor, but usually accessed via widget.patientId
-  const MedicalHistoryScreen({super.key, required String patientId});
+  final String patientId;
+
+  const MedicalHistoryScreen({super.key, required this.patientId});
 
   @override
   State<MedicalHistoryScreen> createState() => _MedicalHistoryScreenState();
@@ -30,6 +31,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
   String _patientName = "Patient";
   bool _isLoading = true;
   bool _isPatient = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -40,36 +42,61 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
 
   Future<void> _checkAccessAndLoadData() async {
     final user = supabase.auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          _currentUserId = widget.patientId;
+          _isLoading = false;
+          _errorMessage = 'Sign in required to load medical history.';
+        });
+      }
+      return;
+    }
 
     try {
       final userData = await supabase
           .from('profiles')
           .select('full_name, role')
-          .eq('id', user.id)
+          .eq('id', widget.patientId)
           .maybeSingle();
 
       if (userData == null) {
-        if (mounted) setState(() { _currentUserId = user.id; _isLoading = false; });
+        if (mounted) {
+          setState(() {
+            _currentUserId = widget.patientId;
+            _isLoading = false;
+          });
+        }
         return;
       }
 
       if (mounted) {
         setState(() {
-          _currentUserId = user.id;
+          _currentUserId = widget.patientId;
           _patientName = userData['full_name'] ?? "Patient";
-          _isPatient = (userData['role']?.toString().toLowerCase() ?? '') == 'patient';
+          _isPatient =
+              (userData['role']?.toString().toLowerCase() ?? '') == 'patient';
           _isLoading = false;
         });
 
-        // Initialize voice engine so the button is ready, 
+        // Initialize voice engine so the button is ready,
         // but DO NOT call the greeting message here.
         if (_isPatient) {
           await _voiceService.initTts();
         }
       }
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+    } catch (e, st) {
+      debugPrint('Medical history load error: $e');
+      debugPrint(st.toString());
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to load medical history. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -111,6 +138,31 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
 
     if (!_isPatient) {
       return _buildAccessDenied();
+    }
+
+    if (_errorMessage != null && _currentUserId == null) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: AppBar(
+          title: Text(
+            "$_patientName Dashboard",
+            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          backgroundColor: primaryColor,
+          centerTitle: true,
+          elevation: 0,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF475569)),
+            ),
+          ),
+        ),
+      );
     }
 
     return Scaffold(
@@ -180,6 +232,31 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
   }
 
   Widget _buildAccessDenied() {
+    if (_errorMessage != null && _currentUserId == null) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: AppBar(
+          title: Text(
+            "$_patientName Dashboard",
+            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          backgroundColor: primaryColor,
+          centerTitle: true,
+          elevation: 0,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF475569)),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Center(

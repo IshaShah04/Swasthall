@@ -121,6 +121,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg(context),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'consultation_accessibility',
         onPressed: () {
           setState(() => _speakerOn = !_speakerOn);
           if (_speakerOn) {
@@ -216,19 +217,40 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     );
   }
 
+  Future<List<Map<String, dynamic>>> _fetchYourBookings() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return <Map<String, dynamic>>[];
+
+    final data = await supabase
+        .from('bookings')
+        .select(
+          'id, provider_id, doctor_name, doctor_speciality, doctor_avatar, '
+          'appointment_date, appointment_time, type, queue_number, status, is_expired',
+        )
+        .eq('user_id', user.id)
+        .order('appointment_date', ascending: true)
+        .limit(10);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .where((b) {
+          final status = (b['status'] ?? '').toString().toLowerCase();
+          final isExpired = b['is_expired'] == true;
+          return !isExpired &&
+              status != 'completed' &&
+              status != 'cancelled' &&
+              status != 'failed' &&
+              status != 'missed';
+        })
+        .toList();
+  }
+
   Widget _buildYourBookingsSection() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: supabase
-          .from('bookings')
-          .stream(primaryKey: ['id'])
-          .eq('user_id', supabase.auth.currentUser?.id ?? '')
-          .order('appointment_date', ascending: true),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchYourBookings(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
 
-        final activeBookings = snapshot.data!
-            .where((b) => b['status'] != 'completed' && b['status'] != 'cancelled')
-            .toList();
+        final activeBookings = snapshot.data!;
 
         if (activeBookings.isEmpty) return const SizedBox.shrink();
         final booking = activeBookings.first; // safe: isEmpty checked above
@@ -359,25 +381,32 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   /// Fetches staff + all their profiles in exactly 2 queries (no N+1).
   Future<Map<String, dynamic>> _fetchStaffWithProfiles(
       String hospitalId, String role) async {
-    final staffList = await supabase
-        .from('staff')
-        .select('*')
-        .eq('hospital_id', hospitalId)
-        .ilike('role', '%$role%')
-        .limit(4);
+    final response = await supabase.rpc(
+      'get_public_staff_directory',
+      params: {
+        'p_role': role,
+        'p_hospital_id': hospitalId,
+        'p_provider_ids': null,
+        'p_search': null,
+        'p_limit': 4,
+      },
+    );
 
-    if (staffList.isEmpty) return {'staff': [], 'profiles': {}};
+    final staffList = (response is List ? response : <dynamic>[])
+        .map<Map<String, dynamic>>((raw) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final fullName = (row['full_name'] ?? row['name'] ?? 'Medical Staff')
+          .toString();
+      return <String, dynamic>{
+        ...row,
+        'name': fullName,
+        'hospitalName': row['hospital_name'],
+        'first_consultation_fee': row['first_consultation_fee'],
+        'followup_consultation_fee': row['followup_consultation_fee'],
+      };
+    }).toList();
 
-    final ids = staffList.map((s) => s['id'].toString()).toList();
-    final profiles = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url')
-        .inFilter('id', ids);
-
-    final profileMap = <String, dynamic>{
-      for (final p in profiles) p['id'].toString(): p,
-    };
-    return {'staff': staffList, 'profiles': profileMap};
+    return {'staff': staffList, 'profiles': <String, dynamic>{}};
   }
 
   Widget _buildHospitalGrid() {

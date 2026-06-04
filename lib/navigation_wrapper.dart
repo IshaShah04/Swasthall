@@ -36,12 +36,17 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
 
   // Cache the pages so they aren't recreated on every build
   List<Widget>? _cachedPages;
+  String? _cachedUserId;
+
+  String _normalizeRole(String role) {
+    final trimmedRole = role.trim().toLowerCase();
+    return trimmedRole.isEmpty ? 'patient' : trimmedRole;
+  }
 
   @override
   void initState() {
     super.initState();
-    // Safety: Fallback to 'patient' if for any reason userRole is empty
-    normalizedRole = widget.userRole.isEmpty ? 'patient' : widget.userRole.toLowerCase().trim();
+    normalizedRole = _normalizeRole(widget.userRole);
   }
 
   @override
@@ -49,25 +54,32 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.userRole != widget.userRole) {
       setState(() {
-        normalizedRole = widget.userRole.isEmpty ? 'patient' : widget.userRole.toLowerCase().trim();
+        normalizedRole = _normalizeRole(widget.userRole);
         _selectedIndex = 0;
         _cachedPages = null; // Clear cache to rebuild for new role
+        _cachedUserId = null;
       });
     }
   }
 
   // Optimized: Only build the list of pages once per role change
   List<Widget> _getPages() {
-    if (_cachedPages != null) return _cachedPages!;
-
     // BRAIN FIX: Use the session user ID directly to ensure it's not empty
-    final String currentUserId = supabase.auth.currentSession?.user.id ?? 
-                                 supabase.auth.currentUser?.id ?? "";
+    final String currentUserId = supabase.auth.currentSession?.user.id ??
+        supabase.auth.currentUser?.id ?? "";
+
+    if (_cachedPages != null && _cachedUserId == currentUserId) {
+      return _cachedPages!;
+    }
 
     // If ID is missing, show a tiny loader instead of crashing the child screens
     if (currentUserId.isEmpty) {
+      _cachedPages = null;
+      _cachedUserId = null;
       return [const Scaffold(body: Center(child: CircularProgressIndicator()))];
     }
+
+    _cachedUserId = currentUserId;
 
     if (normalizedRole == 'hospital' || normalizedRole == 'clinic') {
       _cachedPages = [
@@ -103,6 +115,10 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
     const Color unselectedColor = Color(0xFF94A3B8);
 
     final List<Widget> pages = _getPages();
+
+    if (pages.length == 1) {
+      return pages.first;
+    }
 
     return Scaffold(
       body: IndexedStack(index: _selectedIndex, children: pages),

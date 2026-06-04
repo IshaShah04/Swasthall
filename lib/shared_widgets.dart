@@ -167,19 +167,26 @@ class _PatientHistorySheet extends StatefulWidget {
 class _PatientHistorySheetState extends State<_PatientHistorySheet> {
   String? _selectedCategoryId;
 
-  // Stream cache: avoids new WebSocket on every setState/rebuild.
-  final Map<String, Stream<List<Map<String, dynamic>>>> _recordStreams = {};
-  Stream<List<Map<String, dynamic>>>? _vitalsStream;
+  // Cached one-shot queries for passive/history views.
+  final Map<String, Future<List<Map<String, dynamic>>>> _recordFutures = {};
+  Future<List<Map<String, dynamic>>>? _vitalsFuture;
 
-  Stream<List<Map<String, dynamic>>> _getRecordStream(String patientId, String role) {
+  Future<List<Map<String, dynamic>>> _getRecordFuture(String patientId, String role) {
     final key = '${patientId}_$role';
-    return _recordStreams.putIfAbsent(
+    return _recordFutures.putIfAbsent(
       key,
-      () => SupabaseHandler().client
-          .from('medical_records')
-          .stream(primaryKey: ['id'])
-          .eq('patient_id', patientId)
-          .order('created_at', ascending: false),
+      () async {
+        final data = await SupabaseHandler().client
+            .from('medical_records')
+            .select('id, patient_id, provider_role, file_name, file_url, created_at')
+            .eq('patient_id', patientId)
+            .eq('provider_role', role)
+            .order('created_at', ascending: false)
+            .limit(100);
+        return (data as List)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList();
+      },
     );
   }
 
@@ -388,20 +395,15 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
   }
 
   Widget _buildCategoryRecordsList(String patientId, String providerRole) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _getRecordStream(patientId, providerRole),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _getRecordFuture(patientId, providerRole),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(
               child: CircularProgressIndicator(color: Color(0xFF008080)));
         }
 
-        // ✅ Filter client-side
-        final records = snapshot.data!.where((r) {
-          final pid = (r['patient_id'] ?? '').toString();
-          final role = (r['provider_role'] ?? '').toString();
-          return pid == patientId && role == providerRole;
-        }).toList();
+        final records = snapshot.data!;
 
         if (records.isEmpty) return _buildEmptyState();
 
@@ -531,8 +533,8 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not pick file. Please try again.')));
     }
   }
 
@@ -550,12 +552,20 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
           child: CircularProgressIndicator(color: Color(0xFF008080))),
     );
 
-    try {
-      final supabase = SupabaseHandler().client;
-      final String safeName = name.replaceAll(RegExp(r'[^\w\.]'), '_');
-      final String path =
-          "$patientId/${DateTime.now().millisecondsSinceEpoch}_$safeName";
+    final supabase = SupabaseHandler().client;
 
+    // Security: patientId must always be present for medical_records operations
+    if (patientId.trim().isEmpty) {
+      if (!context.mounted) return;
+      Navigator.pop(context);
+      throw Exception('patientId required for medical_records insert');
+    }
+
+    final String safeName = name.replaceAll(RegExp(r'[^\w\.]'), '_');
+    final String path =
+        "$patientId/${DateTime.now().millisecondsSinceEpoch}_$safeName";
+
+    try {
       if (kIsWeb) {
         await supabase.storage
             .from(_medicalBucket)
@@ -580,10 +590,13 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Uploaded to $providerRole")));
     } catch (e) {
+      try {
+        await supabase.storage.from(_medicalBucket).remove([path]);
+      } catch (_) {}
       if (!context.mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Upload Failed: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Upload failed. Please try again.')));
     }
   }
 
@@ -641,7 +654,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
                 } catch (e) {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Download error: $e")));
+                      const SnackBar(content: Text('Download failed. Please try again.')));
                 }
               },
             ),
@@ -667,7 +680,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
           } catch (e) {
             if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Failed to open file: $e")));
+                const SnackBar(content: Text('Could not open file. Please try again.')));
           }
         },
       ),
@@ -712,12 +725,18 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
     }
   }
 
-  Stream<List<Map<String, dynamic>>> _getVitalsStream(String patientId) {
-    return _vitalsStream ??= SupabaseHandler().client
-        .from('patient_vitals')
-        .stream(primaryKey: ['id'])
-        .eq('patient_id', patientId)
-        .order('created_at', ascending: true);
+  Future<List<Map<String, dynamic>>> _getVitalsFuture(String patientId) {
+    return _vitalsFuture ??= () async {
+      final data = await SupabaseHandler().client
+          .from('patient_vitals')
+          .select('id, type, reading, created_at')
+          .eq('patient_id', patientId)
+          .order('created_at', ascending: true)
+          .limit(200);
+      return (data as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+    }();
   }
 
   static const Color _bpColor = Color(0xFFEF4444);
@@ -725,8 +744,8 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
 
   /// Vitals chart — same design as MedicalVaultTab, shown to professionals
   Widget _buildVitalOverview(String patientId) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _getVitalsStream(patientId),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _getVitalsFuture(patientId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox.shrink();
         final data = snapshot.data!;
@@ -906,8 +925,8 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
   }
 
   Widget _buildVitalsHistoryLog(String patientId) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _getVitalsStream(patientId),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _getVitalsFuture(patientId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

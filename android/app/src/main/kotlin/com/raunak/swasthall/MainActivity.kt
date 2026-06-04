@@ -161,8 +161,8 @@ class MainActivity : FlutterActivity() {
         val rawRoute = intent.getStringExtra(PatientWidgetProvider.EXTRA_WIDGET_ROUTE) ?: ""
         val userId   = intent.getStringExtra(PatientWidgetProvider.EXTRA_USER_ID) ?: ""
 
-        val allowedRoutes = setOf("/patient_queue", "/nurse_tasks", "/widget_action", "/widget_nurse_action")
-        val safeRoute = if (rawRoute in allowedRoutes) rawRoute else "/patient_queue"
+        val allowedRoutes = setOf("/patient_queue", "/booking", "/nurse_tasks", "/widget_action", "/widget_nurse_action")
+        val safeRoute = if (rawRoute in allowedRoutes) rawRoute else "/booking"
 
         pendingWidgetRoute   = safeRoute
         pendingUserId        = userId

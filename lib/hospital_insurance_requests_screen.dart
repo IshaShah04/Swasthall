@@ -28,9 +28,9 @@ class _HospitalInsuranceRequestsScreenState
   static const Color _red     = Color(0xFFEF4444);
 
   late TabController _tabController;
-  late Stream<List<Map<String, dynamic>>> _pendingStream;
-  late Stream<List<Map<String, dynamic>>> _approvedStream;
-  late Stream<List<Map<String, dynamic>>> _rejectedStream;
+  late Future<List<Map<String, dynamic>>> _pendingFuture;
+  late Future<List<Map<String, dynamic>>> _approvedFuture;
+  late Future<List<Map<String, dynamic>>> _rejectedFuture;
 
   @override
   void initState() {
@@ -38,19 +38,34 @@ class _HospitalInsuranceRequestsScreenState
     _tabController = TabController(length: 3, vsync: this);
     final hospitalId = _supabase.auth.currentUser?.id ?? '';
 
-    _pendingStream  = _buildStream(hospitalId, 'pending');
-    _approvedStream = _buildStream(hospitalId, 'active');
-    _rejectedStream = _buildStream(hospitalId, 'rejected');
+    _pendingFuture  = _buildList(hospitalId, 'pending');
+    _approvedFuture = _buildList(hospitalId, 'active');
+    _rejectedFuture = _buildList(hospitalId, 'rejected');
   }
 
-  Stream<List<Map<String, dynamic>>> _buildStream(
-      String hospitalId, String status) {
-    return _supabase
+  Future<List<Map<String, dynamic>>> _buildList(
+      String hospitalId, String status) async {
+    final data = await _supabase
         .from('insurance_subscriptions')
-        .stream(primaryKey: ['id'])
+        .select()
         .eq('hospital_id', hospitalId)
-        .order('created_at', ascending: false)
-        .map((rows) => rows.where((r) => r['status'] == status).toList());
+        .order('created_at', ascending: false);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .where((r) => r['status'] == status)
+        .toList();
+  }
+
+  Future<void> _refreshLists() async {
+    final hospitalId = _supabase.auth.currentUser?.id ?? '';
+    if (mounted) {
+      setState(() {
+        _pendingFuture = _buildList(hospitalId, 'pending');
+        _approvedFuture = _buildList(hospitalId, 'active');
+        _rejectedFuture = _buildList(hospitalId, 'rejected');
+      });
+    }
+    await Future.wait([_pendingFuture, _approvedFuture, _rejectedFuture]);
   }
 
   @override
@@ -61,12 +76,17 @@ class _HospitalInsuranceRequestsScreenState
 
   Future<void> _approve(String subscriptionId) async {
     try {
-      await _supabase.from('insurance_subscriptions').update({
-        'status':      'active',
-        'verified_at': DateTime.now().toIso8601String(),
-        'verified_by': _supabase.auth.currentUser?.id,
-      }).eq('id', subscriptionId);
+      await _supabase.rpc(
+        'review_insurance_subscription',
+        params: {
+          'p_subscription_id': subscriptionId,
+          'p_status': 'active',
+          'p_rejection_reason': null,
+        },
+      );
 
+      if (!mounted) return;
+      await _refreshLists();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -77,8 +97,10 @@ class _HospitalInsuranceRequestsScreenState
       );
     } catch (e) {
       if (!mounted) return;
+      await _refreshLists();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: _red,
+        const SnackBar(content: Text('Could not approve request. Please try again.'), backgroundColor: _red,
             behavior: SnackBarBehavior.floating),
       );
     }
@@ -133,15 +155,19 @@ class _HospitalInsuranceRequestsScreenState
     if (confirmed != true) return;
 
     try {
-      await _supabase.from('insurance_subscriptions').update({
-        'status':           'rejected',
-        'rejection_reason': reasonCtrl.text.trim().isEmpty
-            ? 'Not specified'
-            : reasonCtrl.text.trim(),
-        'verified_at': DateTime.now().toIso8601String(),
-        'verified_by': _supabase.auth.currentUser?.id,
-      }).eq('id', subscriptionId);
+      await _supabase.rpc(
+        'review_insurance_subscription',
+        params: {
+          'p_subscription_id': subscriptionId,
+          'p_status': 'rejected',
+          'p_rejection_reason': reasonCtrl.text.trim().isEmpty
+              ? 'Not specified'
+              : reasonCtrl.text.trim(),
+        },
+      );
 
+      if (!mounted) return;
+      await _refreshLists();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -152,8 +178,10 @@ class _HospitalInsuranceRequestsScreenState
       );
     } catch (e) {
       if (!mounted) return;
+      await _refreshLists();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: _red,
+        const SnackBar(content: Text('Could not reject request. Please try again.'), backgroundColor: _red,
             behavior: SnackBarBehavior.floating),
       );
     }
@@ -192,13 +220,22 @@ class _HospitalInsuranceRequestsScreenState
         controller: _tabController,
         children: [
           _RequestList(
-            stream: _pendingStream,
+            future: _pendingFuture,
+            onRefresh: _refreshLists,
             status: 'pending',
             onApprove: _approve,
-            onReject:  _showRejectDialog,
+            onReject: _showRejectDialog,
           ),
-          _RequestList(stream: _approvedStream, status: 'active'),
-          _RequestList(stream: _rejectedStream, status: 'rejected'),
+          _RequestList(
+            future: _approvedFuture,
+            onRefresh: _refreshLists,
+            status: 'active',
+          ),
+          _RequestList(
+            future: _rejectedFuture,
+            onRefresh: _refreshLists,
+            status: 'rejected',
+          ),
         ],
       ),
     );
@@ -211,13 +248,15 @@ class _HospitalInsuranceRequestsScreenState
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _RequestList extends StatelessWidget {
-  final Stream<List<Map<String, dynamic>>> stream;
+  final Future<List<Map<String, dynamic>>> future;
+  final Future<void> Function() onRefresh;
   final String status;
   final void Function(String id)? onApprove;
   final void Function(String id)? onReject;
 
   const _RequestList({
-    required this.stream,
+    required this.future,
+    required this.onRefresh,
     required this.status,
     this.onApprove,
     this.onReject,
@@ -225,8 +264,8 @@ class _RequestList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: stream,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -259,14 +298,18 @@ class _RequestList extends StatelessWidget {
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: items.length,
-          itemBuilder: (context, i) => _RequestCard(
-            item:      items[i],
-            status:    status,
-            onApprove: onApprove,
-            onReject:  onReject,
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(12),
+            itemCount: items.length,
+            itemBuilder: (context, i) => _RequestCard(
+              item: items[i],
+              status: status,
+              onApprove: onApprove,
+              onReject: onReject,
+            ),
           ),
         );
       },

@@ -22,6 +22,15 @@ class _NurseSettingState extends State<NurseSetting> {
   Map<String, dynamic>? _mergedUserData;
   bool _isUploading = false;
 
+  Future<User?> _waitForUser() async {
+    for (int i = 0; i < 20; i++) {
+      final user = supabase.auth.currentUser ?? supabase.auth.currentSession?.user;
+      if (user != null) return user;
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+    return supabase.auth.currentUser ?? supabase.auth.currentSession?.user;
+  }
+
   DateTime selectedDate = DateTime.now();
   TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay endTime = const TimeOfDay(hour: 17, minute: 0);
@@ -46,7 +55,7 @@ class _NurseSettingState extends State<NurseSetting> {
 
   Future<void> _syncData() async {
     try {
-      final user = supabase.auth.currentUser;
+      final user = await _waitForUser();
       if (user == null) return;
 
       final data = await supabase
@@ -278,6 +287,7 @@ class _NurseSettingState extends State<NurseSetting> {
       });
 
       if (mounted) {
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Doctor's $type slot saved!"), backgroundColor: brandBlue),
         );
@@ -292,25 +302,25 @@ class _NurseSettingState extends State<NurseSetting> {
     }
   }
 
-  // FIX: stream() in your version doesn't support .eq()
-  // So stream all + filter locally in Dart (UI stays the same)
-  Stream<List<Map<String, dynamic>>>? _slotsStream;
+  Future<List<Map<String, dynamic>>> _fetchSlots(String targetDoctorId) async {
+    final data = await supabase
+        .from('availability_slots')
+        .select()
+        .eq('provider_id', targetDoctorId)
+        .order('date');
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
 
   Widget _buildRealTimeSlotList(String targetDoctorId) {
-    _slotsStream ??= supabase
-        .from('availability_slots')
-        .stream(primaryKey: ['id'])
-        .order('date');
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _slotsStream,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchSlots(targetDoctorId),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Text("Error: ${snapshot.error}");
         if (!snapshot.hasData) return const Center(child: LinearProgressIndicator());
 
-        final allSlots = snapshot.data!;
-        final slots = allSlots
-            .where((s) => (s['provider_id']?.toString() ?? '') == targetDoctorId)
-            .toList();
+        final slots = snapshot.data!;
 
         if (slots.isEmpty) return _emptyState("No active slots for this doctor.");
 
@@ -464,8 +474,10 @@ class _NurseSettingState extends State<NurseSetting> {
         ),
       );
 
-  Future<void> _deleteSlot(String id) async =>
-      await supabase.from('availability_slots').delete().eq('id', id);
+  Future<void> _deleteSlot(String id) async {
+    await supabase.from('availability_slots').delete().eq('id', id);
+    if (mounted) setState(() {});
+  }
 
   Future<void> _confirmClearSchedule(String docId) async {
     final navigator = Navigator.of(context);

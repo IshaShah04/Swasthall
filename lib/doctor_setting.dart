@@ -22,6 +22,17 @@ class _DoctorSettingState extends State<DoctorSetting> {
   bool _isInitialLoading = true;
 
   Map<String, dynamic>? _localUserData;
+  Future<String>? _nurseNameFuture;
+  Future<List<Map<String, dynamic>>>? _scheduleFuture;
+
+  Future<User?> _waitForUser() async {
+    for (int i = 0; i < 20; i++) {
+      final user = _supabase.auth.currentUser ?? _supabase.auth.currentSession?.user;
+      if (user != null) return user;
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+    return _supabase.auth.currentUser ?? _supabase.auth.currentSession?.user;
+  }
 
   @override
   void initState() {
@@ -65,8 +76,11 @@ class _DoctorSettingState extends State<DoctorSetting> {
 
   Future<void> _fetchProfile() async {
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return;
+      final user = await _waitForUser();
+      if (user == null) {
+        if (mounted) setState(() => _isInitialLoading = false);
+        return;
+      }
 
       final data = await _supabase
           .from('profiles')
@@ -90,7 +104,15 @@ class _DoctorSettingState extends State<DoctorSetting> {
   void didUpdateWidget(DoctorSetting oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.userData != oldWidget.userData && widget.userData != null) {
-      setState(() => _localUserData = widget.userData);
+      final oldId = oldWidget.userData?['id']?.toString();
+      final newId = widget.userData?['id']?.toString();
+      setState(() {
+        _localUserData = widget.userData;
+        if (oldId != newId) {
+          _nurseNameFuture = null;
+          _scheduleFuture = null;
+        }
+      });
     }
   }
 
@@ -108,8 +130,17 @@ class _DoctorSettingState extends State<DoctorSetting> {
   setState(() => _isUploading = true);
 
   try {
-    final String userId =
-        _localUserData?['id'] ?? _supabase.auth.currentUser!.id;
+    final String? userId =
+        _localUserData?['id'] ?? _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("User not authenticated"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     // Must match SQL policy: {user_id}/avatar.jpg
     final String path = '$userId/avatar.jpg';
@@ -146,9 +177,10 @@ class _DoctorSettingState extends State<DoctorSetting> {
       const SnackBar(content: Text("Profile picture updated!")),
     );
   } catch (e) {
+    debugPrint("Upload failed: $e");
     messenger.showSnackBar(
-      SnackBar(
-        content: Text("Upload failed: $e"),
+      const SnackBar(
+        content: Text("Upload failed. Please try again."),
         backgroundColor: Colors.red,
       ),
     );
@@ -196,7 +228,6 @@ class _DoctorSettingState extends State<DoctorSetting> {
   }
 
   // Cache the nurse name so we don't re-fetch on every rebuild.
-  Future<String>? _nurseNameFuture;
 
   Future<String> _fetchNurseName(String doctorId) async {
     try {
@@ -382,15 +413,28 @@ class _DoctorSettingState extends State<DoctorSetting> {
     );
   }
 
+  Future<List<Map<String, dynamic>>> _fetchSchedule(String doctorId) async {
+    final data = await _supabase
+        .from('availability_slots')
+        .select('id, date, start_time, end_time, slot_type')
+        .eq('provider_id', doctorId)
+        .order('date')
+        .order('start_time')
+        .limit(200);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
+
   Widget _buildLiveScheduleViewer() {
     final String doctorId =
         _localUserData?['id'] ?? _supabase.auth.currentUser?.id ?? '';
     if (doctorId.isEmpty) return const SizedBox.shrink();
 
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _supabase
-          .from('availability_slots')
-          .stream(primaryKey: ['id']).eq('provider_id', doctorId),
+    _scheduleFuture ??= _fetchSchedule(doctorId);
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _scheduleFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return const Center(child: Text("Connection error. Please restart."));
@@ -451,9 +495,10 @@ class _DoctorSettingState extends State<DoctorSetting> {
     final controller = TextEditingController(text: currentVal);
     final navigator = Navigator.of(context);
 
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
+    try {
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: Text("Update $label"),
         content: TextField(
@@ -476,7 +521,11 @@ class _DoctorSettingState extends State<DoctorSetting> {
               try {
                 final newValue = controller.text.trim();
                 final uid =
-                    _localUserData?['id'] ?? _supabase.auth.currentUser!.id;
+                    _localUserData?['id'] ?? _supabase.auth.currentUser?.id;
+                if (uid == null) {
+                  debugPrint("Update Error: User not authenticated");
+                  return;
+                }
                 await _supabase
                     .from('profiles')
                     .update({column: newValue}).eq('id', uid);
@@ -495,7 +544,10 @@ class _DoctorSettingState extends State<DoctorSetting> {
             child: Text("Save", style: TextStyle(color: AppColors.cardBg(context))),
           ),
         ],
-      ),
-    );
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 }

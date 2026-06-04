@@ -19,11 +19,59 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
   final supabase = Supabase.instance.client;
   final Color brandBlue = const Color(0xFF6366F1);
   int _unreadCount = 0;
+  String? _resolvedHospitalId;
 
-  // Streams
-  Stream<List<Map<String, dynamic>>>? _staffStream;
-  Stream<Map<String, dynamic>>? _profileStream;
-  Stream<List<Map<String, dynamic>>>? _revenueStream;
+  Future<List<Map<String, dynamic>>>? _staffFuture;
+  Future<Map<String, dynamic>>? _profileFuture;
+  Future<List<Map<String, dynamic>>>? _revenueFuture;
+
+  Future<User?> _waitForUser() async {
+    for (int i = 0; i < 20; i++) {
+      final user = supabase.auth.currentUser ?? supabase.auth.currentSession?.user;
+      if (user != null) return user;
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+    return supabase.auth.currentUser ?? supabase.auth.currentSession?.user;
+  }
+
+
+  Future<String?> _resolveHospitalId(User user) async {
+    try {
+      final profile = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final role = (profile?['role'] ?? '').toString().trim().toLowerCase();
+      if (role == 'hospital' || role == 'clinic') {
+        return user.id;
+      }
+
+      final staffByUser = await supabase
+          .from('staff')
+          .select('hospital_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      final hid = staffByUser?['hospital_id']?.toString();
+      if (hid != null && hid.isNotEmpty && hid != 'null') return hid;
+
+      final email = user.email?.trim();
+      if (email != null && email.isNotEmpty) {
+        final staffByEmail = await supabase
+            .from('staff')
+            .select('hospital_id')
+            .eq('email', email)
+            .maybeSingle();
+        final hid2 = staffByEmail?['hospital_id']?.toString();
+        if (hid2 != null && hid2.isNotEmpty && hid2 != 'null') return hid2;
+      }
+    } catch (e) {
+      debugPrint('Hospital id resolution error: $e');
+    }
+    return user.id;
+  }
 
   // State Variables
   String _selectedFilter = "Month";
@@ -37,26 +85,55 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
     _initStreams();
   }
 
-  void _initStreams() {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
+  Future<void> _initStreams() async {
+    final user = await _waitForUser();
+    if (!mounted) return;
 
-    _staffStream = supabase
-        .from('hospital_staff_unified')
-        .stream(primaryKey: ['id']).eq('hospital_id', user.id);
+    if (user == null) {
+      setState(() {
+        _resolvedHospitalId = null;
+        _staffFuture = Future<List<Map<String, dynamic>>>.value(<Map<String, dynamic>>[]);
+        _profileFuture = Future<Map<String, dynamic>>.value(<String, dynamic>{});
+        _revenueFuture = Future<List<Map<String, dynamic>>>.value(<Map<String, dynamic>>[]);
+      });
+      return;
+    }
 
-    _profileStream = supabase
-        .from('profiles')
-        .stream(primaryKey: ['id'])
-        .eq('id', user.id)
-        .map((list) => list.isNotEmpty ? list.first : {});
+    final hospitalId = await _resolveHospitalId(user);
 
-    _updateRevenueStream();
+    setState(() {
+      _resolvedHospitalId = hospitalId;
+      _staffFuture = hospitalId == null
+          ? Future<List<Map<String, dynamic>>>.value(<Map<String, dynamic>>[])
+          : _fetchStaff(hospitalId);
+      _profileFuture = _fetchProfile(user.id);
+    });
+    await _updateRevenueFuture();
   }
 
-  void _updateRevenueStream() {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
+  Future<List<Map<String, dynamic>>> _fetchStaff(String hospitalId) async {
+    final data = await supabase
+        .from('hospital_staff_unified')
+        .select('id, name, speciality, avatar_url, daily_bookings, role, hospital_id')
+        .eq('hospital_id', hospitalId)
+        .limit(80);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> _fetchProfile(String userId) async {
+    final data = await supabase
+        .from('profiles')
+        .select('id, avatar_url, full_name')
+        .eq('id', userId)
+        .maybeSingle();
+    return data == null ? <String, dynamic>{} : Map<String, dynamic>.from(data);
+  }
+
+  Future<void> _updateRevenueFuture() async {
+    final user = await _waitForUser();
+    if (!mounted) return;
 
     DateTime now = DateTime.now();
     setState(() {
@@ -75,19 +152,51 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
           break;
       }
 
-      _revenueStream = supabase
-          .from('revenue_stats')
-          .stream(primaryKey: ['id'])
-          .eq('hospital_id', user.id)
-          .order('created_at', ascending: true);
+      _revenueFuture = (user == null || _resolvedHospitalId == null)
+          ? Future<List<Map<String, dynamic>>>.value(<Map<String, dynamic>>[])
+          : _fetchRevenue(_resolvedHospitalId!);
     });
   }
 
+
+  Future<List<Map<String, dynamic>>> _fetchRevenue(String hospitalId) async {
+    final rows = await supabase.rpc(
+      'get_my_staff_revenue_analytics_range',
+      params: {
+        'p_from': _startDate.toIso8601String().split('T').first,
+        'p_to': DateTime.now().toIso8601String().split('T').first,
+      },
+    );
+
+    final list = (rows as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .where((row) => row['hospital_id']?.toString() == hospitalId)
+        .toList();
+
+    final Map<String, double> byDate = {};
+    for (final row in list) {
+      final revenueDate = (row['revenue_date'] ?? '').toString();
+      final amount = ((row['hospital_payout'] as num?)?.toDouble()) ??
+          double.tryParse('${row['hospital_payout'] ?? 0}') ??
+          0.0;
+      if (revenueDate.isEmpty) continue;
+      byDate[revenueDate] = (byDate[revenueDate] ?? 0) + amount;
+    }
+
+    final entries = byDate.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return entries
+        .map((e) => {
+              'revenue_date': e.key,
+              'amount': e.value,
+            })
+        .toList();
+  }
+
   Future<void> _handleRefresh() async {
-    setState(() {
-      _initStreams();
-    });
-    await Future.delayed(const Duration(milliseconds: 800));
+    await _initStreams();
+    await Future.delayed(const Duration(milliseconds: 300));
   }
 
   void _navigateToDoctorDetail(Map<String, dynamic> staffData) {
@@ -101,12 +210,12 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
 
   List<Map<String, dynamic>> _getFilteredStaff(
       List<Map<String, dynamic>> allStaff) {
-    if (_searchQuery.isEmpty) return allStaff;
+    if (_searchQuery.trim().isEmpty) return allStaff;
+    final query = _searchQuery.trim().toLowerCase();
     return allStaff.where((doc) {
       final name = (doc['name'] ?? "").toString().toLowerCase();
       final spec = (doc['speciality'] ?? "").toString().toLowerCase();
-      return name.contains(_searchQuery.toLowerCase()) ||
-          spec.contains(_searchQuery.toLowerCase());
+      return name.contains(query) || spec.contains(query);
     }).toList();
   }
 
@@ -120,7 +229,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_profileStream == null || _staffStream == null) {
+    if (_profileFuture == null || _staffFuture == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -130,8 +239,8 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
       body: RefreshIndicator(
         color: brandBlue,
         onRefresh: _handleRefresh,
-        child: StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _staffStream,
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: _staffFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -182,8 +291,8 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
       backgroundColor: AppColors.cardBg(context),
       elevation: 0,
       leadingWidth: 56,
-      leading: StreamBuilder<Map<String, dynamic>>(
-        stream: _profileStream,
+      leading: FutureBuilder<Map<String, dynamic>>(
+        future: _profileFuture,
         builder: (context, snapshot) {
           final avatarUrl = snapshot.data?['avatar_url'];
           return Padding(
@@ -329,7 +438,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                       if (selected) {
                         setState(() {
                           _selectedFilter = filter;
-                          _updateRevenueStream();
+                          _updateRevenueFuture();
                         });
                       }
                     },
@@ -341,18 +450,13 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
           const SizedBox(height: 25),
           SizedBox(
             height: 180,
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _revenueStream,
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _revenueFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final rawData = snapshot.data ?? [];
-                final filteredData = rawData.where((item) {
-                  final createdAt = DateTime.tryParse(item['created_at'] ?? '');
-                  if (createdAt == null) return false;
-                  return createdAt.isAfter(_startDate);
-                }).toList();
+                final filteredData = snapshot.data ?? [];
 
                 if (snapshot.hasError) {
                   return Center(

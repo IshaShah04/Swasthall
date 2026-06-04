@@ -4,9 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AIAssistantService {
   static final SupabaseClient _supabase = Supabase.instance.client;
 
-  /// Sanitise free-text before sending to AI (prevents prompt injection).
+  /// Sanitise free-text before sending to AI.
+  /// This is not a full medical-safety filter; the Edge Function still owns
+  /// the real system prompt and output rules.
   static String _sanitise(String input) {
-    String cleaned = input
+    final cleaned = input
         .replaceAll('<', '')
         .replaceAll('>', '')
         .replaceAll('{', '')
@@ -52,7 +54,7 @@ class AIAssistantService {
       return {"error": "Please log in to use the AI assistant."};
     }
 
-    final String sanitisedInput = _sanitise(userInput);
+    final sanitisedInput = _sanitise(userInput);
     if (sanitisedInput.isEmpty) {
       return {"error": "Please describe your symptoms."};
     }
@@ -62,25 +64,6 @@ class AIAssistantService {
         : preferredLanguage == "hi-IN"
             ? "Hindi"
             : "English";
-
-    final String systemPrompt = """
-ROLE: Warm Healthcare Guide in Nepal. Respond in $lang.
-TASK: Match symptoms to the DATABASE of doctors and labs provided. Output ONLY valid JSON.
-SCHEMA: {
-  "specialty": "string",
-  "suggestion": "string",
-  "estimates": [
-    {
-      "doctorName": "string",
-      "hospital": "string",
-      "address": "string",
-      "consultationFee": "string",
-      "otherCostsRange": "string"
-    }
-  ],
-  "disclaimer": "string"
-}
-""";
 
     try {
       final response = await _supabase.functions.invoke(
@@ -92,55 +75,36 @@ SCHEMA: {
           'userInput': sanitisedInput,
           'preferredLanguage': preferredLanguage,
           'languageLabel': lang,
-          'systemPrompt': systemPrompt,
+          'promptMode': 'triage',
           'localDoctors': localDoctors,
           'labTests': labTests,
         },
       );
 
-      final dynamic data = response.data;
-
-      // Log full raw response for debugging
-      debugPrint("AI RAW RESPONSE: $data");
-
+      final data = response.data;
       if (data == null) {
         return {"error": "Empty response from assistant."};
       }
 
-      Map<String, dynamic> result;
-
+      late final Map<String, dynamic> result;
       if (data is Map<String, dynamic>) {
-        // Log detail field if present (from Edge Function error responses)
-        if (data['detail'] != null) {
-          debugPrint("AI DETAIL: ${data['detail']}");
-        }
-        if (data['error'] != null) {
-          debugPrint("AI ERROR: ${data['error']} | DETAIL: ${data['detail']}");
-          return {
-            "error": data['error'].toString(),
-            if (data['detail'] != null) "detail": data['detail'].toString(),
-          };
-        }
         result = data;
       } else if (data is Map) {
-        final map = Map<String, dynamic>.from(data);
-        if (map['detail'] != null) {
-          debugPrint("AI DETAIL: ${map['detail']}");
-        }
-        if (map['error'] != null) {
-          debugPrint("AI ERROR: ${map['error']} | DETAIL: ${map['detail']}");
-          return {
-            "error": map['error'].toString(),
-            if (map['detail'] != null) "detail": map['detail'].toString(),
-          };
-        }
-        result = map;
+        result = Map<String, dynamic>.from(data);
       } else {
-        debugPrint("AI UNEXPECTED TYPE: ${data.runtimeType} => $data");
+        if (kDebugMode) {
+          debugPrint('AI service returned unexpected type: ${data.runtimeType}');
+        }
         return {"error": "Invalid response format from assistant."};
       }
 
-      // Re-attach doctor IDs locally from trusted source
+      if (result['error'] != null) {
+        if (kDebugMode) {
+          debugPrint('AI service returned error: ${result['error']}');
+        }
+        return {"error": "Assistant service unavailable. Please try again."};
+      }
+
       final estimates = result['estimates'];
       if (estimates is List) {
         _enrichEstimatesWithIds(estimates, localDoctors);
@@ -148,15 +112,14 @@ SCHEMA: {
 
       return result;
     } on FunctionException catch (e) {
-      debugPrint("AI FunctionException: status=${e.status} details=${e.details} reason=${e.reasonPhrase}");
-      return {
-        "error": e.details?.toString() ??
-            e.reasonPhrase ??
-            "Assistant service unavailable.",
-      };
-    } catch (e, stack) {
-      debugPrint("AI Exception: $e");
-      debugPrint("AI Stack: $stack");
+      if (kDebugMode) {
+        debugPrint('AI FunctionException status=${e.status} reason=${e.reasonPhrase}');
+      }
+      return {"error": "Assistant service unavailable. Please try again."};
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('AI request failed: ${e.runtimeType}');
+      }
       return {"error": "Network error. Check your connection."};
     }
   }

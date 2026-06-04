@@ -35,17 +35,72 @@ class _CompletedTabState extends State<CompletedTab>
   final Color successGreen = const Color(0xFF10B981);
   final Color errorRed = const Color(0xFFEF4444);
 
+  late Future<List<Map<String, dynamic>>> _historyFuture;
+
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    _loadHistory();
     if (widget.forceUploadMode && widget.activePatientId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         viewPatientHistory(context, widget.activePatientId!, "Patient Record", userRole: widget.userRole);
       });
     }
+  }
+
+
+  @override
+  void didUpdateWidget(covariant CompletedTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filterId != widget.filterId || oldWidget.userRole != widget.userRole) {
+      _loadHistory();
+    }
+  }
+
+  void _loadHistory() {
+    _historyFuture = _fetchHistory();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchHistory() async {
+    final supabase = SupabaseHandler().client;
+    final bool isTechnician = widget.userRole.toLowerCase() == "technician";
+
+    if (widget.filterId != null) {
+      if (isTechnician) {
+        final result = await supabase
+            .from('lab_appointments')
+            .select()
+            .eq('professional_id', widget.filterId!)
+            .order('id', ascending: false);
+        return List<Map<String, dynamic>>.from(result);
+      }
+
+      final result = await supabase
+          .from('bookings')
+          .select()
+          .eq('provider_id', widget.filterId!)
+          .order('id', ascending: false);
+      return List<Map<String, dynamic>>.from(result);
+    }
+
+    final result = await supabase
+        .from('bookings')
+        .select()
+        .order('id', ascending: false);
+    return List<Map<String, dynamic>>.from(result);
+  }
+
+  Future<void> _refreshHistory() async {
+    final future = _fetchHistory();
+    if (mounted) {
+      setState(() {
+        _historyFuture = future;
+      });
+    }
+    await future;
   }
 
   @override
@@ -95,6 +150,7 @@ class _CompletedTabState extends State<CompletedTab>
         );
 
         if (mounted) {
+          _refreshHistory();
           messenger.showSnackBar(
             SnackBar(
               content: Text("Record for $patientName archived in Vault."),
@@ -124,35 +180,15 @@ class _CompletedTabState extends State<CompletedTab>
   Widget build(BuildContext context) {
     super.build(context);
 
-    final supabase = SupabaseHandler().client;
     final bool isTechnician = widget.userRole.toLowerCase() == "technician";
-
-    // Unified stream logic: Technicians filter by lab_category, Doctors/Nurses by provider_id
-    Stream<List<Map<String, dynamic>>> historyStream;
-
-    if (widget.filterId != null) {
-      if (isTechnician) {
-        historyStream = supabase
-            .from('bookings')
-            .stream(primaryKey: ['id'])
-            .eq('lab_category', widget.filterId!);
-      } else {
-        historyStream = supabase
-            .from('bookings')
-            .stream(primaryKey: ['id'])
-            .eq('provider_id', widget.filterId!);
-      }
-    } else {
-      historyStream = supabase.from('bookings').stream(primaryKey: ['id']);
-    }
 
     return Column(
       children: [
         _buildSearchBar(),
         Expanded(
-          child: StreamBuilder<List<Map<String, dynamic>>>(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
             key: ValueKey(widget.filterId),
-            stream: historyStream,
+            future: _historyFuture,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(child: Text("Error: ${snapshot.error}"));
@@ -163,20 +199,23 @@ class _CompletedTabState extends State<CompletedTab>
 
               final data = snapshot.data!.where((e) {
                 final status = e['status']?.toString().toLowerCase();
-                final bool isHistorical = [
-                  'completed',
-                  'failed',
-                  'missed',
-                  'cancelled'
-                ].contains(status);
+                final bool isExpired = e['is_expired'] == true;
+                // lab_appointments uses completed/cancelled; bookings also has failed/missed
+                final bool isHistorical = isTechnician
+                    ? isExpired || ['completed', 'cancelled'].contains(status)
+                    : isExpired || ['completed', 'failed', 'missed', 'cancelled'].contains(status);
 
                 if (!isHistorical) return false;
 
                 if (_searchQuery.isEmpty) return true;
+                final query = _searchQuery.toLowerCase();
                 final name = (e['patient_name'] ?? "").toString().toLowerCase();
-                final phone = (e['phone_number'] ?? "").toString();
-                return name.contains(_searchQuery.toLowerCase()) ||
-                    phone.contains(_searchQuery);
+                if (isTechnician) {
+                  final testNames = (e['test_names'] ?? "").toString().toLowerCase();
+                  return name.contains(query) || testNames.contains(query);
+                }
+                final phone = (e['phone_number'] ?? "").toString().toLowerCase();
+                return name.contains(query) || phone.contains(query);
               }).toList();
 
               // Sort by ID descending to show most recent at the top
@@ -184,12 +223,16 @@ class _CompletedTabState extends State<CompletedTab>
 
               if (data.isEmpty) return _buildEmptyState();
 
-              return ListView.builder(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                itemCount: data.length,
-                itemBuilder: (context, index) {
+              return RefreshIndicator(
+                onRefresh: _refreshHistory,
+                child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  itemCount: data.length,
+                  itemBuilder: (context, index) {
                   final appt = data[index];
+                  // lab_appointments: patient is user_id; bookings: patient_id or user_id
                   final String patientId =
                       (appt['patient_id'] ?? appt['user_id'] ?? '').toString();
                   final String patientName = appt['patient_name'] ?? "Patient";
@@ -198,12 +241,13 @@ class _CompletedTabState extends State<CompletedTab>
                   final String tokenNum = appt['token_number']?.toString() ??
                       (index + 1).toString();
 
+                  final bool isExpired = appt['is_expired'] == true;
                   final bool isDone = status == 'completed';
                   final bool isFailed =
-                      ['failed', 'missed', 'cancelled'].contains(status);
+                      isExpired || ['failed', 'missed', 'cancelled'].contains(status);
 
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: AppColors.cardBg(context),
@@ -248,8 +292,13 @@ class _CompletedTabState extends State<CompletedTab>
                                   children: [
                                     _infoTile(Icons.calendar_today_rounded,
                                         appt['appointment_date'] ?? 'No Date'),
-                                    _infoTile(Icons.phone_android_rounded,
-                                        appt['phone_number'] ?? "No Phone"),
+                                    // lab_appointments has test_names; bookings has phone_number
+                                    if (isTechnician)
+                                      _infoTile(Icons.biotech_rounded,
+                                          appt['test_names'] ?? 'Lab Test')
+                                    else
+                                      _infoTile(Icons.phone_android_rounded,
+                                          appt['phone_number'] ?? 'No Phone'),
                                   ],
                                 ),
                               ],
@@ -289,7 +338,8 @@ class _CompletedTabState extends State<CompletedTab>
                       ),
                     ),
                   );
-                },
+                  },
+                ),
               );
             },
           ),
@@ -305,7 +355,9 @@ class _CompletedTabState extends State<CompletedTab>
         controller: _searchController,
         onChanged: (value) => setState(() => _searchQuery = value),
         decoration: InputDecoration(
-          hintText: "Search name or phone...",
+          hintText: (widget.userRole).trim().toLowerCase() == "technician"
+    ? "Search name or test..."
+    : "Search name or phone...",
           prefixIcon: Icon(Icons.search_rounded, color: brandIndigo, size: 22),
           filled: true,
           fillColor: AppColors.inputFill(context),

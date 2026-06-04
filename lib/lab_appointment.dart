@@ -29,10 +29,94 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
   Map<String, int> _slotBookings = {};
   bool _isLoadingSlots = false;
   bool _isUpdating = false;
+  int _maxCapacityPerSlot = 1;
 
   // SYNCED BRAND COLORS
   final Color primaryIndigo = const Color(0xFF6366F1);
   final Color bgLight = const Color(0xFFF8FAFC);
+
+  DateTime _parseSlotDateTime(dynamic rawValue) {
+    final raw = (rawValue ?? '').toString().trim();
+    if (raw.isEmpty) {
+      throw const FormatException('Empty time value');
+    }
+
+    final hasAmPm = RegExp(r'\b(am|pm)\b', caseSensitive: false).hasMatch(raw);
+    if (hasAmPm) {
+      final datePart = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      final candidates = [
+        '$datePart $raw',
+        raw,
+      ];
+      const patterns = [
+        'yyyy-MM-dd hh:mm a',
+        'yyyy-MM-dd h:mm a',
+        'hh:mm a',
+        'h:mm a',
+      ];
+      for (final candidate in candidates) {
+        for (final pattern in patterns) {
+          try {
+            final parsed = DateFormat(pattern).parse(candidate);
+            return DateTime(
+              _selectedDate.year,
+              _selectedDate.month,
+              _selectedDate.day,
+              parsed.hour,
+              parsed.minute,
+              parsed.second,
+            );
+          } catch (_) {}
+        }
+      }
+      throw FormatException('Unsupported 12-hour time value: $raw');
+    }
+
+    if (raw.contains('T')) {
+      return DateTime.parse(raw).toLocal();
+    }
+
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}\s').hasMatch(raw)) {
+      return DateTime.parse(raw.replaceFirst(' ', 'T')).toLocal();
+    }
+
+    if (RegExp(r'^\d{1,2}:\d{2}(:\d{2})?$').hasMatch(raw)) {
+      final datePart = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      return DateTime.parse('${datePart}T$raw').toLocal();
+    }
+
+    return DateTime.parse(raw).toLocal();
+  }
+
+  String _normalizeAppointmentTime(dynamic rawValue) {
+    final raw = (rawValue ?? '').toString().trim();
+    if (raw.isEmpty) return '';
+
+    try {
+      return DateFormat('hh:mm a').format(_parseSlotDateTime(raw));
+    } catch (_) {
+      for (final pattern in const ['HH:mm:ss', 'HH:mm']) {
+        try {
+          final parsed = DateFormat(pattern).parse(raw);
+          return DateFormat('hh:mm a').format(parsed);
+        } catch (_) {}
+      }
+      return raw;
+    }
+  }
+
+  int _resolveAppointmentIntervalMinutes() {
+    final rawInterval = widget.labData['appointment_interval_minutes'];
+    if (rawInterval is int && rawInterval > 0) return rawInterval;
+    if (rawInterval is num && rawInterval > 0) return rawInterval.toInt();
+    if (rawInterval is String) {
+      final direct = int.tryParse(rawInterval.trim());
+      if (direct != null && direct > 0) return direct;
+      final asDouble = double.tryParse(rawInterval.trim());
+      if (asDouble != null && asDouble > 0) return asDouble.toInt();
+    }
+    return 60;
+  }
 
   @override
   void initState() {
@@ -45,58 +129,103 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
       _isLoadingSlots = true;
       _selectedTime = null;
       _dynamicTimeSlots = [];
+      _slotBookings = {};
+      _maxCapacityPerSlot = 1;
     });
 
-    final String dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
-    final availability = widget.labData['availability_json'] ?? {};
+    try {
+      final technicianIds = (widget.selectedTests ?? [])
+          .map((e) => (e['technician_id'] ?? '').toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toSet();
 
-    if (availability.containsKey(dateKey)) {
-      try {
-        final String startStr = availability[dateKey]['start'];
-        final String endStr = availability[dateKey]['end'];
-        final int interval =
-            widget.labData['appointment_interval_minutes'] ?? 60;
-
-        DateTime startTime = DateFormat("HH:mm").parse(startStr);
-        DateTime endTime = DateFormat("HH:mm").parse(endStr);
-
-        List<String> generatedTimes = [];
-        while (startTime.isBefore(endTime)) {
-          generatedTimes.add(DateFormat("hh:mm a").format(startTime));
-          startTime = startTime.add(Duration(minutes: interval));
-        }
-
-        // Fetch current bookings
-        final response = await SupabaseHandler()
-            .client
-            .from('lab_appointments')
-            .select('appointment_time')
-            .eq('professional_id', widget.labData['id'])
-            .eq('appointment_date', dateKey)
-            .not('status', 'eq', 'cancelled');
-
-        final List existingAppts = response as List;
-        Map<String, int> counts = {};
-        for (var appt in existingAppts) {
-          String time = appt['appointment_time'].toString();
-          counts[time] = (counts[time] ?? 0) + 1;
-        }
-
+      if (technicianIds.length != 1) {
         setState(() {
-          _dynamicTimeSlots = generatedTimes;
-          _slotBookings = counts;
+          _isLoadingSlots = false;
         });
-      } catch (e) {
-        debugPrint("Error processing slots: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Unable to determine technician for selected tests.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final technicianId = technicianIds.first;
+      final String dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+      final slotRow = await SupabaseHandler()
+          .client
+          .from('availability_slots')
+          .select('start_time, end_time, hourly_cap')
+          .eq('provider_id', technicianId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (slotRow == null) {
+        setState(() {
+          _isLoadingSlots = false;
+        });
+        return;
+      }
+
+      final int interval = _resolveAppointmentIntervalMinutes();
+
+      DateTime startTime = _parseSlotDateTime(slotRow['start_time']);
+      DateTime endTime = _parseSlotDateTime(slotRow['end_time']);
+
+      final List<String> generatedTimes = [];
+      while (startTime.isBefore(endTime)) {
+        generatedTimes.add(DateFormat("hh:mm a").format(startTime));
+        startTime = startTime.add(Duration(minutes: interval));
+      }
+
+      final response = await SupabaseHandler()
+          .client
+          .from('lab_appointments')
+          .select('appointment_time')
+          .eq('professional_id', technicianId)
+          .eq('appointment_date', dateKey)
+          .not('status', 'eq', 'cancelled');
+
+      final List existingAppts = response as List;
+      final Map<String, int> counts = {};
+      for (final appt in existingAppts) {
+        final String time = _normalizeAppointmentTime(appt['appointment_time']);
+        if (time.isEmpty) continue;
+        counts[time] = (counts[time] ?? 0) + 1;
+      }
+
+      final rawCap = slotRow['hourly_cap'];
+      final int parsedCap = rawCap is int
+          ? rawCap
+          : rawCap is num
+              ? rawCap.toInt()
+              : rawCap is String
+                  ? (int.tryParse(rawCap.trim()) ??
+                      (double.tryParse(rawCap.trim())?.toInt() ?? 1))
+                  : 1;
+
+      setState(() {
+        _dynamicTimeSlots = generatedTimes;
+        _slotBookings = counts;
+        _maxCapacityPerSlot = parsedCap > 0 ? parsedCap : 1;
+      });
+    } catch (e) {
+      debugPrint("Error processing lab slots: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingSlots = false);
       }
     }
-    setState(() => _isLoadingSlots = false);
   }
 
   bool _isSlotFull(String time) {
-    int currentBookings = _slotBookings[time] ?? 0;
-    int maxCapacity = widget.labData['max_capacity_per_slot'] ?? 1;
-    return currentBookings >= maxCapacity;
+    final int currentBookings = _slotBookings[time] ?? 0;
+    return currentBookings >= _maxCapacityPerSlot;
   }
 
   Future<void> _performReschedule() async {
@@ -105,11 +234,19 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
       final String formattedDate =
           DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-      await SupabaseHandler().client.from('lab_appointments').update({
-        'appointment_date': formattedDate,
-        'appointment_time': _selectedTime,
-        'status': 'scheduled',
-      }).eq('id', widget.rescheduleAppointmentId!);
+      final parsedId = int.tryParse(widget.rescheduleAppointmentId!.toString());
+      if (parsedId == null) {
+        throw Exception('Invalid appointment id');
+      }
+
+      await SupabaseHandler().client.rpc(
+        'reschedule_my_lab_appointment',
+        params: {
+          'p_lab_appointment_id': parsedId,
+          'p_appointment_date': formattedDate,
+          'p_appointment_time': _selectedTime,
+        },
+      );
 
       if (!mounted) return;
 
@@ -123,9 +260,10 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
 
       Navigator.popUntil(context, (route) => route.isFirst);
     } catch (e) {
+      debugPrint('Reschedule failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Reschedule failed: $e")),
+          const SnackBar(content: Text('Failed to reschedule appointment. Please try again.')),
         );
       }
     } finally {
@@ -416,6 +554,8 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
   }
 
   Widget _buildProceedButton(bool isRescheduling) {
+    final canProceed = isRescheduling ||
+        (widget.selectedTests != null && widget.totalAmount != null);
     return Container(
       padding: EdgeInsets.fromLTRB(
           20, 20, 20, MediaQuery.of(context).padding.bottom + 20),
@@ -424,27 +564,24 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: ElevatedButton(
-        onPressed: (_selectedTime == null || _isUpdating)
+        onPressed: (_selectedTime == null || _isUpdating || !canProceed)
             ? null
             : () {
                 if (isRescheduling) {
                   _performReschedule();
                 } else {
-                  if (widget.selectedTests != null &&
-                      widget.totalAmount != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => LabPaymentScreen(
-                          labData: widget.labData,
-                          selectedTests: widget.selectedTests!,
-                          totalAmount: widget.totalAmount!,
-                          selectedDate: _selectedDate,
-                          selectedTime: _selectedTime!,
-                        ),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => LabPaymentScreen(
+                        labData: widget.labData,
+                        selectedTests: widget.selectedTests!,
+                        totalAmount: widget.totalAmount!,
+                        selectedDate: _selectedDate,
+                        selectedTime: _selectedTime!,
                       ),
-                    );
-                  }
+                    ),
+                  );
                 }
               },
         style: ElevatedButton.styleFrom(

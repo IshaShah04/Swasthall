@@ -96,6 +96,72 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
     return "${m}m ${s}s";
   }
 
+  Future<void> _syncProfessionalAnalyticsForToday({
+    required String doctorId,
+  }) async {
+    final today = DateTime.now().toIso8601String().split('T').first;
+
+    try {
+      final reviewRows = await _supabase
+          .from('call_reviews')
+          .select('rating, duration_seconds')
+          .eq('doctor_id', doctorId)
+          .gte('created_at', '${today}T00:00:00')
+          .lt('created_at', '${today}T23:59:59.999999');
+
+      final rows = (reviewRows as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      final completedCount = rows.length;
+
+      final ratedRows = rows.where((r) => r['rating'] != null).toList();
+      final avgRating = ratedRows.isEmpty
+          ? 0.0
+          : ratedRows
+                  .map((r) => (r['rating'] as num).toDouble())
+                  .reduce((a, b) => a + b) /
+              ratedRows.length;
+
+      final durationRows = rows
+          .where((r) => r['duration_seconds'] != null && (r['duration_seconds'] as num).toInt() > 0)
+          .toList();
+      final avgDuration = durationRows.isEmpty
+          ? 0.0
+          : durationRows
+                  .map((r) => (r['duration_seconds'] as num).toDouble())
+                  .reduce((a, b) => a + b) /
+              durationRows.length;
+
+      final existing = await _supabase
+          .from('professional_analytics_data')
+          .select('id, cancelled_count')
+          .eq('doctor_id', doctorId)
+          .eq('date_period', today)
+          .maybeSingle();
+
+      final payload = <String, dynamic>{
+        'doctor_id': doctorId,
+        'date_period': today,
+        'completed_count': completedCount,
+        'cancelled_count': (existing?['cancelled_count'] as num?)?.toInt() ?? 0,
+        'avg_rating': avgRating == 0 ? null : double.parse(avgRating.toStringAsFixed(2)),
+        'avg_duration': avgDuration == 0 ? null : double.parse(avgDuration.toStringAsFixed(2)),
+      };
+
+      if (existing != null && existing['id'] != null) {
+        await _supabase
+            .from('professional_analytics_data')
+            .update(payload)
+            .eq('id', existing['id']);
+      } else {
+        await _supabase.from('professional_analytics_data').insert(payload);
+      }
+    } catch (e) {
+      debugPrint('Professional analytics sync error: $e');
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Rating sheet
   //
@@ -117,41 +183,72 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
     int selectedRating = 0;
     final TextEditingController reviewController = TextEditingController();
     bool isSubmitting = false;
+    BuildContext? ratingSheetContext;
+
+    void closeRatingSheet() {
+      final sheetContext = ratingSheetContext;
+      if (sheetContext != null) {
+        final navigator = Navigator.of(sheetContext);
+        if (navigator.canPop()) {
+          navigator.pop();
+        }
+      }
+    }
 
     Future<void> saveAndEnd(int rating, String review) async {
+      final currentUser = _supabase.auth.currentUser;
       try {
-        await _supabase.from('call_reviews').insert({
-          'booking_id': widget.bookingId,
-          'doctor_id': widget.professionalId,
-          'patient_id': _supabase.auth.currentUser?.id,
-          'rating': rating,
-          'review_text': review.trim().isEmpty ? null : review.trim(),
-          'duration_seconds': durationSeconds,
-        });
+        final doctorId = widget.professionalId?.trim() ?? '';
+        if (currentUser == null) {
+          debugPrint('Rating save skipped: unauthenticated user');
+        } else {
+          await _supabase.from('call_reviews').insert({
+            'booking_id': widget.bookingId,
+            'doctor_id': widget.professionalId,
+            'patient_id': currentUser.id,
+            'rating': rating,
+            'review_text': review.trim().isEmpty ? null : review.trim(),
+            'duration_seconds': durationSeconds,
+          });
+
+          if (doctorId.isNotEmpty) {
+            await _syncProfessionalAnalyticsForToday(doctorId: doctorId);
+          }
+        }
       } catch (e) {
         debugPrint('Rating save error: $e');
       }
 
-      // 1. ZEGO cleanup first
       defaultAction();
-      // 2. Dismiss the sheet
-      if (mounted) Navigator.of(context).pop();
+      closeRatingSheet();
     }
 
     Future<void> skipAndEnd() async {
+      final currentUser = _supabase.auth.currentUser;
       try {
-        await _supabase.from('call_reviews').insert({
-          'booking_id': widget.bookingId,
-          'doctor_id': widget.professionalId,
-          'patient_id': _supabase.auth.currentUser?.id,
-          'rating': null,
-          'review_text': null,
-          'duration_seconds': durationSeconds,
-        });
-      } catch (_) {}
+        final doctorId = widget.professionalId?.trim() ?? '';
+        if (currentUser == null) {
+          debugPrint('Rating skip save skipped: unauthenticated user');
+        } else {
+          await _supabase.from('call_reviews').insert({
+            'booking_id': widget.bookingId,
+            'doctor_id': widget.professionalId,
+            'patient_id': currentUser.id,
+            'rating': null,
+            'review_text': null,
+            'duration_seconds': durationSeconds,
+          });
+
+          if (doctorId.isNotEmpty) {
+            await _syncProfessionalAnalyticsForToday(doctorId: doctorId);
+          }
+        }
+      } catch (e) {
+        debugPrint('Rating skip save error: $e');
+      }
 
       defaultAction();
-      if (mounted) Navigator.of(context).pop();
+      closeRatingSheet();
     }
 
     showModalBottomSheet(
@@ -160,6 +257,7 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
       backgroundColor: Colors.transparent,
       isDismissible: false,
       builder: (sheetContext) {
+        ratingSheetContext = sheetContext;
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
             return Container(
@@ -312,22 +410,20 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
           },
         );
       },
-    );
+    ).whenComplete(reviewController.dispose);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Normalize room ID — ZEGO requires the same format on both sides
-    final String finalRoomID = widget.callID.startsWith('room_')
-        ? widget.callID
-        : "room_${widget.callID.replaceAll('-', '')}";
+    // room_id is already finalized and stored in the booking row.
+    final String finalRoomID = widget.callID.trim();
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         child: ZegoUIKitPrebuiltCall(
           appID: EnvConfig.zegoAppId,
-          appSign: EnvConfig.zegoAppSign,
+          appSign: '', // Security: token-based auth via zego-token edge function
           userID: widget.userID,
           userName: widget.userName,
           callID: finalRoomID,

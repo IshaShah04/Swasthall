@@ -235,17 +235,21 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
     );
   }
 
-  Stream<List<Map<String, dynamic>>>? _slotsStream;
+  Future<List<Map<String, dynamic>>> _fetchSlots(String providerId) async {
+    final data = await _supabase
+        .from('availability_slots')
+        .select()
+        .eq('provider_id', providerId);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
 
   Widget _buildLiveSlotStream() {
     final providerId = widget.userData?['id'] ?? _supabase.auth.currentUser?.id;
     if (providerId == null) return const SizedBox.shrink();
-    _slotsStream ??= _supabase
-        .from('availability_slots')
-        .stream(primaryKey: ['id'])
-        .eq('provider_id', providerId);
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _slotsStream,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchSlots(providerId.toString()),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(
@@ -311,6 +315,7 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
         'slot_type': 'physical',
       });
       if (mounted) {
+        setState(() {});
         messenger.showSnackBar(
             const SnackBar(content: Text("Consultation slot added!")));
       }
@@ -409,6 +414,8 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
             ]),
           ));
 
-  Future<void> _deleteSlot(dynamic id) async =>
-      await _supabase.from('availability_slots').delete().eq('id', id);
+  Future<void> _deleteSlot(dynamic id) async {
+    await _supabase.from('availability_slots').delete().eq('id', id);
+    if (mounted) setState(() {});
+  }
 }

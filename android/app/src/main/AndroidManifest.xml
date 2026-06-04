@@ -46,12 +46,12 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
-        android:name="${applicationName}"
-        android:allowBackup="false"
-        android:icon="@mipmap/launcher_icon"
-        android:label="Swasthall"
-        android:networkSecurityConfig="@xml/network_security_config">
-
+    android:name="${applicationName}"
+    android:allowBackup="false"
+    android:icon="@mipmap/launcher_icon"
+    android:label="Swasthall"
+    android:networkSecurityConfig="@xml/network_security_config"
+    tools:replace="android:allowBackup">
         <!-- ── FIX: Remove live_activities plugin FCM service ───────────────
              The live_activities plugin auto-merges a FirebaseMessagingService
              (LiveActivityFirebaseMessagingService) that crashes at line 26
@@ -165,6 +165,38 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="swasthall" android:host="physical" />
+            </intent-filter>
+
+
+            <!-- Deep link: Google / auth callback -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="swasthall" android:host="login-callback" />
+            </intent-filter>
+
+            <!-- Deep link: password reset — Supabase email link redirects here -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="swasthall" android:host="reset-password" />
+            </intent-filter>
+
+            <!-- Deep links: eSewa payment return -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="swasthall" android:host="esewa-success" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="swasthall" android:host="esewa-failure" />
             </intent-filter>
 
             <!-- Launcher -->

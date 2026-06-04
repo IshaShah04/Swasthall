@@ -1,0 +1,13 @@
+project_id = "gowboqoczpdctzqwavej"
+
+[functions.esewa-sdk-callback]
+verify_jwt = false
+
+[functions.esewa-verify-sdk]
+verify_jwt = false
+
+[functions.esewa-status]
+verify_jwt = false
+
+[functions.esewa-verify]
+verify_jwt = false

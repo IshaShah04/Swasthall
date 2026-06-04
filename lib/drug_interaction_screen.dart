@@ -10,6 +10,7 @@
 //   • Session saved to prescription_scans table
 //   • Full dark/light theme support via AppColors
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -114,6 +115,9 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
 
   // Active suggestion overlay slot index
   int? _activeSuggestionSlot;
+  Timer? _autocompleteDebounce;
+  final Map<_DrugSlot, VoidCallback> _controllerListeners = {};
+  final Map<_DrugSlot, VoidCallback> _focusListeners = {};
 
   // Brand colors (matching medical_care.dart)
   static const Color _primary = Color(0xFF6366F1);
@@ -132,20 +136,40 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
     _initSpeech();
 
     // Attach text change listeners for autocomplete
-    for (var i = 0; i < _slots.length; i++) {
-      _attachListener(i);
+    for (final slot in _slots) {
+      _attachListener(slot);
     }
   }
 
-  void _attachListener(int index) {
-    _slots[index].controller.addListener(() {
-      _onTextChanged(index, _slots[index].controller.text);
-    });
-    _slots[index].focusNode.addListener(() {
-      if (!_slots[index].focusNode.hasFocus) {
+  void _attachListener(_DrugSlot slot) {
+    void controllerListener() {
+      final index = _slots.indexOf(slot);
+      if (index != -1) {
+        _onTextChanged(index, slot.controller.text);
+      }
+    }
+
+    void focusListener() {
+      if (!slot.focusNode.hasFocus && mounted) {
         setState(() => _activeSuggestionSlot = null);
       }
-    });
+    }
+
+    _controllerListeners[slot] = controllerListener;
+    _focusListeners[slot] = focusListener;
+    slot.controller.addListener(controllerListener);
+    slot.focusNode.addListener(focusListener);
+  }
+
+  void _detachListener(_DrugSlot slot) {
+    final controllerListener = _controllerListeners.remove(slot);
+    if (controllerListener != null) {
+      slot.controller.removeListener(controllerListener);
+    }
+    final focusListener = _focusListeners.remove(slot);
+    if (focusListener != null) {
+      slot.focusNode.removeListener(focusListener);
+    }
   }
 
   Future<void> _initSpeech() async {
@@ -158,18 +182,30 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
 
   @override
   void dispose() {
+    _autocompleteDebounce?.cancel();
     for (final slot in _slots) {
+      _detachListener(slot);
       slot.dispose();
     }
     _pulseCtrl.dispose();
     super.dispose();
   }
 
+  String _escapeLikePattern(String input) {
+    return input
+        .replaceAll('\\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+  }
+
   // ── AUTOCOMPLETE ───────────────────────────────────────────────────────────
 
   Future<void> _onTextChanged(int index, String value) async {
+    _autocompleteDebounce?.cancel();
+
     final q = value.trim().toLowerCase();
     if (q.length < 2) {
+      if (!mounted) return;
       setState(() {
         _slots[index].suggestions = [];
         _activeSuggestionSlot = null;
@@ -177,47 +213,48 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
       return;
     }
 
-    try {
-      // Search interaction_entities (drug classes + known drugs)
-      final entitiesRes = await _supabase
-          .from('interaction_entities')
-          .select('entity')
-          .ilike('entity', '%$q%')
-          .limit(6);
+    _autocompleteDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final escapedQ = _escapeLikePattern(q);
 
-      // Search nepal_medicines_2018 (brand + generic)
-      final medsRes = await _supabase
-          .from('nepal_medicines_2018')
-          .select('brand_name, generic_name')
-          .or('brand_name.ilike.%$q%,generic_name.ilike.%$q%')
-          .limit(6);
+        final entitiesRes = await _supabase
+            .from('interaction_entities')
+            .select('entity')
+            .ilike('entity', '%$escapedQ%')
+            .limit(6);
 
-      if (!mounted) return;
+        final medsRes = await _supabase
+            .from('nepal_medicines_2018')
+            .select('brand_name, generic_name')
+            .or('brand_name.ilike.%$escapedQ%,generic_name.ilike.%$escapedQ%')
+            .limit(6);
 
-      final suggestions = <String>{};
-      for (final e in entitiesRes) {
-        suggestions.add((e['entity'] as String).toLowerCase());
-      }
-      for (final m in medsRes) {
-        suggestions.add((m['brand_name'] as String).toLowerCase());
-        suggestions.add((m['generic_name'] as String).toLowerCase());
-      }
+        if (!mounted || index >= _slots.length) return;
 
-      // Sort: starts-with first, then contains
-      final sorted = suggestions.toList()
-        ..sort((a, b) {
-          final aStarts = a.startsWith(q) ? 0 : 1;
-          final bStarts = b.startsWith(q) ? 0 : 1;
-          return aStarts.compareTo(bStarts);
+        final suggestions = <String>{};
+        for (final e in entitiesRes) {
+          suggestions.add((e['entity'] as String).toLowerCase());
+        }
+        for (final m in medsRes) {
+          suggestions.add((m['brand_name'] as String).toLowerCase());
+          suggestions.add((m['generic_name'] as String).toLowerCase());
+        }
+
+        final sorted = suggestions.toList()
+          ..sort((a, b) {
+            final aStarts = a.startsWith(q) ? 0 : 1;
+            final bStarts = b.startsWith(q) ? 0 : 1;
+            return aStarts.compareTo(bStarts);
+          });
+
+        setState(() {
+          _slots[index].suggestions = sorted.take(8).toList();
+          _activeSuggestionSlot = sorted.isNotEmpty ? index : null;
         });
-
-      setState(() {
-        _slots[index].suggestions = sorted.take(8).toList();
-        _activeSuggestionSlot = sorted.isNotEmpty ? index : null;
-      });
-    } catch (e) {
-      debugPrint('Autocomplete error: $e');
-    }
+      } catch (e) {
+        debugPrint('Autocomplete error: $e');
+      }
+    });
   }
 
   void _selectSuggestion(int slotIndex, String suggestion) {
@@ -273,7 +310,7 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
     }
     final newSlot = _DrugSlot();
     _slots.add(newSlot);
-    _attachListener(_slots.length - 1);
+    _attachListener(newSlot);
     setState(() {});
   }
 
@@ -282,7 +319,9 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
       _snack('Minimum 2 drugs required');
       return;
     }
-    _slots[index].dispose();
+    final slot = _slots[index];
+    _detachListener(slot);
+    slot.dispose();
     _slots.removeAt(index);
     setState(() {
       _hasChecked = false;
@@ -321,7 +360,11 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
         type: FileType.image,
         withData: true,
       );
-      if (result != null) bytes = result.files.single.bytes;
+      if (result != null && result.files.single.bytes != null) {
+        bytes = result.files.single.bytes;
+      } else if (result != null) {
+        _snack('Could not read selected image');
+      }
     }
 
     if (bytes == null) return;
@@ -368,6 +411,50 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
     );
   }
 
+
+  Future<FunctionResponse> _invokeFunctionWithAuthRetry(
+    String functionName, {
+    required Map<String, dynamic> body,
+  }) async {
+    final session = _supabase.auth.currentSession;
+    if (session == null) {
+      throw StateError('Session expired');
+    }
+
+    try {
+      return await _supabase.functions.invoke(
+        functionName,
+        body: body,
+      );
+    } on FunctionException catch (e) {
+      final detailsText = e.details?.toString().toLowerCase() ?? '';
+      final isUnauthorized =
+          e.status == 401 ||
+          detailsText.contains('invalid jwt') ||
+          detailsText.contains('unauthorized');
+
+      if (!isUnauthorized) rethrow;
+
+      debugPrint('$functionName 401 — refreshing session explicitly');
+
+      final authResponse = await _supabase.auth.refreshSession();
+      final freshToken = authResponse.session?.accessToken ??
+          _supabase.auth.currentSession?.accessToken;
+
+      if (freshToken == null || freshToken.isEmpty) {
+        throw StateError('Session expired');
+      }
+
+      return await _supabase.functions.invoke(
+        functionName,
+        body: body,
+        headers: {
+          'Authorization': 'Bearer $freshToken',
+        },
+      );
+    }
+  }
+
   Future<void> _scanPrescription(Uint8List bytes) async {
     final session = _supabase.auth.currentSession;
     if (session == null) {
@@ -380,14 +467,15 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
 
     try {
       final base64Image = base64Encode(bytes);
-      final response = await _supabase.functions.invoke(
+
+      final response = await _invokeFunctionWithAuthRetry(
         'gemini-prescription-proxy',
         body: {'imageBase64': base64Image},
       );
 
       if (!mounted) return;
 
-      if (response.status == 200 && response.data != null) {
+      if (response.status == 200 && response.data is Map) {
         final data = Map<String, dynamic>.from(response.data as Map);
         final rawMeds = data['medicines'] as List<dynamic>? ?? [];
 
@@ -396,17 +484,15 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
           return;
         }
 
-        // Fill slots with scanned medicine names
         final names = rawMeds
             .map((m) => (m['name'] ?? '').toString().trim())
             .where((n) => n.isNotEmpty)
             .toList();
 
-        // Ensure enough slots
         while (_slots.length < names.length && _slots.length < 5) {
           final s = _DrugSlot();
           _slots.add(s);
-          _attachListener(_slots.length - 1);
+          _attachListener(s);
         }
 
         for (var i = 0; i < names.length && i < _slots.length; i++) {
@@ -416,7 +502,12 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
         setState(() {});
         _snack('${names.length} medicines detected from prescription');
       } else {
+        debugPrint('Prescription scan failed: ${response.status} ${response.data}');
         _snack('Scan failed (${response.status}). Try a clearer photo.');
+      }
+    } on StateError {
+      if (mounted) {
+        _snack('Session expired. Please log in again.');
       }
     } catch (e) {
       debugPrint('Scan error: $e');
@@ -646,11 +737,13 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
           for (int j = i + 1; j < drugs.length; j++) {
             final a = drugs[i];
             final b = drugs[j];
+            final escA = _escapeLikePattern(a);
+            final escB = _escapeLikePattern(b);
             final res = await _supabase
                 .from('drug_interactions')
                 .select()
-                .or('and(drug_a.ilike.%$a%,drug_b.ilike.%$b%),'
-                    'and(drug_a.ilike.%$b%,drug_b.ilike.%$a%)');
+                .or('and(drug_a.ilike.%$escA%,drug_b.ilike.%$escB%),'
+                    'and(drug_a.ilike.%$escB%,drug_b.ilike.%$escA%)');
             for (final row in res) {
               final severity = row['severity'] as String? ?? 'moderate';
               found.add(_InteractionResult(
@@ -675,13 +768,73 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
         debugPrint('Supabase interaction check error (non-fatal): $e');
       }
 
-      // ── 3. DEDUPLICATE — keep highest severity per pair ───────────────────
+      // ── 3. AI CHECK (Gemini medical knowledge — catches anything not in JSON) ──
+      //
+      // Only call if there are drugs we didn't already find interactions for,
+      // OR always call to get richer clinical detail than the JSON provides.
+      // Non-fatal: if it fails, the JSON + Supabase results are still shown.
+      try {
+        final aiResponse = await _invokeFunctionWithAuthRetry(
+          'drug-interactions-ai',
+          body: {
+            // Send generic names where we know them, for better AI matching
+            'medicines': drugs,
+          },
+        );
+
+        if (aiResponse.status == 200 && aiResponse.data is Map) {
+          final aiData = Map<String, dynamic>.from(aiResponse.data as Map);
+          final rawAI = aiData['interactions'] as List<dynamic>? ?? [];
+
+          for (final item in rawAI) {
+            final m = Map<String, dynamic>.from(item as Map);
+            final drugA = m['drugA']?.toString().trim() ?? '';
+            final drugB = m['drugB']?.toString().trim() ?? '';
+            if (drugA.isEmpty || drugB.isEmpty) continue;
+
+            final sev = m['severity']?.toString() ?? 'moderate';
+            found.add(_InteractionResult(
+              drugA: drugA,
+              drugB: drugB,
+              severity: sev,
+              severityRank: _severityRankOf(sev),
+              effect: m['effect']?.toString() ?? '',
+              mechanism: m['mechanism']?.toString() ?? '',
+              action: m['action']?.toString() ?? '',
+              monitoring: m['monitoring']?.toString(),
+              alternative: m['alternative']?.toString(),
+              onset: m['onset']?.toString(),
+              source: 'AI-generated (verify with pharmacist)',
+            ));
+          }
+          debugPrint('AI interaction check: ${rawAI.length} found');
+        }
+      } catch (e) {
+        debugPrint('AI interaction check error (non-fatal): $e');
+      }
+
+      // ── 4. DEDUPLICATE — keep highest severity per pair; on ties prefer verified ──
+
+      bool isAiSource(_InteractionResult result) =>
+          (result.source ?? '').toLowerCase().contains('ai');
 
       final Map<String, _InteractionResult> deduped = {};
       for (final r in found) {
         final key = ([r.drugA, r.drugB]..sort()).join('|');
         final existing = deduped[key];
-        if (existing == null || r.severityRank > existing.severityRank) {
+        if (existing == null) {
+          deduped[key] = r;
+          continue;
+        }
+
+        if (r.severityRank > existing.severityRank) {
+          deduped[key] = r;
+          continue;
+        }
+
+        if (r.severityRank == existing.severityRank &&
+            isAiSource(existing) &&
+            !isAiSource(r)) {
           deduped[key] = r;
         }
       }

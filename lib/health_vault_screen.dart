@@ -31,8 +31,8 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
   Stream<List<Map<String, dynamic>>>? _dashboardStream;
   bool _isInitializing = true;
   
-  String? _filterId; 
-  String? _assignedLab;
+  String? _filterId;
+  String? _effectiveRole;
 
   final ValueNotifier<int> _refreshNotifier = ValueNotifier<int>(0);
 
@@ -60,16 +60,26 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
     _tabController.animateTo(1);
   }
 
-  bool _isTechnician() => widget.userRole.toLowerCase() == "technician";
-  bool _isNurse() => widget.userRole.toLowerCase() == "nurse";
+  String get _normalizedRole => (_effectiveRole ?? widget.userRole).toLowerCase();
+  bool _isTechnician() => _normalizedRole == "technician";
+  bool _isNurse() => _normalizedRole == "nurse";
 
   Future<void> _initializeProfessionalData() async {
     final user = supabase.auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() => _isInitializing = false);
+      return;
+    }
 
     try {
-      // 1. Fetch staff record via email
-      final staffData = await supabase
+      // 1. Fetch staff record by auth uid first, then email fallback for legacy staff rows.
+      Map<String, dynamic>? staffData = await supabase
+          .from('staff')
+          .select('id, role, assigned_lab')
+          .or('id.eq.${user.id},user_id.eq.${user.id},profile_id.eq.${user.id}')
+          .maybeSingle();
+
+      staffData ??= await supabase
           .from('staff')
           .select('id, role, assigned_lab')
           .eq('email', user.email ?? '')
@@ -78,7 +88,6 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
       if (staffData != null) {
         String role = staffData['role'].toString().toLowerCase();
         String myStaffId = staffData['id'];
-        String? lab = staffData['assigned_lab'];
         String? finalFilterId = myStaffId;
 
         // 2. Logic for Nurse to use the Unified View for the Doctor's queue
@@ -96,15 +105,18 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
 
         if (mounted) {
           setState(() {
+            _effectiveRole = role;
             _filterId = finalFilterId;
-            _assignedLab = lab;
             
             // 3. Setup the real-time stream
+            // Technician: read lab_appointments by their own staff ID (professional_id).
+            // myStaffId is the technician's staff.id which matches lab_appointments.professional_id
+            // set at booking time from labData['id'] in lab_payment.dart.
             if (role == 'technician') {
               _dashboardStream = supabase
-                  .from('bookings')
+                  .from('lab_appointments')
                   .stream(primaryKey: ['id'])
-                  .eq('lab_category', lab ?? 'Unknown');
+                  .eq('professional_id', myStaffId);
             } else {
               // Both Doctors and Nurses filter by the doctor's ID in 'provider_id'
               if (finalFilterId != null && finalFilterId.isNotEmpty) {
@@ -119,6 +131,9 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
             _isInitializing = false;
           });
         }
+      } else {
+        debugPrint('health_vault: no staff record found for current user');
+        if (mounted) setState(() => _isInitializing = false);
       }
     } catch (e) {
       debugPrint("Critical Init Error: $e");
@@ -128,13 +143,35 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
 
   Future<void> _updateStatus(String id, String newStatus) async {
     try {
-      await supabase
-          .from('bookings')
-          .update({
-            'status': newStatus.toLowerCase(),
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', id);
+      final normalized = newStatus.toLowerCase();
+
+      if (_isTechnician() && normalized == 'completed') {
+        final labAppointmentId = int.tryParse(id);
+        if (labAppointmentId == null) {
+          throw Exception('Invalid lab appointment id');
+        }
+        await supabase.rpc(
+          'mark_lab_appointment_completed',
+          params: {'p_lab_appointment_id': labAppointmentId},
+        );
+      } else if (!_isTechnician()) {
+        if (normalized == 'completed') {
+          await supabase.rpc(
+            'mark_booking_completed',
+            params: {'p_booking_id': id},
+          );
+        } else {
+          await supabase.rpc(
+            'advance_queue_safely',
+            params: {'target_booking_id': id, 'new_status': normalized},
+          );
+        }
+      } else {
+        await supabase
+            .from('lab_appointments')
+            .update({'status': normalized})
+            .eq('id', int.tryParse(id) ?? id);
+      }
 
       _refreshNotifier.value++;
 
@@ -149,6 +186,15 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
       }
     } catch (e) {
       debugPrint("Update Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to update status. Please try again."),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -166,7 +212,7 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
       backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         title: Text(
-          _isNurse() ? "Nursing Care Assistant" : "${widget.userRole} Professional Suite",
+          _isNurse() ? "Nursing Care Assistant" : "${_effectiveRole ?? widget.userRole} Professional Suite",
           style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.textPrimary(context), fontSize: 16),
         ),
         centerTitle: true,
@@ -206,16 +252,16 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
                           controller: _tabController,
                           children: [
                             QueueTab(
-                              userRole: widget.userRole,
+                              userRole: _effectiveRole ?? widget.userRole,
                               tabController: _tabController,
                               selectedFilter: "Today",
-                              filterId: _isTechnician() ? _assignedLab : _filterId,
+                              filterId: _filterId, // doctors/nurses: provider_id; technicians: professional_id in lab_appointments
                             ),
                             CompletedTab(
-                              userRole: widget.userRole,
+                              userRole: _effectiveRole ?? widget.userRole,
                               forceUploadMode: widget.forceUploadMode,
                               activePatientId: widget.activePatientId,
-                              filterId: _isTechnician() ? _assignedLab : _filterId,
+                              filterId: _filterId, // doctors/nurses: provider_id; technicians: professional_id in lab_appointments
                             ),
                           ],
                         );
@@ -236,14 +282,23 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
         if (!snapshot.hasData) return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
 
         final allItems = snapshot.data ?? [];
-        
-        final completed = allItems.where((e) => e['status']?.toString().toLowerCase() == 'completed').toList();
-        final waiting = allItems.where((e) => [
-              'confirmed', 'pending', 'pending_lab', 'collecting_sample'
-            ].contains(e['status']?.toString().toLowerCase())).toList();
-        
-        final servingNow = allItems.firstWhere(
-          (e) => ['consulting', 'calling', 'in_progress', 'processing'].contains(e['status']?.toString().toLowerCase()),
+        final nonExpired =
+            allItems.where((e) => e['is_expired'] != true).toList();
+
+        final completed = nonExpired
+            .where((e) => e['status']?.toString().toLowerCase() == 'completed')
+            .toList();
+
+        final waiting = nonExpired.where((e) => _isTechnician()
+              ? ['scheduled', 'collecting_sample']
+                  .contains(e['status']?.toString().toLowerCase())
+              : ['confirmed', 'pending', 'pending_lab', 'collecting_sample']
+                  .contains(e['status']?.toString().toLowerCase()))
+            .toList();
+
+        final servingNow = nonExpired.firstWhere(
+          (e) => ['consulting', 'calling', 'in_progress', 'processing']
+              .contains(e['status']?.toString().toLowerCase()),
           orElse: () => {},
         );
 
@@ -256,7 +311,7 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
               if (servingNow.isNotEmpty) _buildActivePatientCard(servingNow),
               Row(
                 children: [
-                  _metricTile("Today", allItems.length.toString(), brandIndigo, Icons.calendar_today_rounded),
+                  _metricTile("Today", nonExpired.length.toString(), brandIndigo, Icons.calendar_today_rounded),
                   const SizedBox(width: 10),
                   _metricTile("Done", completed.length.toString(), healingGreen, Icons.check_circle_rounded),
                 ],
@@ -266,7 +321,7 @@ class _HealthVaultScreenState extends State<HealthVaultScreen>
                 children: [
                   _metricTile("Waiting", waiting.length.toString(), waitingOrange, Icons.hourglass_top_rounded),
                   const SizedBox(width: 10),
-                  _metricTile("Role", _isNurse() ? "Nurse" : widget.userRole, Colors.blueGrey, Icons.person_pin_rounded),
+                  _metricTile("Role", _isNurse() ? "Nurse" : (_effectiveRole ?? widget.userRole), Colors.blueGrey, Icons.person_pin_rounded),
                 ],
               ),
             ],

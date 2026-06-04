@@ -125,13 +125,25 @@ class _VideoCallPageState extends State<VideoCallPage>
 
   Future<void> _updateCallStatus(String status, String id) async {
     try {
-      await SupabaseHandler().client.from('bookings').update({
-        'status': status.toLowerCase(),
-        'caller_role': widget.professionalRole.toLowerCase(),
-        if (_isNurseTriage) 'nurse_seen': true,
-      }).eq('id', id);
+      final handler = SupabaseHandler();
+      final normalized = status.toLowerCase().trim();
 
-      debugPrint('Booking $id → $status');
+      if (_isNurseTriage) {
+        await handler.client.rpc('mark_nurse_triaged', params: {'p_booking_id': id});
+        await handler.client.rpc(
+          'advance_queue_safely',
+          params: {'target_booking_id': id, 'new_status': 'confirmed'},
+        );
+      } else if (normalized == 'completed') {
+        await handler.client.rpc('mark_booking_completed', params: {'p_booking_id': id});
+      } else {
+        await handler.client.rpc(
+          'advance_queue_safely',
+          params: {'target_booking_id': id, 'new_status': normalized},
+        );
+      }
+
+      debugPrint('Booking status updated safely: $status');
     } catch (e) {
       debugPrint('DB sync error: $e');
     }
@@ -164,7 +176,7 @@ class _VideoCallPageState extends State<VideoCallPage>
               // ── Zego call UI (full screen) ───────────────────────────────
               ZegoUIKitPrebuiltCall(
                 appID: EnvConfig.zegoAppId,
-                appSign: EnvConfig.zegoAppSign,
+                appSign: '', // Security: token-based auth via zego-token edge function
                 userID: widget.userID.trim(),
                 userName: widget.userName,
                 callID: _roomId,

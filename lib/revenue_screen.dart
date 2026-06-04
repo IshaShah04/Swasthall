@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
 import 'theme_colors.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -54,6 +55,11 @@ class _RevenueScreenState extends State<RevenueScreen> {
   double _insuranceClaims = 0;
   List<FlSpot> _insuranceSpots = [];
 
+  // ── Staff revenue analytics (hospital view) ─────────────────
+  List<FlSpot> _staffRevenueSpots = [];
+  List<Map<String, dynamic>> _staffRevenueLeaders = [];
+  double _topStaffPayout = 0;
+
   @override
   void initState() {
     super.initState();
@@ -69,15 +75,21 @@ class _RevenueScreenState extends State<RevenueScreen> {
     }
 
     try {
+      String? hid;
+
       final profile = await _supabase
           .from('profiles')
-          .select('hospital_id')
+          .select('role')
           .eq('id', user.id)
           .maybeSingle();
 
-      String? hid = profile?['hospital_id']?.toString();
+      final role = (profile?['role'] ?? '').toString().trim().toLowerCase();
 
-      if (hid == null || hid == 'null') {
+      if (role == 'hospital' || role == 'clinic') {
+        hid = user.id;
+      }
+
+      if (hid == null || hid == 'null' || hid.isEmpty) {
         final staff = await _supabase
             .from('staff')
             .select('hospital_id')
@@ -86,8 +98,19 @@ class _RevenueScreenState extends State<RevenueScreen> {
         hid = staff?['hospital_id']?.toString();
       }
 
-      // Fallback: treat user id itself as hospital id
-      if (hid == null || hid == 'null') hid = user.id;
+      if ((hid == null || hid == 'null' || hid.isEmpty) &&
+          (user.email?.trim().isNotEmpty ?? false)) {
+        final staffByEmail = await _supabase
+            .from('staff')
+            .select('hospital_id')
+            .eq('email', user.email!.trim())
+            .maybeSingle();
+        hid = staffByEmail?['hospital_id']?.toString();
+      }
+
+      if (hid == null || hid == 'null' || hid.isEmpty) {
+        hid = user.id;
+      }
 
       _hospitalId = hid;
       await _fetchAll();
@@ -115,6 +138,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
     try {
       await Future.wait([
         _fetchPlatformTransactions(),
+        _fetchStaffRevenueAnalytics(),
         _fetchLabRevenue(),
         _fetchInsuranceRevenue(),
       ]);
@@ -125,139 +149,143 @@ class _RevenueScreenState extends State<RevenueScreen> {
     }
   }
 
-  // ── Consultation: platform_transactions ──────────────────
-  Future<void> _fetchPlatformTransactions() async {
-    final from = _fromDate.toIso8601String();
+  Future<List<Map<String, dynamic>>> _loadFinanceSummaryRows(String sourceType) async {
+    final from = DateFormat('yyyy-MM-dd').format(_fromDate);
+    final to = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-    try {
-      final rows = await _supabase
-          .from('platform_transactions')
-          .select(
-            'gross_amount, convenience_fee, commission_amount, '
-            'total_payable, hospital_payout, created_at',
-          )
-          .eq('hospital_id', _hospitalId!)
-          .eq('status', 'completed')
-          .gte('created_at', from)
-          .order('created_at');
+    final rows = await _supabase.rpc(
+      'get_my_hospital_finance_summary_range',
+      params: {
+        'p_source_type': sourceType,
+        'p_from': from,
+        'p_to': to,
+      },
+    );
 
-      double collected = 0, convenience = 0, commission = 0, payout = 0;
-      final Map<int, double> dayTotals = {};
-
-      for (final r in rows) {
-        final tp = _d(r['total_payable']);
-        final cf = _d(r['convenience_fee']);
-        final ca = _d(r['commission_amount']);
-        final hp = _d(r['hospital_payout']);
-
-        collected   += tp;
-        convenience += cf;
-        commission  += ca;
-        payout      += hp;
-
-        final day = DateTime.parse(r['created_at']).day;
-        dayTotals[day] = (dayTotals[day] ?? 0) + tp;
-      }
-
-      _ptTotalCollected   = collected;
-      _ptConvenienceFees  = convenience;
-      _ptCommission       = commission;
-      _ptSwasthallRevenue = convenience + commission;
-      _ptHospitalPayout   = payout;
-      _ptBookingCount     = rows.length;
-      _ptSpots            = _toSpots(dayTotals);
-
-    } catch (e) {
-      // platform_transactions table may not exist yet — fall back
-      // to reading from bookings directly
-      debugPrint('platform_transactions fetch failed, falling back: $e');
-      await _fetchConsultationFallback(from);
-    }
+    return (rows as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .where((row) => row['finance_bucket']?.toString() == 'completed_settled')
+        .toList();
   }
 
-  // Fallback: bookings table (before migration is deployed)
-  Future<void> _fetchConsultationFallback(String from) async {
-    final rows = await _supabase
-        .from('bookings')
-        .select('consultation_fee, platform_fee, amount, created_at')
-        .eq('hospital_id', _hospitalId!)
-        .eq('status', 'completed')
-        .gte('created_at', from)
-        .order('created_at');
+  Future<void> _fetchPlatformTransactions() async {
+    final rows = await _loadFinanceSummaryRows('consultation');
 
-    double collected = 0, convenience = 0;
+    double collected = 0, convenience = 0, payout = 0;
+    int bookingCount = 0;
     final Map<int, double> dayTotals = {};
 
     for (final r in rows) {
-      final cf = _d(r['consultation_fee']);
-      final pf = _d(r['platform_fee']);
-      final tp = cf + pf;
-      collected   += tp;
-      convenience += pf;
-      final day = DateTime.parse(r['created_at']).day;
-      dayTotals[day] = (dayTotals[day] ?? 0) + tp;
+      final gross = _d(r['total_gross_received']);
+      final platform = _d(r['total_platform_fee']);
+      final serviceAmount = _d(r['total_service_amount']);
+      final count = int.tryParse('${r['item_count'] ?? 0}') ?? 0;
+      final financeDate = DateTime.tryParse((r['finance_date'] ?? '').toString());
+
+      collected += gross;
+      convenience += platform;
+      payout += serviceAmount;
+      bookingCount += count;
+
+      if (financeDate != null) {
+        dayTotals[financeDate.day] = (dayTotals[financeDate.day] ?? 0) + gross;
+      }
     }
 
-    _ptTotalCollected   = collected;
-    _ptConvenienceFees  = convenience;
+    _ptTotalCollected = collected;
+    _ptConvenienceFees = convenience;
+    _ptCommission = 0;
     _ptSwasthallRevenue = convenience;
-    _ptHospitalPayout   = collected - convenience;
-    _ptBookingCount     = rows.length;
-    _ptSpots            = _toSpots(dayTotals);
+    _ptHospitalPayout = payout;
+    _ptBookingCount = bookingCount;
+    _ptSpots = _toSpots(dayTotals);
   }
 
-  // ── Lab revenue ──────────────────────────────────────────
-  Future<void> _fetchLabRevenue() async {
-    final from = _fromDate.toIso8601String();
 
-    final rows = await _supabase
-        .from('lab_appointments')
-        .select('total_amount, created_at')
-        .eq('hospital_id', _hospitalId!)
-        .inFilter('status', ['completed', 'scheduled'])
-        .gte('created_at', from)
-        .order('created_at');
+  Future<void> _fetchStaffRevenueAnalytics() async {
+    final from = DateFormat('yyyy-MM-dd').format(_fromDate);
+    final to = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    final rows = await _supabase.rpc(
+      'get_my_staff_revenue_analytics_range',
+      params: {
+        'p_from': from,
+        'p_to': to,
+      },
+    );
+
+    final list = (rows as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+
+    final Map<int, double> dayTotals = {};
+    final Map<String, double> staffTotals = {};
+
+    for (final r in list) {
+      final payout = _d(r['hospital_payout']);
+      final staffName = (r['staff_name'] ?? 'Unknown Staff').toString();
+      final revenueDate =
+          DateTime.tryParse((r['revenue_date'] ?? '').toString());
+
+      if (revenueDate != null) {
+        dayTotals[revenueDate.day] = (dayTotals[revenueDate.day] ?? 0) + payout;
+      }
+      staffTotals[staffName] = (staffTotals[staffName] ?? 0) + payout;
+    }
+
+    final leaders = staffTotals.entries
+        .map((e) => {'staff_name': e.key, 'hospital_payout': e.value})
+        .toList()
+      ..sort((a, b) => _d(b['hospital_payout']).compareTo(_d(a['hospital_payout'])));
+
+    _staffRevenueLeaders = leaders.take(5).toList();
+    _topStaffPayout = _staffRevenueLeaders.isEmpty
+        ? 0
+        : _d(_staffRevenueLeaders.first['hospital_payout']);
+    _staffRevenueSpots = _toSpots(dayTotals);
+  }
+
+  Future<void> _fetchLabRevenue() async {
+    final rows = await _loadFinanceSummaryRows('lab');
 
     double total = 0;
     final Map<int, double> dayTotals = {};
 
     for (final r in rows) {
-      final price = _d(r['total_amount']);
-      total += price;
-      final day = DateTime.parse(r['created_at']).day;
-      dayTotals[day] = (dayTotals[day] ?? 0) + price;
+      final gross = _d(r['total_gross_received']);
+      final financeDate = DateTime.tryParse((r['finance_date'] ?? '').toString());
+
+      total += gross;
+      if (financeDate != null) {
+        dayTotals[financeDate.day] = (dayTotals[financeDate.day] ?? 0) + gross;
+      }
     }
 
     _labRevenue = total;
-    _labSpots   = _toSpots(dayTotals);
+    _labSpots = _toSpots(dayTotals);
   }
 
-  // ── Insurance revenue ────────────────────────────────────
   Future<void> _fetchInsuranceRevenue() async {
-    final from = _fromDate.toIso8601String();
-
-    final rows = await _supabase
-        .from('insurance_subscriptions')
-        .select('amount_paid, claim_amount, created_at')
-        .eq('hospital_id', _hospitalId!)
-        .gte('created_at', from)
-        .order('created_at');
+    final rows = await _loadFinanceSummaryRows('insurance');
 
     double gross = 0, claims = 0;
     final Map<int, double> dayTotals = {};
 
     for (final r in rows) {
-      final paid  = _d(r['amount_paid']);
-      final claim = _d(r['claim_amount']);
-      gross  += paid;
+      final paid = _d(r['total_gross_received']);
+      final claim = _d(r['total_claim_amount']);
+      final financeDate = DateTime.tryParse((r['finance_date'] ?? '').toString());
+
+      gross += paid;
       claims += claim;
-      final day = DateTime.parse(r['created_at']).day;
-      dayTotals[day] = (dayTotals[day] ?? 0) + paid;
+      if (financeDate != null) {
+        dayTotals[financeDate.day] = (dayTotals[financeDate.day] ?? 0) + paid;
+      }
     }
 
-    _insuranceGross  = gross;
+    _insuranceGross = gross;
     _insuranceClaims = claims;
-    _insuranceSpots  = _toSpots(dayTotals);
+    _insuranceSpots = _toSpots(dayTotals);
   }
 
   // ── Helpers ──────────────────────────────────────────────
@@ -369,6 +397,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
                           children: [
                             _buildConsultationCard(),
                             const SizedBox(height: 20),
+                            _buildStaffRevenueCard(),
+                            const SizedBox(height: 20),
                             _buildLabCard(),
                             const SizedBox(height: 20),
                             _buildInsuranceCard(),
@@ -423,6 +453,54 @@ class _RevenueScreenState extends State<RevenueScreen> {
           _row('Hospital Net Payout',
               _npr(_ptHospitalPayout),
               color: _green, isBold: true),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildStaffRevenueCard() {
+    return _baseCard(
+      title: 'Staff Earnings Contribution',
+      icon: Icons.bar_chart_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _chipStat(
+                '${_staffRevenueLeaders.length}',
+                'Active Staff',
+                _indigo,
+              ),
+              const SizedBox(width: 10),
+              _chipStat(
+                _npr(_topStaffPayout),
+                'Top Payout',
+                _green,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _areaChart(_staffRevenueSpots, _indigo),
+          const SizedBox(height: 18),
+          if (_staffRevenueLeaders.isEmpty)
+            Text(
+              'No settled staff earnings in this period',
+              style: TextStyle(
+                color: AppColors.textMuted(context),
+                fontSize: 13,
+              ),
+            )
+          else
+            ..._staffRevenueLeaders.map(
+              (row) => _row(
+                row['staff_name']?.toString() ?? 'Unknown Staff',
+                _npr(_d(row['hospital_payout'])),
+                color: _green,
+                isBold: true,
+              ),
+            ),
         ],
       ),
     );

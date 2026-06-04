@@ -1,6 +1,7 @@
 // lib/debug/policy_debug_screen.dart
 // ⚠️  REMOVE THIS FILE BEFORE PRODUCTION RELEASE.
 
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -100,7 +101,9 @@ class _PolicyDebugScreenState extends State<PolicyDebugScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _runAllTests();
+    if (!kReleaseMode) {
+      _runAllTests();
+    }
   }
 
   @override
@@ -226,12 +229,20 @@ class _PolicyDebugScreenState extends State<PolicyDebugScreen>
         name: 'book_appointment_atomic',
         screen: 'consultation_payment_screen',
         params: {
-          'p_provider_id': _uid, 'p_patient_id': _uid, 'p_hospital_id': _uid,
-          'p_date': DateTime.now().toIso8601String().substring(0, 10),
-          'p_time': '10:00', 'p_type': 'physical', 'p_fee': 500,
-          'p_patient_zego_uid': 'debug-patient-zego',
-          'p_provider_zego_uid': 'debug-provider-zego',
-          'p_room_id': 'room_debug_provider_debug_patient',
+          'p_slot_id': null,
+          'p_user_id': _uid,
+          'p_provider_id': _uid,
+          'p_hospital_id': _uid,
+          'p_doctor_email': 'debug@example.com',
+          'p_patient_name': 'Debug Patient',
+          'p_appointment_date': DateTime.now().toIso8601String().substring(0, 10),
+          'p_appointment_time': '10:00 AM',
+          'p_payment_method': 'cash',
+          'p_amount': 500,
+          'p_consultation_fee': 500,
+          'p_platform_fee': 0,
+          'p_type': 'physical',
+          'p_slots_type': 'appointment',
           'p_idempotency_key': 'debug-test-key',
         },
         roleLabel: 'patient',
@@ -501,6 +512,21 @@ class _PolicyDebugScreenState extends State<PolicyDebugScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (kReleaseMode) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Unavailable')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Policy debug tools are disabled in release builds.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     final failCount = _results.where((r) => r.status == _Status.fail).length;
     final passCount = _results.where((r) => r.status == _Status.pass).length;
     final issueCount = _auditResults.fold(0, (s, a) => s + a.unusedColumns.length);

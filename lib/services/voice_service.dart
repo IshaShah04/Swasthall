@@ -55,11 +55,8 @@ class VoiceService {
     }
   }
 
-  /// RESTORED: Placeholder to stop errors in main.dart
-  /// We don't need the "Kill Logic" anymore, so this just logs.
-  void enableGreetingOnce() {
-    debugPrint("Greeting enabled (Master Guard removed for better reliability).");
-  }
+  /// Compatibility method used by existing screens.
+  void enableGreetingOnce() {}
 
   /// Internal helper to sync pitch and language
   Future<void> _updateLanguageSettings(String code) async {

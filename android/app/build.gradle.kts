@@ -42,9 +42,6 @@ android {
         versionName    = "1.0"
         multiDexEnabled = true
 
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
-        }
     }
 
     buildTypes {
@@ -82,14 +79,23 @@ android {
             excludes  += "/META-INF/{AL2.0,LGPL2.1}"
             pickFirsts += "**/libc++_shared.so"
         }
+        jniLibs {
+            excludes += setOf("**/libtranslate_jni.so")
+        }
     }
-}
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+} 
 
 flutter {
     source = "../.."
 }
 
 dependencies {
+    implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.multidex:multidex:2.0.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
@@ -99,4 +105,6 @@ dependencies {
     implementation("im.zego:zpns-fcm:2.7.0")
 
     implementation("com.google.android.play:core:1.10.3")
+
+    implementation(files("../../esewa_flutter_sdk/android/libs/esewasdk-release.aar"))
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,12 +7,8 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'consultation_description.dart';
 import 'services/voice_service.dart';
 import 'services/earliest_slot_service.dart';
-import 'widgets/safe_network_image.dart';
 import 'theme_colors.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Local fuzzy match helpers (misspelling + voice tolerance)
-// ─────────────────────────────────────────────────────────────────────────────
 bool _fuzzyMatchLocal(String target, String query) {
   if (query.isEmpty) return true;
   final t = target.toLowerCase().trim();
@@ -19,7 +17,8 @@ bool _fuzzyMatchLocal(String target, String query) {
   final qWords = q.split(RegExp(r'\s+'));
   final tWords = t.split(RegExp(r'\s+'));
   if (qWords.every((qw) => tWords.any(
-      (tw) => tw.startsWith(qw) || _levDist(qw, tw) <= _levThreshold(qw)))) {
+        (tw) => tw.startsWith(qw) || _levDist(qw, tw) <= _levThreshold(qw),
+      ))) {
     return true;
   }
   return false;
@@ -37,18 +36,25 @@ int _levDist(String a, String b) {
   if (a.isEmpty) return b.length;
   if (b.isEmpty) return a.length;
   if ((a.length - b.length).abs() > 4) return 99;
-  final dp = List.generate(a.length + 1,
-      (i) => List.generate(b.length + 1, (j) => i == 0 ? j : (j == 0 ? i : 0)));
+
+  final dp = List.generate(
+    a.length + 1,
+    (i) => List.generate(b.length + 1, (j) => i == 0 ? j : (j == 0 ? i : 0)),
+  );
+
   for (int i = 1; i <= a.length; i++) {
     for (int j = 1; j <= b.length; j++) {
       final cost = a[i - 1] == b[j - 1] ? 0 : 1;
-      dp[i][j] = [dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost]
-          .reduce((x, y) => x < y ? x : y);
+      dp[i][j] = [
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      ].reduce((x, y) => x < y ? x : y);
     }
   }
+
   return dp[a.length][b.length];
 }
-
 
 class ConsultationSearch extends StatefulWidget {
   final Map<String, dynamic>? preSelectedHospital;
@@ -79,7 +85,7 @@ class _MedicalResult {
   final double rating;
   final String type;
 
-  _MedicalResult({
+  const _MedicalResult({
     required this.id,
     required this.name,
     required this.specialty,
@@ -100,6 +106,10 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
   final VoiceService _voiceService = VoiceService();
   final stt.SpeechToText _speech = stt.SpeechToText();
 
+  final Map<String, Future<String?>> _slotFutures = {};
+  Timer? _searchDebounce;
+  int _searchRequestId = 0;
+
   List<_MedicalResult> _results = [];
   bool _isSearching = false;
   bool _isListening = false;
@@ -118,25 +128,37 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     _speech.stop();
+    _voiceService.stop();
     super.dispose();
   }
 
-  // ── Voice search ─────────────────────────────────────────────
+
+  Future<String?> _getEarliestSlot(String docId) {
+    return _slotFutures.putIfAbsent(
+      docId,
+      () => fetchEarliestSlot(supabase, docId),
+    );
+  }
+
   Future<void> _toggleListening() async {
     if (_isListening) {
       await _speech.stop();
       if (mounted) setState(() => _isListening = false);
       return;
     }
+
     final available = await _speech.initialize(
       onError: (_) {
         if (mounted) setState(() => _isListening = false);
       },
     );
     if (!available) return;
+
     if (mounted) setState(() => _isListening = true);
+
     _speech.listen(
       onResult: (result) {
         if (result.recognizedWords.isNotEmpty) {
@@ -153,122 +175,121 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
   }
 
   void _onSearchChanged() {
-    _performSearch(_searchController.text.trim());
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      _performSearch(_searchController.text.trim());
+    });
   }
 
   Future<void> _performSearch(String query) async {
     if (!mounted) return;
+
+    final requestId = ++_searchRequestId;
     setState(() => _isSearching = true);
 
     try {
-      dynamic q = supabase.from('staff').select(
-        'id, name, role, speciality, first_consultation_fee, '
-        'followup_consultation_fee, avatar_url, rating, '
-        'assigned_nurse, hospital_id',
+      final response = await supabase.rpc(
+        'get_public_staff_directory',
+        params: {
+          'p_role': activeRoleFilter?.trim().isEmpty == true
+              ? null
+              : activeRoleFilter?.trim(),
+          'p_hospital_id': null,
+          'p_provider_ids': null,
+          'p_search': query.trim().isEmpty ? null : query.trim(),
+          'p_limit': 60,
+        },
       );
 
-      if (activeRoleFilter != null) {
-        q = q.ilike('role', '%${activeRoleFilter!}%');
-      }
+      List<dynamic> data = response is List ? response : <dynamic>[];
 
-      // Broad DB pre-filter + client-side fuzzy refinement for misspellings/voice
-      if (query.isNotEmpty) {
-        // Use a 3-char prefix for DB filter so we cast a wide net,
-        // then fuzzy-match on the client handles typos and voice results.
-        q = q.or('name.ilike.%${query.length >= 3 ? query.substring(0, 3) : query}%,speciality.ilike.%${query.length >= 3 ? query.substring(0, 3) : query}%');
-      }
-
-      // FIX 3: Use OR to include staff with NULL fees instead of silently
-      // dropping them. Staff with no fee set still appear in results.
       if (_priceRange.start > 0 || _priceRange.end < 10000) {
-        q = q.or(
-          'first_consultation_fee.is.null,'
-          'and(first_consultation_fee.gte.${_priceRange.start.toInt()},'
-          'first_consultation_fee.lte.${_priceRange.end.toInt()})',
-        );
+        data = data.where((s) {
+          final fee = (s['first_consultation_fee'] ?? 0) as num?;
+          final price = (fee ?? 0).toDouble();
+          return price == 0 ||
+              (price >= _priceRange.start && price <= _priceRange.end);
+        }).toList();
       }
 
-      List<dynamic> data = await q;
-
-      // ── Client-side fuzzy filter (handles misspellings + voice input) ──
       if (query.isNotEmpty) {
         data = data.where((s) {
-          final name = (s['name'] ?? '').toString().toLowerCase();
-          final spec = (s['speciality'] ?? s['role'] ?? '').toString().toLowerCase();
+          final name = (s['full_name'] ?? s['name'] ?? '')
+              .toString()
+              .toLowerCase();
+          final spec = (s['speciality'] ?? s['role'] ?? '')
+              .toString()
+              .toLowerCase();
           final q2 = query.toLowerCase();
           return _fuzzyMatchLocal(name, q2) || _fuzzyMatchLocal(spec, q2);
         }).toList();
       }
 
-      // ── DEBUG: remove before release ──
-      debugPrint("🔍 Query returned ${data.length} rows");
-      if (data.isNotEmpty) debugPrint("🔍 First row: ${data.first}");
-      debugPrint("🔍 roleFilter=$activeRoleFilter query=$query priceRange=$_priceRange");
-      // ─────────────────────────────────
+      if (!mounted || requestId != _searchRequestId) return;
 
-      if (!mounted) return;
-
-      // Fetch hospital names separately (no FK yet — run the SQL to fix permanently)
-      final hospitalIds = data
-          .map((s) => s['hospital_id'])
-          .whereType<String>()
-          .toSet()
-          .toList();
-
-      final Map<String, String> hospitalNames = {};
-      if (hospitalIds.isNotEmpty) {
-        try {
-          final hospitals = await supabase
-              .from('hospitals')
-              .select('id, name')
-              .inFilter('id', hospitalIds);
-          for (final h in hospitals) {
-            hospitalNames[h['id'].toString()] = h['name'] ?? 'Hospital';
-          }
-        } catch (_) {}
-
-      }
-
-      final mappedResults = data.map<_MedicalResult>((s) {
+      final mappedResults = data.map<_MedicalResult>((raw) {
+        final s = Map<String, dynamic>.from(raw as Map);
         final hid = s['hospital_id']?.toString() ?? '';
+        final staffName = (s['full_name'] ?? s['name'])?.toString().trim();
+        final safeName =
+            (staffName != null && staffName.isNotEmpty) ? staffName : 'Doctor';
+
         return _MedicalResult(
-          id:            s['id'].toString(),
-          name:          s['name'] ?? 'Doctor',
-          specialty:     s['speciality'] ??
-                         s['role']?.toString().toUpperCase() ??
-                         "GENERAL",
-          hospitalName:  hospitalNames[hid] ?? 'Partner Hospital',
-          hospitalId:    hid.isEmpty ? null : hid,
-          nurseAssigned: s['assigned_nurse'] ?? "Available",
-          firstPrice:    (s['first_consultation_fee'] ?? 0).toDouble(),
-          followUpPrice: (s['followup_consultation_fee'] ?? 0).toDouble(),
-          imageUrl:      s['avatar_url'] ??
-                         "https://api.dicebear.com/7.x/avataaars/svg?seed=${s['name']}",
-          rating:        (s['rating'] ?? 4.5).toDouble(),
-          type:          'staff',
+          id: s['id'].toString(),
+          name: safeName,
+          specialty: s['speciality']?.toString() ??
+              s['role']?.toString().toUpperCase() ??
+              'GENERAL',
+          hospitalName: s['hospital_name']?.toString() ?? 'Partner Hospital',
+          hospitalId: hid.isEmpty ? null : hid,
+          nurseAssigned: 'Available',
+          firstPrice: ((s['first_consultation_fee'] ?? 0) as num).toDouble(),
+          followUpPrice: ((s['followup_consultation_fee'] ?? 0) as num)
+              .toDouble(),
+          imageUrl: s['avatar_url']?.toString() ??
+              "https://api.dicebear.com/7.x/avataaars/svg?seed=$safeName",
+          rating: ((s['rating'] ?? 4.5) as num).toDouble(),
+          type: 'staff',
         );
       }).toList();
 
       mappedResults.sort((a, b) {
         if (widget.preSelectedHospital != null) {
-          final aLocal = a.hospitalId == widget.preSelectedHospital!['id'].toString();
-          final bLocal = b.hospitalId == widget.preSelectedHospital!['id'].toString();
+          final priorityHospitalId =
+              widget.preSelectedHospital!['id']?.toString();
+          final aLocal = a.hospitalId == priorityHospitalId;
+          final bLocal = b.hospitalId == priorityHospitalId;
           if (aLocal && !bLocal) return -1;
           if (!aLocal && bLocal) return 1;
         }
-        if (_sortBy == 'price_asc')  return a.firstPrice.compareTo(b.firstPrice);
-        if (_sortBy == 'price_desc') return b.firstPrice.compareTo(a.firstPrice);
+
+        if (_sortBy == 'price_asc') {
+          return a.firstPrice.compareTo(b.firstPrice);
+        }
+        if (_sortBy == 'price_desc') {
+          return b.firstPrice.compareTo(a.firstPrice);
+        }
         return b.rating.compareTo(a.rating);
       });
 
+      final limitedResults = mappedResults.take(30).toList();
+      _slotFutures.clear();
+
+      if (!mounted || requestId != _searchRequestId) return;
       setState(() {
-        _results    = mappedResults;
+        _results = limitedResults;
         _isSearching = false;
       });
-    } catch (e, stack) {
-      debugPrint("❌ Search Error: $e");
-      debugPrint("❌ Stack: $stack");
-      if (mounted) setState(() => _isSearching = false);
+    } catch (e) {
+      debugPrint("Search error: $e");
+      if (!mounted || requestId != _searchRequestId) return;
+      setState(() => _isSearching = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Search failed. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -281,6 +302,7 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
         : (lang == VoiceService.nepali
             ? "${_results.length} जना स्वास्थ्यकर्मीहरू फेला पर्यो।"
             : "Found ${_results.length} results.");
+
     _voiceService.speakWithSavedLanguage(text);
   }
 
@@ -291,12 +313,16 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
         : "Search all specialists...";
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
+      backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
         backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.textPrimary(context), size: 20),
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            color: AppColors.textPrimary(context),
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: TextField(
@@ -305,12 +331,14 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
           style: const TextStyle(fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: AppColors.textMuted(context), fontSize: 14),
+            hintStyle: TextStyle(
+              color: AppColors.textMuted(context),
+              fontSize: 14,
+            ),
             border: InputBorder.none,
           ),
         ),
         actions: [
-          // ── Mic button for voice search — mobile only ──────
           if (!kIsWeb)
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -330,15 +358,18 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
               ),
             ),
           IconButton(
-            icon: const Icon(Icons.filter_list_rounded, color: Color(0xFF6366F1)),
+            icon: const Icon(
+              Icons.filter_list_rounded,
+              color: Color(0xFF6366F1),
+            ),
             onPressed: _showFilterSheet,
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'consultation_search_tts',
         onPressed: _speakResults,
-        backgroundColor: const Color(0xFF6366F1),
-        child: Icon(Icons.volume_up, color: Colors.white),
+        child: const Icon(Icons.volume_up),
       ),
       body: _buildResultsGrid(),
     );
@@ -346,26 +377,34 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
 
   Widget _buildResultsGrid() {
     if (_isSearching) return const Center(child: CircularProgressIndicator());
-    if (_results.isEmpty && !_isSearching) {
+
+    if (_results.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off_rounded, size: 64, color: const Color(0xFFCBD5E1)),
+            const Icon(
+              Icons.search_off_rounded,
+              size: 64,
+              color: Color(0xFFCBD5E1),
+            ),
             const SizedBox(height: 16),
-            const Text("No matches found.",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              "No matches found.",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             const SizedBox(height: 8),
             Text(
               _isListening
                   ? "Listening... speak a name or specialty"
                   : "Try the mic 🎤 or check spelling",
-              style: TextStyle(color: const Color(0xFF64748B), fontSize: 13),
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
             ),
           ],
         ),
       );
     }
+
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 50, 16, 100),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -378,125 +417,186 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
       itemBuilder: (context, index) {
         final doc = _results[index];
         final isPriority = widget.preSelectedHospital != null &&
-            doc.hospitalId == widget.preSelectedHospital!['id'].toString();
+            doc.hospitalId == widget.preSelectedHospital!['id']?.toString();
         return _build3DCard(doc, isPriority);
       },
     );
   }
 
   Widget _build3DCard(_MedicalResult doc, bool isPriority) {
+    final avatarText =
+        doc.name.trim().isNotEmpty ? doc.name.trim()[0].toUpperCase() : '?';
+
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ConsultationDescription(
-            doctorData: {
-              'id':            doc.id,
-              'name':          doc.name,
-              'specialty':     doc.specialty,
-              'hospitalName':  doc.hospitalName,
-              'nurseAssigned': doc.nurseAssigned,
-              'firstPrice':    doc.firstPrice,
-              'followUpPrice': doc.followUpPrice,
-              'avatar_url':    doc.imageUrl,
-              'rating':        doc.rating,
-            },
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ConsultationDescription(
+              doctorData: {
+                'id': doc.id,
+                'name': doc.name,
+                'full_name': doc.name,
+                'speciality': doc.specialty,
+                'hospitalName': doc.hospitalName,
+                'hospital_id': doc.hospitalId,
+                'avatar_url': doc.imageUrl,
+                'first_consultation_fee': doc.firstPrice,
+                'followup_consultation_fee': doc.followUpPrice,
+                'rating': doc.rating,
+                'assigned_nurse': doc.nurseAssigned,
+              },
+            ),
           ),
-        ),
-      ),
+        );
+      },
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Container(
-            padding: const EdgeInsets.fromLTRB(12, 65, 12, 12),
+            padding: const EdgeInsets.fromLTRB(12, 48, 12, 14),
             decoration: BoxDecoration(
               color: AppColors.cardBg(context),
-              borderRadius: BorderRadius.circular(25),
-              border: isPriority
-                  ? Border.all(
-                      color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-                      width: 1)
-                  : null,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isPriority
+                    ? const Color(0xFF6366F1)
+                    : AppColors.surfaceBg(context),
+                width: isPriority ? 1.6 : 1.0,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.shadow(context),
-                  blurRadius: 15,
+                  blurRadius: 16,
                   offset: const Offset(0, 8),
-                )
+                ),
               ],
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (isPriority)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 4),
-                    child: Text("LOCAL PRIORITY",
-                        style: TextStyle(
-                            color: Color(0xFF6366F1),
-                            fontSize: 7,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5)),
+                Text(
+                  doc.name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary(context),
                   ),
-                Text(doc.name,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                Text(doc.specialty,
-                    style: const TextStyle(
-                        color: Color(0xFF6366F1),
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                _rowIconInfo(Icons.location_on, doc.hospitalName),
-                _rowIconInfo(Icons.star, "${doc.rating} Rating"),
-                // ── Earliest available slot ──────────────────────────
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  doc.specialty.toUpperCase(),
+                  style: const TextStyle(
+                    color: Color(0xFF6366F1),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
+                    const SizedBox(width: 2),
+                    Text(
+                      doc.rating.toStringAsFixed(1),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary(context),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
                 FutureBuilder<String?>(
-                  future: fetchEarliestSlot(supabase, doc.id),
+                  future: _getEarliestSlot(doc.id),
                   builder: (context, snap) {
-                    if (!snap.hasData || snap.data == null) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Row(children: [
-                        const Icon(Icons.access_time_rounded, size: 10, color: Color(0xFF10B981)),
-                        const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            snap.data!,
-                            style: const TextStyle(fontSize: 9, color: Color(0xFF10B981), fontWeight: FontWeight.w700),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                    if (!snap.hasData || snap.data == null) {
+                      return const SizedBox(height: 18);
+                    }
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.greenTint(context),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        snap.data!,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: Color(0xFF059669),
+                          fontWeight: FontWeight.w700,
                         ),
-                      ]),
+                        textAlign: TextAlign.center,
+                      ),
                     );
                   },
                 ),
+                const Divider(height: 14),
+                _rowIconInfo(Icons.local_hospital_outlined, doc.hospitalName),
+                _rowIconInfo(Icons.person_outline_rounded, doc.nurseAssigned),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _priceCol("First", doc.firstPrice),
-                    _priceCol("Follow", doc.followUpPrice),
+                    _priceCol('1st', doc.firstPrice),
+                    _priceCol('Follow', doc.followUpPrice),
                   ],
                 ),
               ],
             ),
           ),
           Positioned(
-            top: -40, left: 0, right: 0,
-            child: Center(
-              child: Hero(
-                tag: 'doctor_image_${doc.id}',
-                child: SafeAvatar(
-                  url: doc.imageUrl,
-                  radius: 37,
-                  name: doc.name,
-                  backgroundColor:
-                      isPriority ? const Color(0xFF6366F1) : Colors.white,
-                ),
+            top: -34,
+            left: 0,
+            right: 0,
+            child: CircleAvatar(
+              radius: 34,
+              backgroundColor: const Color(0xFFE2E8F0),
+              child: ClipOval(
+                child: doc.imageUrl.isNotEmpty
+                    ? Image.network(
+                        doc.imageUrl,
+                        width: 68,
+                        height: 68,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            Text(avatarText, style: const TextStyle(fontSize: 22)),
+                      )
+                    : Text(avatarText, style: const TextStyle(fontSize: 22)),
               ),
             ),
           ),
+          if (isPriority)
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Priority',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -505,14 +605,22 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
   Widget _rowIconInfo(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Row(children: [
-        Icon(icon, size: 12, color: AppColors.textMuted(context)),
-        const SizedBox(width: 4),
-        Expanded(
-            child: Text(text,
-                style: TextStyle(fontSize: 9, color: AppColors.textSecondary(context)),
-                overflow: TextOverflow.ellipsis)),
-      ]),
+      child: Row(
+        children: [
+          Icon(icon, size: 12, color: AppColors.textMuted(context)),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 9,
+                color: AppColors.textSecondary(context),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -520,12 +628,18 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 8, color: AppColors.textMuted(context))),
-        Text("Rs ${price.toInt()}",
-            style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 11,
-                color: Color(0xFF059669))),
+        Text(
+          label,
+          style: TextStyle(fontSize: 8, color: AppColors.textMuted(context)),
+        ),
+        Text(
+          "Rs ${price.toInt()}",
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+            color: Color(0xFF059669),
+          ),
+        ),
       ],
     );
   }
@@ -535,7 +649,8 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
           padding: const EdgeInsets.all(24),
@@ -543,8 +658,10 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Price Range (Rs)",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text(
+                "Price Range (Rs)",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               RangeSlider(
                 values: _priceRange,
                 min: 0,
@@ -552,52 +669,67 @@ class _ConsultationSearchState extends State<ConsultationSearch> {
                 divisions: 20,
                 activeColor: const Color(0xFF6366F1),
                 labels: RangeLabels(
-                    _priceRange.start.round().toString(),
-                    _priceRange.end.round().toString()),
+                  _priceRange.start.round().toString(),
+                  _priceRange.end.round().toString(),
+                ),
                 onChanged: (v) => setModalState(() => _priceRange = v),
               ),
               const SizedBox(height: 20),
-              const Text("Sort By",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-
-              // Flutter 3.32+: RadioGroup manages groupValue + onChanged.
-              // RadioListTile values are read by the ancestor RadioGroup.
+              const Text(
+                "Sort By",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               RadioGroup<String>(
                 groupValue: _sortBy,
-                onChanged: (v) {
-                  if (v != null) {
-                    setModalState(() => _sortBy = v);
-                    setState(() => _sortBy = v);
-                  }
+                onChanged: (value) {
+                  if (value == null) return;
+                  setModalState(() => _sortBy = value);
+                  setState(() => _sortBy = value);
                 },
                 child: Column(
-                  children: [
-                    ("Highest Rating",      'rating'),
-                    ("Price: Low to High",  'price_asc'),
-                    ("Price: High to Low",  'price_desc'),
-                  ].map((opt) => RadioListTile<String>(
-                        title: Text(opt.$1,
-                            style: const TextStyle(fontSize: 14)),
-                        value: opt.$2,
-                        contentPadding: EdgeInsets.zero,
-                      )).toList(),
+                  children: const [
+                    RadioListTile<String>(
+                      title: Text(
+                        "Highest Rating",
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      value: 'rating',
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    RadioListTile<String>(
+                      title: Text(
+                        "Price: Low to High",
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      value: 'price_asc',
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    RadioListTile<String>(
+                      title: Text(
+                        "Price: High to Low",
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      value: 'price_desc',
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
                 ),
               ),
-
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _performSearch(_searchController.text);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15)),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _performSearch(_searchController.text.trim());
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text("Apply Filters"),
                 ),
-                child: Text("Apply",
-                    style: TextStyle(color: Colors.white)),
               ),
             ],
           ),

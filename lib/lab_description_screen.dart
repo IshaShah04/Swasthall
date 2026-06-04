@@ -92,16 +92,62 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
 
   // --- DATABASE & FILTER LOGIC ---
 
-  Future<List<Map<String, dynamic>>> _fetchLabTests() async {
+  
+Future<List<Map<String, dynamic>>> _fetchLabTests() async {
+    final rawProviderId = widget.labData['id'] ?? widget.labData['provider_id'];
+    if (rawProviderId == null || rawProviderId.toString().trim().isEmpty) {
+      if (mounted) {
+        setState(() {
+          _allTests = [];
+          _filteredTests = [];
+        });
+      }
+      return [];
+    }
+    final providerId = rawProviderId.toString();
+
     final response = await Supabase.instance.client
         .from('lab_tests')
         .select(
-            'id, name, price, do_instructions, dont_instructions, do_instructions_ne, dont_instructions_ne, do_instructions_hi, dont_instructions_hi')
-        .eq('provider_id',
-            widget.labData['id'] ?? widget.labData['provider_id'])
+          'id, hospital_id, name, price, do_instructions, dont_instructions, '
+          'do_instructions_ne, dont_instructions_ne, do_instructions_hi, dont_instructions_hi',
+        )
+        .eq('provider_id', providerId)
         .range(0, 15);
 
     final data = List<Map<String, dynamic>>.from(response);
+
+    if (data.isNotEmpty) {
+      final testIds = data.map((e) => e['id']).toList();
+
+      try {
+        final assignments = await Supabase.instance.client
+            .from('lab_test_assignments')
+            .select('lab_test_id, technician_id')
+            .inFilter('lab_test_id', testIds)
+            .eq('is_active', true);
+
+        final techByTest = <String, String>{};
+        for (final row in assignments) {
+          final labTestId = row['lab_test_id']?.toString();
+          final technicianId = row['technician_id']?.toString();
+          if (labTestId != null &&
+              labTestId.isNotEmpty &&
+              technicianId != null &&
+              technicianId.isNotEmpty &&
+              !techByTest.containsKey(labTestId)) {
+            techByTest[labTestId] = technicianId;
+          }
+        }
+
+        for (final test in data) {
+          test['technician_id'] = techByTest[test['id'].toString()];
+        }
+      } catch (e) {
+        debugPrint('Failed to fetch technician assignments: $e');
+      }
+    }
+
     setState(() {
       _allTests = data;
       _filteredTests = data;
@@ -495,14 +541,51 @@ class _LabDescriptionScreenState extends State<LabDescriptionScreen> {
               onPressed: _selectedTests.isEmpty
                   ? null
                   : () {
+                      final technicianIds = _selectedTests
+                          .map((e) => (e['technician_id'] ?? '').toString().trim())
+                          .where((e) => e.isNotEmpty)
+                          .toSet();
+                      final testsWithoutTechnician = _selectedTests
+                          .where(
+                            (e) =>
+                                (e['technician_id'] ?? '').toString().trim().isEmpty,
+                          )
+                          .toList();
+
+                      if (testsWithoutTechnician.isNotEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '${testsWithoutTechnician.length} test(s) have no technician assigned.',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (technicianIds.length > 1) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Selected tests are assigned to different technicians. Please book them separately.',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
                       Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => LabAppointmentScreen(
-                                    labData: widget.labData,
-                                    selectedTests: _selectedTests,
-                                    totalAmount: _totalPrice,
-                                  )));
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LabAppointmentScreen(
+                            labData: widget.labData,
+                            selectedTests: _selectedTests,
+                            totalAmount: _totalPrice,
+                          ),
+                        ),
+                      );
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryIndigo,

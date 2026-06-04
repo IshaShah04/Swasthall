@@ -9,24 +9,31 @@ class LabOffer extends StatefulWidget {
 }
 
 class _LabOfferState extends State<LabOffer> {
-  late final Stream<List<Map<String, dynamic>>> _offerStream;
+  late Future<List<Map<String, dynamic>>> _offerFuture;
 
   @override
   void initState() {
     super.initState();
-    _offerStream = Supabase.instance.client
+    _offerFuture = _fetchOffers();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchOffers() async {
+    final data = await Supabase.instance.client
         .from('lab_offers')
-        .stream(primaryKey: ['id'])
+        .select()
         .limit(1);
+    return (data as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _offerStream,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _offerFuture,
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink(); // Hide if no offers exist
+          return const SizedBox.shrink();
         }
 
         final offer = snapshot.data!.first;
@@ -54,14 +61,15 @@ class _LabOfferState extends State<LabOffer> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.orange,
                   borderRadius: BorderRadius.circular(5),
                 ),
                 child: Text(
                   offer['tag'] ?? "OFFER",
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
@@ -71,7 +79,7 @@ class _LabOfferState extends State<LabOffer> {
               const SizedBox(height: 10),
               Text(
                 "${offer['title']}\n@ Rs. ${offer['price']}",
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
