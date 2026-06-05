@@ -81,6 +81,7 @@ dependencies:
   zego_zim: 2.27.0
   flutter_inappwebview: ^6.1.5
   qr_flutter: ^4.1.0
+  pointycastle: ^3.9.1
 
 dev_dependencies:
   flutter_test:

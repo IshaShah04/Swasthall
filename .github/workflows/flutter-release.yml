@@ -1,0 +1,98 @@
+name: Flutter Build & Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build & Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.3.0'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze code
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Mask Secrets
+        run: |
+          echo "::add-mask::${{ secrets.SUPABASE_URL }}"
+          echo "::add-mask::${{ secrets.SUPABASE_ANON_KEY }}"
+          echo "::add-mask::${{ secrets.ZEGO_APP_ID }}"
+          echo "::add-mask::${{ secrets.ZEGO_APP_SIGN }}"
+          echo "::add-mask::${{ secrets.ESEWA_SDK_SECRET_ID }}"
+          echo "::add-mask::${{ secrets.FCM_SERVER_KEY }}"
+
+      - name: Generate env_config.dart
+        run: |
+          mkdir -p lib/config
+          cat << 'EOF' > lib/config/env_config.dart
+          class EnvConfig {
+            static const supabaseUrl = '${{ secrets.SUPABASE_URL }}';
+            static const supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
+            static const zegoAppId = ${{ secrets.ZEGO_APP_ID }};
+            static const zegoAppSign = '${{ secrets.ZEGO_APP_SIGN }}';
+            static const fdaApiKey = '';
+            static const geminiApiKey = '';
+            static const esewaSdkClientId = '';
+            static const esewaSdkSecretId = '${{ secrets.ESEWA_SDK_SECRET_ID }}';
+            static const esewaSdkEnvironment = 'test';
+            static const khaltiPublicKey = '';
+            static const khaltiEnvironment = 'test';
+            static const fcmServerKey = '${{ secrets.FCM_SERVER_KEY }}';
+
+            static void validate() {
+              final missing = <String>[];
+              if (supabaseUrl.isEmpty)     missing.add('SUPABASE_URL');
+              if (supabaseAnonKey.isEmpty) missing.add('SUPABASE_ANON_KEY');
+              if (zegoAppId == 0)          missing.add('ZEGO_APP_ID');
+
+              if (missing.isNotEmpty) {
+                throw StateError(
+                  'Missing required build config: ${missing.join(', ')}.'
+                );
+              }
+            }
+          }
+          EOF
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
+          echo "storeFile=keystore.jks" > android/key.properties
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+
+      - name: Build Release APK
+        run: flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
+
+      - name: Upload Release Artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: release-${{ github.run_number }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          name: Release ${{ github.run_number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

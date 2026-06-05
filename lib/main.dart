@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'services/offline_booking_queue.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
@@ -20,6 +21,8 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'config/env_config.dart';
 import 'navigation_wrapper.dart';
+import 'utils/key_provider.dart';
+import 'zego_service.dart';
 import 'login_page.dart';
 import 'registration_page.dart';
 import 'registration_completion_screen.dart';
@@ -656,6 +659,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
         }
 
         if (event == AuthChangeEvent.signedOut) {
+          KeyProvider.clearKey();
           final oldUserId = _lastAuthTrackedUserId;
           _lastAuthTrackedUserId = null;
           await _clearFcmTokenForUser(oldUserId);
