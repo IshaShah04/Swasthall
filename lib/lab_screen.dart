@@ -8,6 +8,8 @@ import 'global_search_bar.dart';
 import 'universal_search_delegate.dart';
 import 'services/voice_service.dart';
 import 'theme_colors.dart';
+import 'widgets/safe_network_image.dart';
+import 'patient_settings.dart';
 
 class LabTestScreen extends StatefulWidget {
   final String? searchQuery;
@@ -33,6 +35,7 @@ class _LabTestScreenState extends State<LabTestScreen> {
   String? _currentlySpeakingId;
   Future<List<Map<String, dynamic>>>? _bookingsFuture;
   Future<List<Map<String, dynamic>>>? _labsFuture;
+  String? _avatarUrl;
 
   @override
   void initState() {
@@ -42,6 +45,26 @@ class _LabTestScreenState extends State<LabTestScreen> {
     _bookingsFuture = _fetchMyBookings();
     _labsFuture = _fetchLabs();
     _initVoice();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+      final data = await supabase
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _avatarUrl = data?['avatar_url'];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading avatar: $e');
+    }
   }
 
   Future<void> _initVoice() async {
@@ -377,8 +400,22 @@ class _LabTestScreenState extends State<LabTestScreen> {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg(context),
       appBar: AppBar(
-        title: Text("Labs & Diagnostics",
-            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary(context))),
+        title: Row(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PatientSettings())),
+              child: SafeAvatar(
+                url: _avatarUrl,
+                radius: 18,
+                fallbackIcon: Icons.person_outline,
+                backgroundColor: const Color(0xFFE0E7FF),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text("Labs & Diagnostics",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.textPrimary(context))),
+          ],
+        ),
         backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         iconTheme: IconThemeData(color: AppColors.textPrimary(context)),

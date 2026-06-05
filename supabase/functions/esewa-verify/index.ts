@@ -31,11 +31,21 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    const body = await req.json() as { data?: string }
-    const base64Data = body.data?.trim() ?? ''
-    if (!base64Data) {
-      return json({ verified: false, error: 'No data provided' }, 400)
+    const parsedBody = await req.json();
+    
+    // Validate required fields before processing
+    if (
+      typeof parsedBody !== "object" ||
+      typeof parsedBody.data !== "string" ||
+      parsedBody.data.trim() === ""
+    ) {
+      return new Response(
+        JSON.stringify({ error: "Invalid request payload" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
+
+    const base64Data = parsedBody.data.trim();
 
     let parsed: Record<string, string>
     try {

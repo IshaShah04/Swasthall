@@ -215,40 +215,90 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildTimeGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 2.2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: _availableSlots.length,
-      itemBuilder: (context, index) {
-        final slot = _availableSlots[index];
-        final isSelected = _selectedSlotData?['slot_key'] == slot['slot_key'];
-        return GestureDetector(
-          onTap: () => setState(() => _selectedSlotData = slot),
-          child: Container(
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isSelected ? primaryColor : AppColors.cardBg(context),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: isSelected ? primaryColor : Colors.grey.shade300),
-            ),
-            child: Text(
-              slot['display_time']?.toString() ?? 'Time',
-              style: TextStyle(
-                  fontSize: 13,
-                  color: isSelected
-                      ? Colors.white
-                      : AppColors.textPrimary(context),
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.now(),
+                    );
+                    if (time != null && mounted) {
+                      setState(() {
+                        final formattedTime = time.format(context);
+                        _selectedSlotData = {
+                          'display_time': formattedTime,
+                          'slot_type': 'custom',
+                          'slot_id': 'custom_$formattedTime',
+                        };
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.access_time_rounded),
+                  label: const Text('Pick Custom Time'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Text('Or select a suggested time:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.grey)),
+        ),
+        Expanded(
+          child: GridView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              childAspectRatio: 2.2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: _availableSlots.length,
+            itemBuilder: (context, index) {
+              final slot = _availableSlots[index];
+              final isSelected = _selectedSlotData?['slot_key'] == slot['slot_key'] || _selectedSlotData?['display_time'] == slot['display_time'];
+              return GestureDetector(
+                onTap: () => setState(() {
+                  _selectedSlotData = slot;
+                  // Ensure slot_key is present so it can be matched
+                  if (!_selectedSlotData!.containsKey('slot_key')) {
+                    _selectedSlotData!['slot_key'] = slot['display_time'];
+                  }
+                }),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isSelected ? primaryColor : AppColors.cardBg(context),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: isSelected ? primaryColor : Colors.grey.shade300),
+                  ),
+                  child: Text(
+                    slot['display_time']?.toString() ?? 'Time',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textPrimary(context),
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 

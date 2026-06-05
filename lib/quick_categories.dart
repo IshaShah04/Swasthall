@@ -5,6 +5,7 @@ import 'lab_screen.dart';
 import 'blood_bank.dart';
 import 'drug_interaction_screen.dart';
 import 'theme_colors.dart';
+import 'widgets/app_transitions.dart';
 
 // Professional roles allowed to access the Drug Interaction checker.
 // 'patient' is intentionally excluded.
@@ -46,9 +47,7 @@ class QuickCategories extends StatelessWidget {
             "Doctors",
             () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => const ConsultationSearch(filter: 'doctor'),
-              ),
+              slideRightRoute(const ConsultationSearch(filter: 'doctor')),
             ),
           ),
           _buildCircularCat(
@@ -57,9 +56,7 @@ class QuickCategories extends StatelessWidget {
             "Medicines",
             () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => const StudyHubScreen(isStandalone: true),
-              ),
+              slideRightRoute(const StudyHubScreen(isStandalone: true)),
             ),
           ),
           _buildCircularCat(
@@ -68,7 +65,7 @@ class QuickCategories extends StatelessWidget {
             "Lab Tests",
             () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const LabTestScreen()),
+              slideRightRoute(const LabTestScreen()),
             ),
           ),
           _buildCircularCat(
@@ -77,10 +74,7 @@ class QuickCategories extends StatelessWidget {
             "Pharmacists",
             () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    const ConsultationSearch(filter: 'pharmacist'),
-              ),
+              slideRightRoute(const ConsultationSearch(filter: 'pharmacist')),
             ),
           ),
           _buildCircularCat(
@@ -89,7 +83,7 @@ class QuickCategories extends StatelessWidget {
             "Blood",
             () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const BloodBank()),
+              slideRightRoute(const BloodBank()),
             ),
           ),
 
@@ -103,9 +97,7 @@ class QuickCategories extends StatelessWidget {
               "Interactions",
               () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const DrugInteractionScreen(),
-                ),
+                slideRightRoute(const DrugInteractionScreen()),
               ),
               highlight: true,
             ),
@@ -124,7 +116,7 @@ class QuickCategories extends StatelessWidget {
     const Color brandIndigo = Color(0xFF6366F1);
 
     return Padding(
-      padding: const EdgeInsets.only(right: 20),
+      padding: const EdgeInsets.only(right: 17),
       child: GestureDetector(
         onTap: onTap,
         child: Column(

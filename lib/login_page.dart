@@ -572,61 +572,86 @@ class _LoginPageState extends State<LoginPage>
         AnimatedBuilder(
           animation: _logoController,
           builder: (context, child) {
-            return Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                color: _brandColor,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: _brandColor.withValues(alpha: 0.35),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                // Radial gradient glow behind logo
+                Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        _brandColor.withValues(alpha: 0.3),
+                        _brandColor.withValues(alpha: 0.08),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
                   ),
-                ],
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  ClipRect(
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      heightFactor: _sAnim.value,
-                      child: Text(
-                        "S",
-                        style: TextStyle(
-                          fontSize: 80,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.cardBg(context),
-                          height: 1.0,
+                ),
+                // Logo with slight transparency blend
+                Opacity(
+                  opacity: 0.92,
+                  child: Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      color: _brandColor,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _brandColor.withValues(alpha: 0.35),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
                         ),
-                      ),
+                      ],
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        ClipRect(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            heightFactor: _sAnim.value,
+                            child: Text(
+                              "S",
+                              style: TextStyle(
+                                fontSize: 80,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.cardBg(context),
+                                height: 1.0,
+                              ),
+                            ),
+                          ),
+                        ),
+                        CustomPaint(
+                          size: const Size(90, 90),
+                          painter: _LoginHeartbeatPainter(
+                            progress: _heartbeatAnim.value,
+                            color: AppColors.cardBg(context).withValues(alpha: 0.9),
+                            strokeWidth: 2.2,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  CustomPaint(
-                    size: const Size(90, 90),
-                    painter: _LoginHeartbeatPainter(
-                      progress: _heartbeatAnim.value,
-                      color: AppColors.cardBg(context).withValues(alpha: 0.9),
-                      strokeWidth: 2.2,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         ),
 
         const SizedBox(height: 20),
 
-        const Text(
+        Text(
           "Swasthall",
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.w800,
             color: _textDark,
-            letterSpacing: 0.3,
+            letterSpacing: 2.0,
           ),
         ),
 

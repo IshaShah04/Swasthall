@@ -16,6 +16,7 @@ import 'services/esewa_sdk_payment_service.dart';
 import 'services/khalti_sdk_payment_service.dart';
 import 'services/fonepay_mock_service.dart';
 import 'theme_colors.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class LabPaymentScreen extends StatefulWidget {
   final Map<String, dynamic> labData;
@@ -680,38 +681,103 @@ Future<bool> _runKhalti() async {
     );
   }
 
+  void _showQRPayment(BuildContext context, double totalAmount) {
+    final qrData = 'SWASTHALL_LAB_${widget.labData['id']}_$totalAmount';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.cardBg(context),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text('Pay via QR Code',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('Total Amount: Rs. ${totalAmount.toStringAsFixed(0)}',
+                  style: const TextStyle(fontSize: 16, color: Colors.grey)),
+              const SizedBox(height: 24),
+              QrImageView(
+                data: qrData,
+                version: QrVersions.auto,
+                size: 220,
+                backgroundColor: Colors.white,
+                errorCorrectionLevel: QrErrorCorrectLevel.M,
+              ),
+              const SizedBox(height: 16),
+              Text('Show this QR at the lab counter',
+                style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPayButton() {
     return Container(
       padding: const EdgeInsets.all(20),
       color: AppColors.cardBg(context),
       child: SafeArea(
-        child: ElevatedButton(
-          onPressed: !_canPay ? null : _processPayment,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryIndigo,
-            minimumSize: const Size(double.infinity, 52),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
-          ),
-          child: _isProcessing
-              ? const SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2),
-                )
-              : Text(
-                  _feeLoading
-                      ? 'Calculating…'
-                      : (!_canPay
-                          ? 'Fee unavailable'
-                          : 'Pay Rs. ${_totalPayable!.toStringAsFixed(0)}'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton(
+              onPressed: !_canPay ? null : _processPayment,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryIndigo,
+                minimumSize: const Size(double.infinity, 52),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _isProcessing
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                    )
+                  : Text(
+                      _feeLoading
+                          ? 'Calculating…'
+                          : (!_canPay
+                              ? 'Fee unavailable'
+                              : 'Pay Rs. ${_totalPayable!.toStringAsFixed(0)}'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: !_canPay
+                  ? null
+                  : () => _showQRPayment(context, _totalPayable ?? widget.totalAmount),
+              icon: const Icon(Icons.qr_code_2_rounded),
+              label: const Text('Pay via QR Code'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
+          ],
         ),
       ),
     );

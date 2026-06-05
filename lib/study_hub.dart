@@ -9,6 +9,9 @@ import 'global_search_bar.dart';
 import 'universal_search_delegate.dart';
 import 'services/voice_service.dart';
 import 'theme_colors.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'widgets/safe_network_image.dart';
+import 'patient_settings.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  Language enum
@@ -124,6 +127,8 @@ class _StudyHubScreenState extends State<StudyHubScreen> {
     },
   };
 
+  String? _avatarUrl;
+
   @override
   void initState() {
     super.initState();
@@ -132,6 +137,27 @@ class _StudyHubScreenState extends State<StudyHubScreen> {
     _loadLanguageData(HubLanguage.english).then((_) {
       if (mounted) setState(() {});
     });
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+      final data = await supabase
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _avatarUrl = data?['avatar_url'];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading avatar: $e');
+    }
   }
 
   @override
@@ -444,8 +470,22 @@ class _StudyHubScreenState extends State<StudyHubScreen> {
     return Scaffold(
       backgroundColor: AppColors.cardBg(context),
       appBar: AppBar(
-        title: const Text("Knowledge Hub",
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Row(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PatientSettings())),
+              child: SafeAvatar(
+                url: _avatarUrl,
+                radius: 18,
+                fallbackIcon: Icons.person_outline,
+                backgroundColor: const Color(0xFFE0E7FF),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text("Knowledge Hub",
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
         backgroundColor: AppColors.cardBg(context),
         foregroundColor: Colors.black,
         elevation: 0,
