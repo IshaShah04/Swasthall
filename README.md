@@ -1,5 +1,9 @@
 # swasthall
 
+[![Flutter Build & Release](https://github.com/RaunakShah29/swasthall-app/actions/workflows/flutter-release.yml/badge.svg)](https://github.com/RaunakShah29/swasthall-app/actions/workflows/flutter-release.yml)
+[![Supabase Migrations](https://github.com/RaunakShah29/swasthall-app/actions/workflows/supabase-migrate.yml/badge.svg)](https://github.com/RaunakShah29/swasthall-app/actions/workflows/supabase-migrate.yml)
+[![Edge Function Deploy](https://github.com/RaunakShah29/swasthall-app/actions/workflows/supabase-functions.yml/badge.svg)](https://github.com/RaunakShah29/swasthall-app/actions/workflows/supabase-functions.yml)
+
 A new Flutter project.
 
 ## Environment Setup

@@ -1,0 +1,33 @@
+name: Supabase Migrations
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/**'
+
+jobs:
+  migrate:
+    name: Run DB Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Mask Secrets
+        run: |
+          echo "::add-mask::${{ secrets.SUPABASE_ACCESS_TOKEN }}"
+          echo "::add-mask::${{ secrets.SUPABASE_PROJECT_ID }}"
+
+      - name: Push Migrations
+        run: |
+          supabase db push --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
