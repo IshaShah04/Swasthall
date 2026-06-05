@@ -8,6 +8,7 @@ import 'services/voice_service.dart';
 import 'services/app_cache.dart';
 import 'services/earliest_slot_service.dart';
 import 'theme_colors.dart';
+import 'patient_settings.dart';
 
 class ConsultationScreen extends StatefulWidget {
   final String patientId;
@@ -25,11 +26,32 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   bool _speakerOn = false; // ← speaker must be explicitly turned on by user
   final Color primaryColor = const Color(0xFF6366F1);
   final Color emergencyRed = const Color(0xFFE11D48);
+  String? _avatarUrl;
 
   @override
   void initState() {
     super.initState();
     _initializeVoiceAndSync();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+      final data = await supabase
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _avatarUrl = data?['avatar_url'];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading avatar: $e');
+    }
   }
 
   Future<void> _initializeVoiceAndSync() async {
@@ -145,40 +167,52 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
           SliverAppBar(
             automaticallyImplyLeading: false,
             floating: true,
-            expandedHeight: 90,
+            pinned: true,
             backgroundColor: AppColors.cardBg(context),
             elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 50, 16, 0),
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      onTap: () => _navigateToSearch(),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceBg(context),
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.search_rounded, color: primaryColor),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                selectedHospital != null
-                                    ? "Search in ${selectedHospital!['name']}..."
-                                    : "Search doctors or hospitals...",
-                                style: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+            title: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PatientSettings())),
+                  child: SafeAvatar(
+                    url: _avatarUrl,
+                    radius: 20,
+                    fallbackIcon: Icons.person_outline,
+                    backgroundColor: const Color(0xFFE0E7FF),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text("Consultation", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.textPrimary(context))),
+              ],
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(60),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: GestureDetector(
+                  onTap: () => _navigateToSearch(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceBg(context),
+                      borderRadius: BorderRadius.circular(15),
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        Icon(Icons.search_rounded, color: primaryColor),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            selectedHospital != null
+                                ? "Search in ${selectedHospital!['name']}..."
+                                : "Search doctors or hospitals...",
+                            style: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),

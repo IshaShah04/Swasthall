@@ -95,6 +95,8 @@ flutter {
 }
 
 dependencies {
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+    implementation("androidx.glance:glance:1.1.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.multidex:multidex:2.0.1")

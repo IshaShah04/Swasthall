@@ -9,11 +9,12 @@ import 'insurance_subscription.dart';
 import 'all_plans_screen.dart';
 import 'services/voice_service.dart';
 import 'patient_settings.dart';
-import 'consultation_search.dart';
-import 'ai_assistant_screen.dart';
 import 'notification_screen.dart';
 import 'widgets/safe_network_image.dart';
 import 'theme_colors.dart';
+import 'consultation_search.dart';
+import 'active_patient_notifier.dart';
+import 'ai_assistant_screen.dart';
 
 class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({super.key});
@@ -25,7 +26,11 @@ class PatientHomeScreen extends StatefulWidget {
 class _PatientHomeScreenState extends State<PatientHomeScreen> {
   Map<String, dynamic>? _activeBooking;
   String? _avatarUrl;
+  String _userName = 'Ram';
   int _unreadCount = 0;
+  List<Map<String, dynamic>> _children = [];
+  List<Map<String, dynamic>> _hospitals = [];
+  bool _isLoadingHospitals = true;
   final VoiceService _voiceService = VoiceService();
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _isListening = false;
@@ -34,14 +39,44 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   @override
   void initState() {
     super.initState();
+    activePatientNotifier.addListener(_onActivePatientChanged);
     _checkForActiveCall();
     _initVoice();
     _loadUserProfile();
     _loadUnreadCount();
+    _loadHospitals();
+  }
+
+  Future<void> _loadHospitals() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .eq('role', 'hospital')
+          .limit(10);
+      if (mounted) {
+        setState(() {
+          _hospitals = List<Map<String, dynamic>>.from(response);
+          _isLoadingHospitals = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading hospitals: $e');
+      if (mounted) {
+        setState(() => _isLoadingHospitals = false);
+      }
+    }
+  }
+
+  void _onActivePatientChanged() {
+    _loadUserProfile();
+    _checkForActiveCall();
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    activePatientNotifier.removeListener(_onActivePatientChanged);
     _voiceService.stop();
     _speech.stop();
     _homeSearchController.dispose();
@@ -85,18 +120,35 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
 
   Future<void> _loadUserProfile() async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
+      final activeId = activePatientNotifier.currentId;
+      if (activeId.isEmpty) return;
 
       final data = await Supabase.instance.client
           .from('profiles')
-          .select('avatar_url')
-          .eq('id', user.id)
+          .select('avatar_url, full_name')
+          .eq('id', activeId)
           .maybeSingle();
+
+      final user = Supabase.instance.client.auth.currentUser;
+      List<Map<String, dynamic>> fetchedChildren = [];
+      if (user != null) {
+        try {
+          final links = await Supabase.instance.client.from('family_links').select('child_id').eq('parent_id', user.id);
+          final childIds = (links as List).map((l) => l['child_id']).toList();
+          if (childIds.isNotEmpty) {
+            final childrenData = await Supabase.instance.client.from('profiles').select('id, full_name, avatar_url').filter('id', 'in', childIds);
+            fetchedChildren = List<Map<String, dynamic>>.from(childrenData);
+          }
+        } catch (_) {}
+      }
 
       if (mounted) {
         setState(() {
           _avatarUrl = data?['avatar_url'];
+          if (data?['full_name'] != null && data!['full_name'].toString().isNotEmpty) {
+            _userName = data['full_name'].toString().split(' ')[0];
+          }
+          _children = fetchedChildren;
         });
       }
     } catch (e) {
@@ -166,10 +218,10 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   }
 
   Future<void> _checkForActiveCall() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    final activeId = activePatientNotifier.currentId;
+    if (activeId.isEmpty) return;
 
-    final booking = await SupabaseHandler().getActiveBooking(user.id);
+    final booking = await SupabaseHandler().getActiveBooking(activeId);
     if (mounted) {
       setState(() {
         _activeBooking = booking;
@@ -184,30 +236,22 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg(context),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'ai_fab',
-            onPressed: () {
-              _voiceService.stop();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AiAssistantScreen(
-                    languageCode: _voiceService.currentLanguage,
-                  ),
-                ),
-              );
-            },
-            backgroundColor: brandBlue,
-            icon: Icon(Icons.auto_awesome, color: Colors.white),
-            label: Text('AI Assistant',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'ai_fab',
+        onPressed: () {
+          _voiceService.stop();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AiAssistantScreen(
+                languageCode: _voiceService.currentLanguage,
+              ),
+            ),
+          );
+        },
+        backgroundColor: brandBlue,
+        icon: const Icon(Icons.auto_awesome, color: Colors.white),
+        label: const Text('AI Assistant', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -220,23 +264,37 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 55),
+              const SizedBox(height: 45),
               _buildModernAppBar(brandBlue, user),
+              const SizedBox(height: 12),
+              Text('Good Morning, $_userName 👋', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: AppColors.textPrimary(context))),
               if (_activeBooking != null) ...[
-                const SizedBox(height: 20),
+                const SizedBox(height: 17),
                 _buildActiveCallBanner(brandBlue),
               ],
-              const SizedBox(height: 25),
+              const SizedBox(height: 17),
               _buildSearchBar(brandBlue),
-              const SizedBox(height: 25),
-              _StaggeredSection(delay: 0,   child: const _SectionHeader(title: 'Quick Categories')),
-              const SizedBox(height: 16),
+              const SizedBox(height: 21),
+              _StaggeredSection(delay: 0,   child: const _SectionHeader(title: 'Select Hospital')),
+              const SizedBox(height: 13),
+              _StaggeredSection(delay: 20,  child: _buildHospitalSelector()),
+              const SizedBox(height: 21),
+              _StaggeredSection(delay: 40,   child: const _SectionHeader(title: 'Quick Categories')),
+              const SizedBox(height: 13),
               _StaggeredSection(delay: 80,  child: QuickCategories(brandBlue: brandBlue, userRole: 'patient')),
-              const SizedBox(height: 30),
-              _StaggeredSection(delay: 160, child: const _SectionHeader(title: 'Special Offers')),
-              const SizedBox(height: 16),
+              const SizedBox(height: 25),
+              _StaggeredSection(delay: 120, child: const _SectionHeader(title: 'Health Monitor')),
+              const SizedBox(height: 13),
+              _StaggeredSection(delay: 140, child: _VitalsMonitorRow(patientId: activePatientNotifier.currentId)),
+              const SizedBox(height: 25),
+              _StaggeredSection(delay: 160, child: _buildUpcomingAppointment()),
+              const SizedBox(height: 25),
+              _StaggeredSection(delay: 180, child: _buildReportsCard()),
+              const SizedBox(height: 25),
+              _StaggeredSection(delay: 200, child: const _SectionHeader(title: 'Special Offers')),
+              const SizedBox(height: 13),
               _StaggeredSection(delay: 240, child: const SpecialOffers()),
-              const SizedBox(height: 30),
+              const SizedBox(height: 25),
               _StaggeredSection(
                 delay: 320,
                 child: _SectionHeader(
@@ -260,23 +318,193 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     );
   }
 
+  Widget _buildHospitalSelector() {
+    if (_isLoadingHospitals) {
+      return const SizedBox(
+        height: 120,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
+    if (_hospitals.isEmpty) {
+      return SizedBox(
+        height: 120,
+        child: Center(
+          child: Text(
+            'No hospitals available at the moment',
+            style: TextStyle(color: AppColors.textMuted(context)),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 119,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _hospitals.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final hospital = _hospitals[index];
+          final hospitalName = (hospital['hospital_name'] ?? hospital['full_name'] ?? 'Unknown Hospital').toString();
+          final avatarUrl = hospital['avatar_url']?.toString();
+          final isSelected = index == 0;
+          return Container(
+            width: 110,
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFF6366F1).withValues(alpha: 0.1) : AppColors.cardBg(context),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                children: [
+                  Expanded(
+                    flex: 7,
+                    child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                        ? SafeNetworkImage(
+                            url: avatarUrl,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            width: double.infinity,
+                            height: double.infinity,
+                            color: isSelected ? const Color(0xFF6366F1).withValues(alpha: 0.2) : Colors.grey.shade100,
+                            child: Icon(Icons.local_hospital_rounded, color: isSelected ? const Color(0xFF6366F1) : Colors.grey, size: 40),
+                          ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: Text(
+                          hospitalName,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.textPrimary(context)),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildUpcomingAppointment() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(context),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFF6366F1).withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.calendar_month, color: Color(0xFF6366F1)),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Upcoming Appointment', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary(context))),
+                const SizedBox(height: 4),
+                Text('No upcoming appointments', style: TextStyle(fontSize: 12, color: AppColors.textMuted(context))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(context),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.description_rounded, color: Color(0xFF10B981)),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your Reports', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary(context))),
+                const SizedBox(height: 4),
+                Text('0 lab reports available', style: TextStyle(fontSize: 12, color: AppColors.textMuted(context))),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: Colors.grey),
+        ],
+      ),
+    );
+  }
+
   Widget _buildModernAppBar(Color brandBlue, User? user) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Tap avatar to open settings
-        GestureDetector(
-          onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (context) => const PatientSettings())),
-          child: SafeAvatar(
-            url: _avatarUrl,
-            radius: 20,
-            fallbackIcon: Icons.person_outline,
-            backgroundColor: const Color(0xFFE0E7FF),
-          ),
-        ),
+        // Tap avatar to open settings or switch child
+        _children.isEmpty
+            ? GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PatientSettings())),
+                child: SafeAvatar(
+                  url: _avatarUrl,
+                  radius: 20,
+                  fallbackIcon: Icons.person_outline,
+                  backgroundColor: const Color(0xFFE0E7FF),
+                ),
+              )
+            : PopupMenuButton<String>(
+                offset: const Offset(0, 50),
+                onSelected: (val) {
+                  if (val == 'settings') {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const PatientSettings()));
+                  } else if (val == 'myself') {
+                    activePatientNotifier.setChild(null);
+                  } else if (val.startsWith('child_')) {
+                    activePatientNotifier.setChild(val.substring(6));
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'settings', child: Text('Settings')),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(value: 'myself', child: Text('Switch to Myself')),
+                  const PopupMenuDivider(),
+                  ..._children.map((child) => PopupMenuItem(
+                        value: 'child_${child['id']}',
+                        child: Text('Family: ${child['full_name'] ?? 'Unknown'}'),
+                      )),
+                ],
+                child: SafeAvatar(
+                  url: _avatarUrl,
+                  radius: 20,
+                  fallbackIcon: Icons.person_outline,
+                  backgroundColor: const Color(0xFFE0E7FF),
+                ),
+              ),
         Expanded(
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -548,4 +776,230 @@ class _StaggeredSectionState extends State<_StaggeredSection>
         opacity: _opacity,
         child: SlideTransition(position: _slide, child: widget.child),
       );
+}
+
+// ── _VitalsMonitorRow — side-by-side BP + Sugar cards ──────────────────────
+class _VitalsMonitorRow extends StatefulWidget {
+  final String patientId;
+  const _VitalsMonitorRow({required this.patientId});
+
+  @override
+  State<_VitalsMonitorRow> createState() => _VitalsMonitorRowState();
+}
+
+class _VitalsMonitorRowState extends State<_VitalsMonitorRow> {
+  String _bpText = '--/--';
+  String _sugarText = '--';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchVitals();
+  }
+
+  @override
+  void didUpdateWidget(covariant _VitalsMonitorRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.patientId != widget.patientId) {
+      _fetchVitals();
+    }
+  }
+
+  Future<void> _fetchVitals() async {
+    try {
+      if (widget.patientId.isEmpty) return;
+      final rows = await Supabase.instance.client
+          .from('patient_vitals')
+          .select('type, reading')
+          .eq('patient_id', widget.patientId)
+          .order('created_at', ascending: false)
+          .limit(20);
+
+      final list = List<Map<String, dynamic>>.from(rows as List);
+
+      String bp = '--/--';
+      String sugar = '--';
+
+      for (final row in list) {
+        final type = (row['type'] ?? '').toString();
+        final reading = row['reading'];
+        if (reading == null) continue;
+
+        if (type == 'BP' && bp == '--/--') {
+          final sys = reading['sys']?.toString() ?? '--';
+          final dia = reading['dia']?.toString() ?? '--';
+          bp = '$sys/$dia';
+        } else if (type == 'Sugar' && sugar == '--') {
+          sugar = reading['value']?.toString() ?? '--';
+        }
+
+        if (bp != '--/--' && sugar != '--') break;
+      }
+
+      if (mounted) {
+        setState(() {
+          _bpText = bp;
+          _sugarText = sugar;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Vitals fetch error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const SizedBox(
+        height: 110,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: _VitalMonitorCard(
+            title: 'Blood Pressure',
+            value: _bpText,
+            unit: 'mmHg',
+            icon: Icons.favorite_rounded,
+            color: const Color(0xFFEF4444),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: _VitalMonitorCard(
+            title: 'Blood Sugar',
+            value: _sugarText,
+            unit: 'mg/dL',
+            icon: Icons.water_drop_rounded,
+            color: const Color(0xFF10B981),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VitalMonitorCard extends StatefulWidget {
+  final String title;
+  final String value;
+  final String unit;
+  final IconData icon;
+  final Color color;
+
+  const _VitalMonitorCard({
+    required this.title,
+    required this.value,
+    required this.unit,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  State<_VitalMonitorCard> createState() => _VitalMonitorCardState();
+}
+
+class _VitalMonitorCardState extends State<_VitalMonitorCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseCtrl;
+  late Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulse = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: widget.color.withValues(alpha: 0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: widget.color.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ScaleTransition(
+                scale: _pulse,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: widget.color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(widget.icon, color: widget.color, size: 16),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  widget.title,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMuted(context),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                widget.value,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary(context),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  widget.unit,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textMuted(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -30,6 +30,7 @@ class _PatientSettingsState extends State<PatientSettings> {
   final _heightController = TextEditingController();
   static const List<String> _bloodGroups = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
   final Color primaryTeal = const Color(0xFF6366F1);
+  List<Map<String, dynamic>> _children = [];
 
   @override
   void initState() {
@@ -48,6 +49,16 @@ class _PatientSettingsState extends State<PatientSettings> {
           .eq('id', user.id)
           .single();
 
+      List<Map<String, dynamic>> fetchedChildren = [];
+      try {
+        final links = await _supabase.from('family_links').select('child_id').eq('parent_id', user.id);
+        final childIds = (links as List).map((l) => l['child_id']).toList();
+        if (childIds.isNotEmpty) {
+          final childrenData = await _supabase.from('profiles').select('id, full_name, avatar_url').filter('id', 'in', childIds);
+          fetchedChildren = List<Map<String, dynamic>>.from(childrenData);
+        }
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _nameController.text = data['full_name'] ?? '';
@@ -58,6 +69,7 @@ class _PatientSettingsState extends State<PatientSettings> {
           _allowNewsletters = data['allow_newsletters'] ?? true;
           _selectedBloodGroup = data['blood_group']?.toString();
           _heightController.text = data['height_cm']?.toString() ?? '';
+          _children = fetchedChildren;
           _loading = false;
         });
       }
@@ -177,6 +189,54 @@ class _PatientSettingsState extends State<PatientSettings> {
     }
   }
 
+  Future<void> _addChildByEmail(String email) async {
+    try {
+      final childProfile = await _supabase.from('profiles').select('id').eq('email', email.trim()).maybeSingle();
+      if (childProfile == null) {
+        _showError("Account not found for that email");
+        return;
+      }
+      final user = _supabase.auth.currentUser;
+      await _supabase.from('family_links').insert({'parent_id': user!.id, 'child_id': childProfile['id']});
+      _loadUserData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Child account added successfully'), backgroundColor: Colors.green));
+      }
+    } catch(e) {
+      _showError("Error adding child account. They might already be linked.");
+    }
+  }
+
+  void _showAddChildDialog() {
+    final emailController = TextEditingController();
+    showDialog(context: context, builder: (context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("Add Child Account"),
+        content: TextField(
+          controller: emailController,
+          decoration: const InputDecoration(
+            hintText: "Child's email address",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: primaryTeal, foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(context);
+              if (emailController.text.isNotEmpty) {
+                _addChildByEmail(emailController.text);
+              }
+            },
+            child: const Text("Add"),
+          ),
+        ],
+      );
+    });
+  }
+
   // ── Data download dialog ──────────────────────────────────
   void _requestDataDownload() {
     showDialog(
@@ -193,7 +253,6 @@ class _PatientSettingsState extends State<PatientSettings> {
           const SizedBox(height: 12),
           _docRow(Icons.picture_as_pdf_outlined, "Medical records — PDF"),
           _docRow(Icons.table_chart_outlined, "Appointments & history — CSV"),
-          _docRow(Icons.code_outlined, "Full profile export — JSON"),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(10),
@@ -596,6 +655,30 @@ Future<void> _refreshAfterSwitch() async {
                   const SizedBox(height: 16),
                   _buildTextField("Height (cm)", _heightController, Icons.straighten_rounded,
                       keyboardType: TextInputType.number),
+                  const SizedBox(height: 28),
+
+                  // ── Family ──────────────────────────────
+                  _sectionLabel("Family"),
+                  const SizedBox(height: 12),
+                  if (_children.isNotEmpty)
+                    _settingsCard(_children.map((child) => _tile(
+                      icon: Icons.child_care_rounded,
+                      title: child['full_name'] ?? 'Child',
+                      sub: "Linked Account",
+                      onTap: () {},
+                    )).toList()),
+                  if (_children.isNotEmpty) const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _showAddChildDialog,
+                    icon: Icon(Icons.person_add_alt_1_rounded, color: primaryTeal),
+                    label: Text("Add Child Account", style: TextStyle(color: primaryTeal, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      side: BorderSide(color: primaryTeal.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+
                   const SizedBox(height: 40),
                   Container(
                     width: double.infinity,
@@ -633,7 +716,7 @@ Future<void> _refreshAfterSwitch() async {
                     _tile(
                       icon: Icons.download_outlined,
                       title: "Download My Data",
-                      sub: "Records sent to your email (PDF / CSV / JSON)",
+                      sub: "Records sent to your email (PDF / CSV)",
                       onTap: _requestDataDownload,
                     ),
                     _divider(),

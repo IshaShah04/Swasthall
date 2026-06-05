@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
@@ -94,35 +96,10 @@ void _configureCrashlytics() {
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-
-    final String msg = details.exceptionAsString();
-    if (msg.contains('Invalid state transition') &&
-        msg.contains('AppLifecycleState')) {
-      FirebaseCrashlytics.instance.recordError(
-        details.exception,
-        details.stack,
-        reason: 'ZegoSystemService lifecycle ordering (non-fatal)',
-        fatal: false,
-      );
-      return;
-    }
-
     FirebaseCrashlytics.instance.recordFlutterFatalError(details);
   };
 
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    final String msg = error.toString();
-    if (msg.contains('Invalid state transition') &&
-        msg.contains('AppLifecycleState')) {
-      FirebaseCrashlytics.instance.recordError(
-        error,
-        stack,
-        reason: 'ZegoSystemService lifecycle ordering (non-fatal)',
-        fatal: false,
-      );
-      return true;
-    }
-
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;
   };
@@ -157,6 +134,18 @@ void _registerFcmBackgroundHandlerOnce() {
   _fcmBackgroundHandlerRegistered = true;
 }
 
+Future<String?> _getStoredAccessToken() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final String? sessionString = prefs.getString('supabase.auth.token');
+    if (sessionString != null) {
+      final sessionData = jsonDecode(sessionString);
+      return sessionData['currentSession']?['access_token'];
+    }
+  } catch (_) {}
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HomeWidget background callback
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,51 +166,23 @@ Future<void> callbackDispatcher(Uri? uri) async {
   if (bookingId == null || bookingId.isEmpty) return;
 
   try {
-    try {
-      Supabase.instance.client;
-    } catch (_) {
-      await Supabase.initialize(
-        url: EnvConfig.supabaseUrl,
-        anonKey: EnvConfig.supabaseAnonKey,
-      );
-    }
-
     final bool isDone = action == 'done' || action == 'completed';
-
-    try {
-      if (isDone) {
-        await Supabase.instance.client.rpc(
-          'mark_booking_completed',
-          params: {'p_booking_id': bookingId},
-        );
-      } else {
-        await Supabase.instance.client.rpc(
-          'mark_booking_missed',
-          params: {'p_booking_id': bookingId},
-        );
-      }
-    } catch (primaryError) {
-      debugPrint('Widget action RPC failed: $primaryError — trying fallback');
-      try {
-        if (isDone) {
-          await Supabase.instance.client
-              .from('bookings')
-              .update({
-                'status': 'completed',
-                'completed_at': DateTime.now().toIso8601String(),
-                'is_expired': false,
-                'updated_at': DateTime.now().toIso8601String(),
-              })
-              .eq('id', bookingId);
-        } else {
-          await Supabase.instance.client.rpc(
-            'mark_booking_missed',
-            params: {'p_booking_id': bookingId},
-          );
-        }
-      } catch (fallbackError) {
-        debugPrint('Fallback also failed for $bookingId: $fallbackError');
-      }
+    final token = await _getStoredAccessToken();
+    
+    final response = await http.post(
+      Uri.parse('${EnvConfig.supabaseUrl}/functions/v1/widget-action'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'action': isDone ? 'mark_booking_completed' : 'mark_booking_missed',
+        'booking_id': bookingId,
+      }),
+    );
+    
+    if (response.statusCode != 200) {
+      debugPrint('Widget action HTTP failed: ${response.body}');
     }
 
     await HomeWidget.updateWidget(

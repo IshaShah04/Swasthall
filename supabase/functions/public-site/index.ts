@@ -51,15 +51,16 @@ function getEndpoint(req: Request) {
   return pathParts[pathParts.length - 1] || "";
 }
 
-function getClientIp(req: Request) {
-  const forwardedFor = req.headers.get("x-forwarded-for");
-  if (forwardedFor) return forwardedFor.split(",")[0].trim();
+function getClientIp(req: Request): string {
+  // CF-Connecting-IP is set by Cloudflare/Supabase infrastructure — cannot be spoofed by client
+  const cfIp = req.headers.get("cf-connecting-ip");
+  if (cfIp) return cfIp;
 
-  return (
-    req.headers.get("cf-connecting-ip") ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
-  );
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp) return realIp;
+
+  // Do NOT use x-forwarded-for — it is client-controlled and spoofable
+  return "unknown";
 }
 
 async function sha256Hex(input: string) {

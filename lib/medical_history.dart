@@ -5,6 +5,8 @@ import 'medical_care.dart';
 import 'medical_vault.dart';
 import 'services/voice_service.dart';
 import 'theme_colors.dart';
+import 'widgets/safe_network_image.dart';
+import 'patient_settings.dart';
 
 class MedicalHistoryScreen extends StatefulWidget {
   final String patientId;
@@ -32,6 +34,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
   bool _isLoading = true;
   bool _isPatient = false;
   String? _errorMessage;
+  String? _avatarUrl;
 
   @override
   void initState() {
@@ -56,7 +59,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
     try {
       final userData = await supabase
           .from('profiles')
-          .select('full_name, role')
+          .select('full_name, role, avatar_url')
           .eq('id', widget.patientId)
           .maybeSingle();
 
@@ -74,6 +77,7 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
         setState(() {
           _currentUserId = widget.patientId;
           _patientName = userData['full_name'] ?? "Patient";
+          _avatarUrl = userData['avatar_url'];
           _isPatient =
               (userData['role']?.toString().toLowerCase() ?? '') == 'patient';
           _isLoading = false;
@@ -171,14 +175,28 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen>
         backgroundColor: AppColors.cardBg(context),
         elevation: 0,
         automaticallyImplyLeading: true, // Set to true if you want a back button
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            const Text("Health Dashboard",
-                style: TextStyle(
-                    fontWeight: FontWeight.w900, fontSize: 22, color: Color(0xFF1E293B))),
-            Text("Patient: $_patientName",
-                style: TextStyle(fontSize: 12, color: const Color(0xFF64748B))),
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PatientSettings())),
+              child: SafeAvatar(
+                url: _avatarUrl,
+                radius: 20,
+                fallbackIcon: Icons.person_outline,
+                backgroundColor: const Color(0xFFE0E7FF),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Health Dashboard",
+                    style: TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF1E293B))),
+                Text("Patient: $_patientName",
+                    style: TextStyle(fontSize: 12, color: const Color(0xFF64748B))),
+              ],
+            ),
           ],
         ),
         actions: [

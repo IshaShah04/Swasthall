@@ -368,6 +368,25 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
                 color: AppColors.cardBg(context).withValues(alpha: 0.8), fontSize: 12),
           ),
           const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final time = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay.now(),
+              );
+              if (time != null && mounted) {
+                setState(() => _selectedTime = time.format(context));
+              }
+            },
+            icon: const Icon(Icons.access_time_rounded, color: Colors.white),
+            label: const Text('Pick Custom Time', style: TextStyle(color: Colors.white)),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 48),
+              side: const BorderSide(color: Colors.white54),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          const SizedBox(height: 20),
           allPacked
               ? _buildPackedIndicator()
               : _buildTimeWrap(isCommonSection: true),
@@ -426,6 +445,11 @@ class _LabAppointmentScreenState extends State<LabAppointmentScreen> {
       children: _dynamicTimeSlots.map((time) {
         bool isFull = _isSlotFull(time);
         bool isSelected = _selectedTime == time;
+
+        // If the selected time is a custom time, we might still want to highlight the custom time if it matches a slot?
+        // Actually, if a custom time is picked, isSelected will just be true if they pick exactly a slot time.
+        // What if they picked a custom time that is NOT in the slots?
+        // We don't render it in the Wrap, but it is saved in _selectedTime and shown in the Confirm button.
 
         return GestureDetector(
           onTap: isFull ? null : () => setState(() => _selectedTime = time),
