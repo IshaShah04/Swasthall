@@ -87,8 +87,8 @@ Deno.serve(async (req) => {
       .eq('user_id', userId)
 
     if (updateError) {
-      console.error('Update row error', updateError)
-      return json({ error: updateError.message }, 500)
+      console.error('[professional-review-alert]', updateError)
+      return json({ error: 'Internal server error' }, 500)
     }
 
     return json({ ok: true, resendId: data?.id ?? null })

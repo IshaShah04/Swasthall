@@ -21,6 +21,7 @@ class _NurseSettingState extends State<NurseSetting> {
 
   Map<String, dynamic>? _mergedUserData;
   bool _isUploading = false;
+  String? _hospitalId;
 
   Future<User?> _waitForUser() async {
     for (int i = 0; i < 20; i++) {
@@ -58,6 +59,15 @@ class _NurseSettingState extends State<NurseSetting> {
       final user = await _waitForUser();
       if (user == null) return;
 
+      try {
+        final hospitalIdResult = await supabase.rpc('get_my_hospital_id');
+        if (mounted) {
+          setState(() { _hospitalId = hospitalIdResult as String?; });
+        }
+      } catch (e) {
+        debugPrint("Error fetching hospital ID: $e");
+      }
+
       final data = await supabase
           .from('nurse_staff_unified')
           .select()
@@ -84,7 +94,15 @@ class _NurseSettingState extends State<NurseSetting> {
   setState(() => _isUploading = true);
 
   try {
+    const maxBytes = 5 * 1024 * 1024;
     final bytes = await image.readAsBytes();
+    if (bytes.length > maxBytes) {
+      throw Exception('Image too large. Maximum size is 5MB.');
+    }
+    final ext = image.path.split('.').last.toLowerCase();
+    if (!['jpg','jpeg','png','webp','gif'].contains(ext)) {
+      throw Exception('Invalid file type. Only JPEG, PNG, WebP and GIF allowed.');
+    }
     final userId = supabase.auth.currentUser!.id;
 
     // Must match SQL policy: {user_id}/avatar.jpg
@@ -277,13 +295,15 @@ class _NurseSettingState extends State<NurseSetting> {
         endTime.minute,
       );
 
-      await supabase.from('availability_slots').insert({
-        'provider_id': targetDocId,
-        'date': DateFormat('yyyy-MM-dd').format(selectedDate),
-        'start_time': fullStart.toIso8601String(),
-        'end_time': fullEnd.toIso8601String(),
-        'slot_type': type,
-        'hourly_cap': type == 'online' ? hourlyCap : null,
+      await supabase.rpc('manage_availability_slot', params: {
+        'p_action': 'insert',
+        'p_provider_id': targetDocId,
+        'p_hospital_id': _hospitalId,
+        'p_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+        'p_start_time': fullStart.toIso8601String(),
+        'p_end_time': fullEnd.toIso8601String(),
+        'p_slot_type': type,
+        'p_hourly_cap': type == 'online' ? hourlyCap : null,
       });
 
       if (mounted) {
@@ -475,7 +495,10 @@ class _NurseSettingState extends State<NurseSetting> {
       );
 
   Future<void> _deleteSlot(String id) async {
-    await supabase.from('availability_slots').delete().eq('id', id);
+    await supabase.rpc('manage_availability_slot', params: {
+      'p_action': 'delete_by_id',
+      'p_slot_id': id,
+    });
     if (mounted) setState(() {});
   }
 
@@ -490,7 +513,10 @@ class _NurseSettingState extends State<NurseSetting> {
           TextButton(onPressed: () => navigator.pop(), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () async {
-              await supabase.from('availability_slots').delete().eq('provider_id', docId);
+              await supabase.rpc('manage_availability_slot', params: {
+                'p_action': 'delete_by_provider',
+                'p_provider_id': docId,
+              });
               if (mounted) {
                 navigator.pop();
               }
@@ -534,10 +560,11 @@ class _NurseSettingState extends State<NurseSetting> {
                   return;
                 }
 
-                await supabase
-                    .from('staff')
-                    .update({staffColumn: controller.text})
-                    .eq('email', user.email!.trim().toLowerCase());
+                await supabase.rpc('update_staff_field', params: {
+                  'p_staff_id': user.id,
+                  'p_column': staffColumn,
+                  'p_value': controller.text,
+                });
 
                 await _syncData();
                 widget.onRefresh();

@@ -43,12 +43,10 @@ class LoginNotificationService {
 
       // 1. Store login event in Supabase (non-blocking)
       unawaited(
-        _supabase.from('user_login_events').insert({
-          'user_id':      user.id,
-          'device_name':  deviceInfo['name'],
-          'platform':     deviceInfo['platform'],
-          'location':     location,
-          'logged_in_at': DateTime.now().toIso8601String(),
+        _supabase.rpc('record_login_event', params: {
+          'p_device_name': deviceInfo['name'],
+          'p_platform': deviceInfo['platform'],
+          'p_location': location,
         }).then((_) {
           debugPrint('[LoginNotif] login event stored');
         }).catchError((Object e) {

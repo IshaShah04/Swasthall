@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.8.1
   cupertino_icons: ^1.0.8
   
   # PDF & Reporting
@@ -82,6 +84,8 @@ dependencies:
   flutter_inappwebview: ^6.1.5
   qr_flutter: ^4.1.0
   pointycastle: ^3.9.1
+  lucide_icons_flutter: ^3.1.14+2
+  smooth_page_indicator: ^2.0.1
 
 dev_dependencies:
   flutter_test:
@@ -114,6 +118,7 @@ flutter_native_splash:
 flutter:
   uses-material-design: true
   assets:
+    - assets/images/
     - assets/data/nepal_medicines.json
     - assets/data/nepal_medicines_ne.json
     - assets/data/nepal_medicines_hi.json

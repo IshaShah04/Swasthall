@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { checkRateLimit } from '../_shared/rateLimit.ts'
+import { createLogger, getRequestId, startTimer } from '../_shared/logger.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -180,12 +181,15 @@ Deno.serve(async (req: Request) => {
 
     const syncResult = await syncPaymentTransaction(supabaseAdmin, user.id, responseProductId, responseRefId, responseAmount, verified, first)
     if (!syncResult.ok) {
+      logger.info('Request completed', { duration_ms: elapsed() });
       return json({ verified: false, status, merchant_txn_id: responseProductId, transaction_uuid: responseProductId, transaction_code: responseRefId, total_amount: responseAmount, product_code: merchantId, error: syncResult.error ?? 'Payment sync failed.' }, 400)
     }
 
+    logger.info('Request completed', { duration_ms: elapsed() });
     return json({ verified, status, merchant_txn_id: responseProductId, transaction_uuid: responseProductId, transaction_code: responseRefId, total_amount: responseAmount, product_code: merchantId, checks: { isComplete, productMatches, amountMatches }, error: verified ? null : 'Payment could not be verified as complete.' }, verified ? 200 : 400)
   } catch (e) {
-    console.error('esewa-verify-sdk error:', e)
+    logger.error('Unhandled error', e)
+    logger.info('Request completed', { duration_ms: elapsed() });
     return json({ verified: false, status: 'UNKNOWN', merchant_txn_id: '', transaction_uuid: '', transaction_code: '', total_amount: '0', error: 'Internal server error' }, 500)
   }
 })

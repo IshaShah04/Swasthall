@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { requireString, requireUUID, handleValidationError } from '../_shared/validate.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -126,11 +127,17 @@ serve(async (req) => {
     const rl = await checkRateLimit(admin, user.id, "zego-token", 30);
     if (!rl.allowed) return json({ error: "Rate limit exceeded" }, 429);
 
-    const { room_id, user_id, expire_seconds = 1800 } = await req.json().catch(() => ({}));
-    const roomId = String(room_id ?? "").trim();
-    const zegoUserId = String(user_id ?? "").trim();
-
-    if (!roomId || !zegoUserId) return json({ error: "room_id and user_id required" }, 400);
+    let roomId: string;
+    let zegoUserId: string;
+    let expire_seconds: number;
+    try {
+      const body = await req.json().catch(() => ({}));
+      roomId = requireString(body.room_id, 'room_id');
+      zegoUserId = requireString(body.user_id, 'user_id');
+      expire_seconds = body.expire_seconds ?? 1800;
+    } catch (err) {
+      return handleValidationError(err);
+    }
 
     const { data: profile, error: profileError } = await admin
       .from("profiles")

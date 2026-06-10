@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { checkRateLimit } from '../_shared/rateLimit.ts'
+import { requireString, requirePositiveNumber, handleValidationError } from '../_shared/validate.ts';
+import { createLogger, getRequestId, startTimer } from '../_shared/logger.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -58,6 +60,10 @@ function mapStatus(status: string): 'pending' | 'complete' | 'failed' | 'cancell
 }
 
 Deno.serve(async (req: Request) => {
+  const requestId = getRequestId(req);
+  const logger = createLogger('khalti-verify', requestId);
+  const elapsed = startTimer();
+  logger.info('Request received', { method: req.method });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
@@ -70,11 +76,15 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Too many verification requests. Please slow down.' }, 429)
     }
 
-    const body = await req.json().catch(() => ({})) as Record<string, unknown>
-    const pidx = String(body.pidx ?? '').trim()
-    const amountPaisa = Number(body.amount_paisa ?? 0)
-
-    if (!pidx) return json({ error: 'pidx is required' }, 400)
+    let pidx: string;
+    let amountPaisa: number;
+    try {
+      const body = await req.json().catch(() => ({}));
+      pidx = requireString(body.pidx, 'pidx');
+      amountPaisa = body.amount_paisa ? requirePositiveNumber(body.amount_paisa, 'amount_paisa') : 0;
+    } catch (err) {
+      return handleValidationError(err);
+    }
 
     const secretKey = Deno.env.get('KHALTI_SECRET_KEY')?.trim() ?? ''
     const envMode = (Deno.env.get('KHALTI_ENVIRONMENT') ?? 'test').trim().toLowerCase()
@@ -136,7 +146,9 @@ Deno.serve(async (req: Request) => {
       .eq('user_id', user.id)
 
     if (updateError) {
-      return json({ error: updateError.message }, 500)
+      logger.error('Unhandled error', updateError)
+      logger.info('Request completed', { duration_ms: elapsed() });
+      return json({ error: 'Internal server error' }, 500)
     }
 
     return json({
@@ -153,6 +165,8 @@ Deno.serve(async (req: Request) => {
       raw: parsed,
     }, verified ? 200 : 400)
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500)
+    logger.error('Unhandled error', e)
+    logger.info('Request completed', { duration_ms: elapsed() });
+    return json({ error: 'Internal server error' }, 500)
   }
 })

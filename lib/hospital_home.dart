@@ -524,7 +524,7 @@ class _HospitalHomeScreenState extends State<HospitalHomeScreen> {
                     lineBarsData: [
                       LineChartBarData(
                         spots: spots,
-                        isCurved: true,
+                        isCurved: false,
                         barWidth: 3,
                         color: brandBlue,
                         belowBarData: BarAreaData(

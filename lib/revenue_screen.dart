@@ -569,7 +569,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
               .toList();
           return LineChartBarData(
             spots: shifted,
-            isCurved: true,
+            isCurved: false,
             color: e.value,
             barWidth: 2.5,
             dotData: const FlDotData(show: false),
@@ -589,7 +589,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
         lineBarsData: [
           LineChartBarData(
             spots: spots,
-            isCurved: true,
+            isCurved: false,
             color: color,
             barWidth: 3,
             belowBarData: BarAreaData(

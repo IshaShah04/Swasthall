@@ -113,13 +113,12 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
 
   Future<void> _sendEmergencyRequest(String label) async {
     try {
-      await supabase.from('consultation_requests').insert({
-        'patient_id': widget.patientId,
-        'hospital_id': selectedHospital?['id'],
-        'request_type': 'EMERGENCY',
-        'target_name': label,
-        'status': 'pending',
-        'created_at': DateTime.now().toIso8601String(),
+      await supabase.rpc('insert_consultation_request', params: {
+        'p_patient_id': widget.patientId,
+        'p_hospital_id': selectedHospital?['id'],
+        'p_request_type': 'EMERGENCY',
+        'p_target_name': label,
+        'p_status': 'pending',
       });
       _showSnackBar("Emergency Alert sent for $label!");
     } catch (e) {

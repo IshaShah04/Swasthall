@@ -82,10 +82,10 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   Future<void> _logVitals(String type, Map<String, dynamic> data) async {
     if (data.values.any((v) => v.toString().isEmpty)) return;
     try {
-      await _supabaseClient.from('patient_vitals').insert({
-        'patient_id': widget.patientId,
-        'type': type,
-        'reading': data,
+      await _supabaseClient.rpc('insert_patient_vital', params: {
+        'p_patient_id': widget.patientId,
+        'p_type': type,
+        'p_reading': data,
       });
 
       if (!mounted) return;
@@ -558,7 +558,7 @@ class _MedicalVaultTabState extends State<MedicalVaultTab> {
   LineChartBarData _lineData(List<FlSpot> spots, Color color) {
     return LineChartBarData(
       spots: spots,
-      isCurved: true,
+      isCurved: false,
       color: color,
       barWidth: 2.5,
       // Gradient fill beneath the line — makes it obvious which area is which

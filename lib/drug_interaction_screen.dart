@@ -864,22 +864,16 @@ class _DrugInteractionScreenState extends State<DrugInteractionScreen>
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      await _supabase.from('prescription_scans').insert({
-        'patient_id': user.id,
-        'medicines': drugs
-            .map((d) => {'name': d})
-            .toList(),
-        'interactions': results
-            .map((r) => {
-                  'drug_a': r.drugA,
-                  'drug_b': r.drugB,
-                  'severity': r.severity,
-                  'effect': r.effect,
-                  'action': r.action,
-                })
-            .toList(),
-        'notes':
-            '${results.length} interaction(s) found for ${drugs.length} drugs',
+      await _supabase.rpc('insert_prescription_scan', params: {
+        'p_medicines': drugs.map((d) => {'name': d}).toList(),
+        'p_interactions': results.map((r) => {
+          'drug_a': r.drugA,
+          'drug_b': r.drugB,
+          'severity': r.severity,
+          'effect': r.effect,
+          'action': r.action,
+        }).toList(),
+        'p_notes': '${results.length} interaction(s) found for ${drugs.length} drugs',
       });
     } catch (e) {
       debugPrint('Save session error: $e');

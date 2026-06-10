@@ -1,0 +1,103 @@
+﻿<USER_REQUEST>
+Implement S2 role hardening and multi-hospital availability system.
+
+PROJECT PATH: C:\Users\rauna\health_department
+
+STEP 1 â€” Read these files fully before writing anything:
+- lib/email_signup_otp_screen.dart
+- lib/registration_completion_screen.dart
+- lib/consultation_search.dart (the provider search screen)
+- lib/doctor_detail.dart (lines 340-360, the stream query)
+- supabase/migrations/20260607121859_auth_registration_rpcs.sql (the existing upsert_user_profile RPC)
+- supabase/migrations/20260607140800_hospital_admin_rpcs.sql (manage_availability_slot RPC)
+
+Report back:
+- What columns does the registration completion screen send to upsert_user_profile?
+- What parameters does consultation_search.dart pass to its search RPC?
+- What does doctor_detail.dart stream from staff_queues?
+
+Do NOT make any changes yet.
+
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+STEP 2 â€” Create migration file:
+Path: supabase/migrations/<timestamp>_s2_role_hardening.sql
+
+SQL to implement in this exact order:
+
+-- PART A: Schema changes
+
+-- A1: Add verification_status to profiles
+ALTER TABLE profiles 
+ADD COLUMN IF NOT EXISTS verification_status TEXT 
+  NOT NULL DEFAULT 'verified'
+  CHECK (verification_status IN ('pending_verification', 'verified', 'rejected'));
+
+-- A2: Set all existing provider roles to verified (they were manually created)
+UPDATE profiles 
+SET verification_status = 'pending_verification'
+WHERE role IN ('doctor', 'nurse', 'pharmacist', 'technician')
+AND is_verified = false;
+
+UPDATE profiles
+SET verification_status = 'verified'
+WHERE role IN ('doctor', 'nurse', 'pharmacist', 'technician', 'hospital')
+AND is_verified = true;
+
+-- A3: Add hospital_id to availability_slots
+ALTER TABLE availability_slots
+ADD COLUMN IF NOT EXISTS hospital_id UUID REFERENCES hospitals(id) ON DELETE SET NULL;
+
+-- A4: Add role column to staff_pairings (to support multi-role staff)
+ALTER TABLE staff_pairings
+ADD COLUMN IF NOT EXISTS role TEXT;
+
+-- PART B: 
+<truncated 6534 bytes>
+h.full_name AS hospital_name,
+    a.date AS available_date,
+    COUNT(a.id)::INT AS slot_count,
+    s.first_consultation_fee,
+    s.followup_consultation_fee,
+    COALESCE(
+      (SELECT AVG(r.rating) FROM call_reviews r WHERE r.doctor_id = p.id),
+      0
+    ) AS rating
+  FROM profiles p
+  JOIN availability_slots a ON a.provider_id = p.id
+  JOIN hospitals h ON h.id = a.hospital_id
+  LEFT JOIN staff s ON s.id = p.id
+  WHERE p.verification_status = 'verified'
+  AND p.is_verified = true
+  AND (p_hospital_id IS NULL OR a.hospital_id = p_hospital_id)
+  AND (p_date IS NULL OR a.date = p_date)
+  AND (p_role IS NULL OR p.role = p_role)
+  AND (p_search_query IS NULL OR 
+       p.full_name ILIKE '%' || p_search_query || '%' OR
+       s.speciality ILIKE '%' || p_search_query || '%')
+  GROUP BY p.id, p.full_name, p.role, s.speciality, p.avatar_url,
+           h.id, h.full_name, a.date, s.first_consultation_fee,
+           s.followup_consultation_fee
+  ORDER BY a.date ASC, rating DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION upsert_user_profile TO authenticated;
+GRANT EXECUTE ON FUNCTION manage_availability_slot TO authenticated;
+GRANT EXECUTE ON FUNCTION link_staff_to_hospital TO authenticated;
+GRANT EXECUTE ON FUNCTION search_providers TO authenticated;
+GRANT EXECUTE ON FUNCTION search_providers TO anon;
+
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+STEP 3 â€” Show me the complete SQL file after writing it.
+Do NOT apply yet. Wait for confirmation.
+
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+STEP 4 â€” Also report:
+- Does consultation_search.dart currently use an RPC or direct from() for search?
+- What parameters does it pass?
+- Does nurse_setting/pharmacist_setting/technician_setting pass hospital_id 
+  when creating availability slots? If not, what do they pass?
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-07T17:57:16+05:45.
+</ADDITIONAL_METADATA>

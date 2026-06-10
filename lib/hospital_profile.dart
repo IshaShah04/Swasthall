@@ -33,7 +33,6 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
   XFile? _pickedXFile;
   bool _isLoading = false;
   bool _isInitialLoad = true;
-  String _accountRole = 'hospital';
 
   void _log(String message) {
     if (kDebugMode) debugPrint(message);
@@ -92,34 +91,31 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
     }
 
     try {
-      final results = await Future.wait<dynamic>([
-        supabase.from('profiles').select().eq('id', user.id).maybeSingle(),
-        supabase.from('staff').select().eq('hospital_id', user.id),
-        supabase
-            .from('staff_assignments_view')
-            .select()
-            .eq('hospital_id', user.id),
-      ]);
+      final dashboard = await supabase.rpc('get_hospital_dashboard');
+      final staffAssignments = await supabase
+          .from('staff_assignments_view')
+          .select()
+          .eq('hospital_id', user.id);
 
-      _log("LOAD: profile fetched = ${results[0] != null}");
-      _log("LOAD: staff rows fetched = ${(results[1] as List).length}");
-      _log("LOAD: pairing view rows fetched = ${(results[2] as List).length}");
+      _log("LOAD: profile fetched = ${dashboard['profile'] != null}");
+      _log("LOAD: staff rows fetched = ${(dashboard['staff'] as List).length}");
+      _log("LOAD: pairing view rows fetched = ${(staffAssignments as List).length}");
 
       if (mounted) {
         setState(() {
-          final profileData = results[0] as Map<String, dynamic>?;
-          final existingRole = (profileData?['role'] ?? '').toString().trim().toLowerCase();
-          _accountRole = existingRole == 'clinic' ? 'clinic' : 'hospital';
+          final profileData = dashboard['profile'] as Map<String, dynamic>?;
+          final staffList = dashboard['staff'] as List;
+
           if (profileData != null) {
             _nameController.text = profileData['full_name'] ?? '';
             _locationController.text = profileData['location'] ?? '';
             _descController.text = profileData['description'] ?? '';
             _avatarUrl = profileData['avatar_url'];
           }
-          _staffList = (results[1] as List)
+          _staffList = staffList
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
-          _pairingList = (results[2] as List)
+          _pairingList = (staffAssignments as List)
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
           _isInitialLoad = false;
@@ -261,13 +257,11 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
         }
       }
 
-      await supabase.from('profiles').upsert({
-        'id': user.id,
-        'full_name': _nameController.text.trim(),
-        'location': _locationController.text.trim(),
-        'description': _descController.text.trim(),
-        'avatar_url': finalAvatarUrl,
-        'role': _accountRole,
+      await supabase.rpc('update_hospital_profile', params: {
+        'p_full_name': _nameController.text.trim(),
+        'p_location': _locationController.text.trim(),
+        'p_description': _descController.text.trim(),
+        'p_avatar_url': finalAvatarUrl,
       });
 
       _log("SAVE: profile upsert OK");
@@ -341,12 +335,20 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
       _log("SAVE: unregistered staff email count = ${notRegisteredEmails.length}");
 
       if (staffToUpsert.isNotEmpty) {
-        final upserted = await supabase
-            .from('staff')
-            .upsert(staffToUpsert, onConflict: 'hospital_id,email')
-            .select('id, hospital_id, email');
-
-        _log("SAVE: staff upsert returned rows = ${(upserted as List).length}");
+        for (final s in staffToUpsert) {
+          await supabase.rpc('upsert_staff_member', params: {
+            'p_id': s['id'],
+            'p_hospital_id': s['hospital_id'],
+            'p_email': s['email'],
+            'p_role': s['role'],
+            'p_name': s['name'],
+            'p_speciality': s['speciality'],
+            'p_assigned_lab': s['assigned_lab'],
+            'p_payout': s['payout'],
+            'p_first_consultation_fee': s['first_consultation_fee'],
+            'p_followup_consultation_fee': s['followup_consultation_fee'],
+          });
+        }
         _log("SAVE: staff upsert OK");
       } else {
         _log("SAVE: no staff insert/update attempted");
@@ -364,8 +366,7 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
         );
       }
 
-      final currentStaff =
-          await supabase.from('staff').select('id, email').eq('hospital_id', user.id);
+      final currentStaff = await supabase.rpc('get_my_staff_emails');
 
       _log("SAVE: current staff count after upsert = ${(currentStaff as List).length}");
 
@@ -374,7 +375,7 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
           s['email'].toString().toLowerCase(): s['id'].toString()
       };
 
-      await supabase.from('staff_pairings').delete().eq('hospital_id', user.id);
+      // Deleted by manage_staff_pairings RPC
 
       final insertPairs = _pairingList.where((p) {
         final dEmail = p['doctor_email']?.toString().toLowerCase().trim();
@@ -391,10 +392,11 @@ class _HospitalProfileScreenState extends State<HospitalProfileScreen> {
       _log("SAVE: staff pairing rows ready = ${insertPairs.length}");
       _log("SAVE: staff pairing payload prepared");
 
-      if (insertPairs.isNotEmpty) {
-        await supabase.from('staff_pairings').insert(insertPairs);
-        _log("SAVE: staff pairings insert OK");
-      }
+      await supabase.rpc('manage_staff_pairings', params: {
+        'p_hospital_id': user.id,
+        'p_pairs': insertPairs,
+      });
+      _log("SAVE: staff pairings sync OK");
 
       bool syncFailed = false;
       try {

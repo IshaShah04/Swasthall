@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme_notifier.dart';
 import '../theme_colors.dart';
 
-/// Appearance slider: Dark ← System → Light.
-/// Drop this anywhere — it reads and writes [themeNotifier] directly.
 class AppearanceToggle extends StatefulWidget {
   const AppearanceToggle({super.key});
 
@@ -12,23 +10,67 @@ class AppearanceToggle extends StatefulWidget {
 }
 
 class _AppearanceToggleState extends State<AppearanceToggle> {
-  double _brightnessValue = 0.5; // default to system
+  late ThemeMode _currentMode;
 
   @override
   void initState() {
     super.initState();
-    _brightnessValue = switch (themeNotifier.value) {
-      ThemeMode.dark   => 0.0,
-      ThemeMode.system => 0.5,
-      ThemeMode.light  => 1.0,
-    };
+    _currentMode = themeNotifier.value;
+    themeNotifier.addListener(_onThemeChanged);
   }
 
-  String get _brightnessLabel => switch (_brightnessValue) {
-    0.0 => 'Dark',
-    1.0 => 'Light',
-    _   => 'System',
-  };
+  @override
+  void dispose() {
+    themeNotifier.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) {
+      setState(() {
+        _currentMode = themeNotifier.value;
+      });
+    }
+  }
+
+  Widget _buildOption(ThemeMode mode, String label, IconData icon) {
+    final isSelected = _currentMode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setThemeMode(mode);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF6366F1).withValues(alpha: 0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF6366F1) : AppColors.border(context),
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? const Color(0xFF6366F1) : AppColors.textMuted(context),
+                size: 20,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? const Color(0xFF6366F1) : AppColors.textMuted(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,8 +86,7 @@ class _AppearanceToggleState extends State<AppearanceToggle> {
         children: [
           Row(
             children: [
-              Icon(Icons.brightness_6_outlined,
-                  color: const Color(0xFF6366F1), size: 20),
+              const Icon(Icons.brightness_6_outlined, color: Color(0xFF6366F1), size: 20),
               const SizedBox(width: 10),
               Text(
                 'Appearance',
@@ -57,69 +98,15 @@ class _AppearanceToggleState extends State<AppearanceToggle> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 6,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
-              activeTrackColor: const Color(0xFF6366F1),
-              inactiveTrackColor: AppColors.surfaceBg(context),
-              thumbColor: const Color(0xFF6366F1),
-              overlayColor: const Color(0xFF6366F1).withValues(alpha: 0.15),
-            ),
-            child: Slider(
-              value: _brightnessValue,
-              min: 0.0,
-              max: 1.0,
-              divisions: 2,
-              label: _brightnessLabel,
-              onChanged: (value) {
-                setState(() => _brightnessValue = value);
-                if (value == 0.0) {
-                  setThemeMode(ThemeMode.dark);
-                } else if (value == 1.0) {
-                  setThemeMode(ThemeMode.light);
-                } else {
-                  setThemeMode(ThemeMode.system);
-                }
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Dark',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: _brightnessValue == 0.0
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: _brightnessValue == 0.0
-                            ? const Color(0xFF6366F1)
-                            : AppColors.textMuted(context))),
-                Text('System',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: _brightnessValue == 0.5
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: _brightnessValue == 0.5
-                            ? const Color(0xFF6366F1)
-                            : AppColors.textMuted(context))),
-                Text('Light',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: _brightnessValue == 1.0
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: _brightnessValue == 1.0
-                            ? const Color(0xFF6366F1)
-                            : AppColors.textMuted(context))),
-              ],
-            ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _buildOption(ThemeMode.light, 'Light', Icons.light_mode_outlined),
+              const SizedBox(width: 8),
+              _buildOption(ThemeMode.system, 'System', Icons.brightness_auto_outlined),
+              const SizedBox(width: 8),
+              _buildOption(ThemeMode.dark, 'Dark', Icons.dark_mode_outlined),
+            ],
           ),
         ],
       ),

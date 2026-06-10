@@ -566,6 +566,16 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
         "$patientId/${DateTime.now().millisecondsSinceEpoch}_$safeName";
 
     try {
+      const maxBytes = 20 * 1024 * 1024;
+      int length = kIsWeb ? (fileData as Uint8List).length : await (fileData as File).length();
+      if (length > maxBytes) {
+        throw Exception('File too large. Maximum size is 20MB.');
+      }
+      final ext = name.split('.').last.toLowerCase();
+      if (!['pdf','jpg','jpeg','png','webp','heic','doc','docx'].contains(ext)) {
+        throw Exception('Invalid file type. Allowed: PDF, images, Word documents.');
+      }
+
       if (kIsWeb) {
         await supabase.storage
             .from(_medicalBucket)
@@ -576,13 +586,11 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
             .upload(path, fileData as File);
       }
 
-      await supabase.from('medical_records').insert({
-        'patient_id': patientId,
-        'provider_id': supabase.auth.currentUser?.id,
-        'file_url': path,
-        'file_name': name,
-        'provider_role': providerRole,
-        'created_at': DateTime.now().toIso8601String(),
+      await supabase.rpc('insert_medical_record', params: {
+        'p_patient_id': patientId,
+        'p_file_url': path,
+        'p_file_name': name,
+        'p_provider_role': providerRole,
       });
 
       if (!context.mounted) return;
@@ -901,7 +909,7 @@ class _PatientHistorySheetState extends State<_PatientHistorySheet> {
   LineChartBarData _lineData(List<FlSpot> spots, Color color) {
     return LineChartBarData(
       spots: spots,
-      isCurved: true,
+      isCurved: false,
       color: color,
       barWidth: 2.5,
       belowBarData: BarAreaData(

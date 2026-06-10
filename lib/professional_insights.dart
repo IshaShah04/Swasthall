@@ -418,7 +418,7 @@ class _ProfessionalInsightsScreenState
                       lineBarsData: [
                         LineChartBarData(
                           spots: _chartSpots,
-                          isCurved: true,
+                          isCurved: false,
                           color: _indigo,
                           barWidth: 4,
                           dotData: const FlDotData(show: false),

@@ -140,48 +140,34 @@ class _EmailSignupOtpScreenState extends State<EmailSignupOtpScreen> {
       }
     }
 
-    await _supabase.from('profiles').upsert(
-      {
-        'id': user.id,
-        'email': widget.data.email,
-        'full_name': widget.data.fullName,
-        'role': widget.data.selectedRole,
-        'phone_number': widget.data.selectedRole == 'patient' ? widget.data.phoneNumber : null,
-        'license_number': widget.data.isProfessional ? widget.data.licenseNumber : null,
-        'avatar_url': avatarUrl,
-        'is_verified': (widget.data.selectedRole == 'patient' || const ['hospital', 'clinic'].contains(widget.data.selectedRole)),
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      onConflict: 'id',
-    );
+    await _supabase.rpc('upsert_user_profile', params: {
+      'p_email': widget.data.email,
+      'p_full_name': widget.data.fullName,
+      'p_role': widget.data.selectedRole,
+      'p_phone_number': widget.data.selectedRole == 'patient' ? widget.data.phoneNumber : null,
+      'p_license_number': widget.data.isProfessional ? widget.data.licenseNumber : null,
+      'p_avatar_url': avatarUrl,
+      'p_is_verified': (widget.data.selectedRole == 'patient' || const ['hospital', 'clinic'].contains(widget.data.selectedRole)),
+    });
 
     if (widget.data.isProfessional && docUrls.isNotEmpty) {
-      await _supabase.from('provider_documents').upsert(
-        docUrls.entries
-            .map((e) => {
-                  'provider_id': user.id,
-                  'document_type': e.key,
-                  'document_url': e.value,
-                  'verification_status': 'pending',
-                  'uploaded_at': DateTime.now().toIso8601String(),
-                })
-            .toList(),
-        onConflict: 'provider_id,document_type',
-      );
+      for (final e in docUrls.entries) {
+        await _supabase.rpc('upsert_provider_document', params: {
+          'p_document_type': e.key,
+          'p_document_url': e.value,
+          'p_verification_status': 'pending',
+        });
+      }
     }
 
-    await _supabase.from('user_consents').upsert(
-      {
-        'user_id': user.id,
-        'terms_version': widget.data.termsVersion,
-        'terms_accepted_at': DateTime.now().toIso8601String(),
-        'privacy_version': widget.data.privacyVersion,
-        'privacy_accepted_at': DateTime.now().toIso8601String(),
-        'telemedicine_version': widget.data.telemedicineVersion,
-        'telemedicine_accepted_at': DateTime.now().toIso8601String(),
-      },
-      onConflict: 'user_id',
-    );
+    await _supabase.rpc('upsert_user_consent', params: {
+      'p_terms_version': widget.data.termsVersion,
+      'p_terms_accepted_at': DateTime.now().toIso8601String(),
+      'p_privacy_version': widget.data.privacyVersion,
+      'p_privacy_accepted_at': DateTime.now().toIso8601String(),
+      'p_telemedicine_version': widget.data.telemedicineVersion,
+      'p_telemedicine_accepted_at': DateTime.now().toIso8601String(),
+    });
   }
 
   Future<void> _verify() async {

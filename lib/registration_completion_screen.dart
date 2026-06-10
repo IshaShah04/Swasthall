@@ -106,11 +106,8 @@ class _RegistrationCompletionScreenState
     if (user == null) return;
 
     try {
-      final profile = await _supabase
-          .from('profiles')
-          .select('role, full_name, phone_number, license_number')
-          .eq('id', user.id)
-          .maybeSingle();
+      final profileRes = await _supabase.rpc('get_my_profile');
+      final profile = profileRes.isNotEmpty ? profileRes.first : null;
       if (!mounted) return;
       if (profile != null) {
         setState(() {
@@ -135,11 +132,8 @@ class _RegistrationCompletionScreenState
     } catch (_) {}
 
     try {
-      final consents = await _supabase
-          .from('user_consents')
-          .select('user_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
+      final consentsRes = await _supabase.rpc('get_my_consents');
+      final consents = consentsRes.isNotEmpty ? consentsRes.first : null;
       if (!mounted) return;
       if (consents != null) {
         setState(() {
@@ -151,10 +145,7 @@ class _RegistrationCompletionScreenState
     } catch (_) {}
 
     try {
-      final dynamic rows = await _supabase
-          .from('provider_documents')
-          .select('document_type, document_url, verification_status')
-          .eq('provider_id', user.id);
+      final dynamic rows = await _supabase.rpc('get_my_provider_documents');
       if (!mounted) return;
 
       final existingUrls = <String, String>{};
@@ -290,50 +281,33 @@ class _RegistrationCompletionScreenState
         }
       }
 
-      await _supabase.from('profiles').upsert(
-        {
-          'id': user.id,
-          'email': _emailCtrl.text.trim().toLowerCase(),
-          'full_name': _nameCtrl.text.trim(),
-          'role': _selectedRole,
-          'phone_number': _selectedRole == 'patient' ? _phoneCtrl.text.trim() : null,
-          'license_number': _isProfessional ? _licenseCtrl.text.trim() : null,
-          if (avatarUrl != null) 'avatar_url': avatarUrl,
-          'is_verified': (_selectedRole == 'patient' || kAdminRoles.contains(_selectedRole)),
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        onConflict: 'id',
-      );
+      await _supabase.rpc('upsert_user_profile', params: {
+        'p_email': _emailCtrl.text.trim().toLowerCase(),
+        'p_full_name': _nameCtrl.text.trim(),
+        'p_role': _selectedRole,
+        'p_phone_number': _selectedRole == 'patient' ? _phoneCtrl.text.trim() : null,
+        'p_license_number': _isProfessional ? _licenseCtrl.text.trim() : null,
+        'p_avatar_url': avatarUrl,
+      });
 
       if (_isProfessional && docUrls.isNotEmpty) {
-        final docRows = docUrls.entries.map((e) {
-          return {
-            'provider_id': user.id,
-            'document_type': e.key,
-            'document_url': e.value,
-            'verification_status': 'pending',
-            'uploaded_at': DateTime.now().toIso8601String(),
-          };
-        }).toList();
-
-        await _supabase.from('provider_documents').upsert(
-          docRows,
-          onConflict: 'provider_id,document_type',
-        );
+        for (final e in docUrls.entries) {
+          await _supabase.rpc('upsert_provider_document', params: {
+            'p_document_type': e.key,
+            'p_document_url': e.value,
+            'p_verification_status': 'pending',
+          });
+        }
       }
 
-      await _supabase.from('user_consents').upsert(
-        {
-          'user_id': user.id,
-          'terms_version': _termsVersion,
-          'terms_accepted_at': DateTime.now().toIso8601String(),
-          'privacy_version': _privacyVersion,
-          'privacy_accepted_at': DateTime.now().toIso8601String(),
-          'telemedicine_version': _telemedicineVersion,
-          'telemedicine_accepted_at': DateTime.now().toIso8601String(),
-        },
-        onConflict: 'user_id',
-      );
+      await _supabase.rpc('upsert_user_consent', params: {
+        'p_terms_version': _termsVersion,
+        'p_terms_accepted_at': DateTime.now().toIso8601String(),
+        'p_privacy_version': _privacyVersion,
+        'p_privacy_accepted_at': DateTime.now().toIso8601String(),
+        'p_telemedicine_version': _telemedicineVersion,
+        'p_telemedicine_accepted_at': DateTime.now().toIso8601String(),
+      });
 
       if (!mounted) return;
 

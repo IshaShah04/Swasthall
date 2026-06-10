@@ -253,7 +253,11 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
     if (patch.isEmpty) return;
 
     try {
-      await _supabase.from('bookings').update(patch).eq('id', bookingId);
+      await _supabase.rpc('update_booking_status', params: {
+        'p_booking_id': bookingId,
+        'p_status': patch['status'] ?? 'calling', // Safe fallback to pass RPC validation
+        'p_patch': patch,
+      });
     } catch (_) {
       // Non-blocking best effort patch for legacy bookings.
     }
@@ -276,8 +280,19 @@ class _QueueTabState extends State<QueueTab> with AutomaticKeepAliveClientMixin 
       final Map<String, dynamic> update = {'status': status.toLowerCase()};
       if (nurseSeen) update['nurse_seen'] = true;
       // Technician status changes go to lab_appointments, others to bookings
-      final String table = _isTechnician() ? 'lab_appointments' : 'bookings';
-      await _supabase.from(table).update(update).eq('id', id);
+      if (_isTechnician()) {
+        await _supabase.rpc('update_lab_appointment_status', params: {
+          'p_appointment_id': id,
+          'p_status': update['status'],
+          'p_patch': update,
+        });
+      } else {
+        await _supabase.rpc('update_booking_status', params: {
+          'p_booking_id': id,
+          'p_status': update['status'],
+          'p_patch': update,
+        });
+      }
       await _refreshQueue();
     } catch (e) {
       _showError("Action failed: $e");
