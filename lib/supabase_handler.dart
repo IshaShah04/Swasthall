@@ -207,6 +207,14 @@ class SupabaseHandler {
     required String fileName,
   }) async {
     try {
+      const maxBytes = 20 * 1024 * 1024;
+      if (fileBytes.length > maxBytes) {
+        throw Exception('File too large. Maximum size is 20MB.');
+      }
+      final ext = fileName.split('.').last.toLowerCase();
+      if (!['pdf','jpg','jpeg','png','webp','heic','doc','docx'].contains(ext)) {
+        throw Exception('Invalid file type. Allowed: PDF, images, Word documents.');
+      }
       final String extension =
           fileName.contains('.') ? '.${fileName.split('.').last}' : '';
       final String sanitizedName =
@@ -245,7 +253,15 @@ class SupabaseHandler {
     String path,
   ) async {
     try {
+      const maxBytes = 5 * 1024 * 1024;
       final Uint8List fileBytes = await xFile.readAsBytes();
+      if (fileBytes.length > maxBytes) {
+        throw Exception('Image too large. Maximum size is 5MB.');
+      }
+      final ext = xFile.path.split('.').last.toLowerCase();
+      if (!['jpg','jpeg','png','webp','gif'].contains(ext)) {
+        throw Exception('Invalid file type. Only JPEG, PNG, WebP and GIF allowed.');
+      }
       final String fileExt =
           xFile.name.contains('.') ? '.${xFile.name.split('.').last}' : '';
 
@@ -280,7 +296,9 @@ class SupabaseHandler {
     try {
       final String path = _extractPath(fileUrl, bucketName);
       await client.storage.from(bucketName).remove([path]);
-      await client.from('medical_records').delete().eq('id', recordId);
+      await client.rpc('delete_medical_record', params: {
+        'p_record_id': recordId,
+      });
     } catch (e) {
       debugPrint('Delete error: $e');
       rethrow;
@@ -360,14 +378,12 @@ class SupabaseHandler {
     String providerRole = 'Doctor',
   }) async {
     try {
-      await client.from('medical_records').insert({
-        'patient_id': patientId,
-        'provider_id': client.auth.currentUser?.id,
-        'appointment_id': appointmentId,
-        'file_url': fileUrl,
-        'file_name': fileName,
-        'provider_role': providerRole,
-        'created_at': DateTime.now().toIso8601String(),
+      await client.rpc('insert_medical_record', params: {
+        'p_patient_id': patientId,
+        'p_file_url': fileUrl,
+        'p_file_name': fileName,
+        'p_provider_role': providerRole,
+        'p_appointment_id': appointmentId,
       });
       return true;
     } catch (e) {

@@ -12,9 +12,9 @@ import 'emergency_screen.dart';
 import 'revenue_screen.dart';
 import 'patient_home.dart';
 import 'medical_history.dart';
-import 'study_hub.dart';
+// Study hub removed temporarily due to errors
 import 'lab_screen.dart';
-import 'consultation_screen.dart';
+import 'consult_screen.dart';
 import 'professional_lab.dart';
 import 'patient_records_screen.dart';
 import 'professional_insights.dart';
@@ -66,7 +66,8 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
   List<Widget> _getPages() {
     // BRAIN FIX: Use the session user ID directly to ensure it's not empty
     final String currentUserId = supabase.auth.currentSession?.user.id ??
-        supabase.auth.currentUser?.id ?? "";
+        supabase.auth.currentUser?.id ??
+        "";
 
     if (_cachedPages != null && _cachedUserId == currentUserId) {
       return _cachedPages!;
@@ -92,9 +93,9 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
     } else if (normalizedRole == 'patient') {
       _cachedPages = [
         const PatientHomeScreen(),
-        ConsultationScreen(patientId: currentUserId),
+        ConsultScreen(patientId: currentUserId),
         MedicalHistoryScreen(patientId: currentUserId),
-        const StudyHubScreen(),
+        const Scaffold(body: Center(child: Text("Study Hub (Under Construction)"))),
         const LabTestScreen(),
       ];
     } else {
@@ -180,7 +181,8 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
   List<BottomNavigationBarItem> _buildHospitalNavItems() {
     return const [
       BottomNavigationBarItem(
-          icon: Icon(Icons.dashboard_outlined, semanticLabel: 'Admin dashboard'),
+          icon:
+              Icon(Icons.dashboard_outlined, semanticLabel: 'Admin dashboard'),
           activeIcon: Icon(Icons.dashboard, semanticLabel: 'Admin dashboard'),
           label: "Admin"),
       BottomNavigationBarItem(
@@ -196,8 +198,10 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
           activeIcon: Icon(Icons.emergency, semanticLabel: 'Emergency'),
           label: "Emergency"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.account_balance_wallet_outlined, semanticLabel: 'Revenue'),
-          activeIcon: Icon(Icons.account_balance_wallet, semanticLabel: 'Revenue'),
+          icon: Icon(Icons.account_balance_wallet_outlined,
+              semanticLabel: 'Revenue'),
+          activeIcon:
+              Icon(Icons.account_balance_wallet, semanticLabel: 'Revenue'),
           label: "Revenue"),
     ];
   }
@@ -209,11 +213,14 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
           activeIcon: Icon(Icons.home, semanticLabel: 'Home'),
           label: "Home"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.video_chat_outlined, semanticLabel: 'Book consultation'),
-          activeIcon: Icon(Icons.video_chat, semanticLabel: 'Book consultation'),
+          icon: Icon(Icons.video_chat_outlined,
+              semanticLabel: 'Book consultation'),
+          activeIcon:
+              Icon(Icons.video_chat, semanticLabel: 'Book consultation'),
           label: "Consult"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.history_edu_outlined, semanticLabel: 'Medical records'),
+          icon: Icon(Icons.history_edu_outlined,
+              semanticLabel: 'Medical records'),
           activeIcon: Icon(Icons.history_edu, semanticLabel: 'Medical records'),
           label: "Records"),
       BottomNavigationBarItem(
@@ -242,12 +249,15 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
           activeIcon: Icon(Icons.groups, semanticLabel: 'Patient queue'),
           label: "Patients"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.health_and_safety_outlined, semanticLabel: 'Coverage'),
+          icon:
+              Icon(Icons.health_and_safety_outlined, semanticLabel: 'Coverage'),
           activeIcon: Icon(Icons.health_and_safety, semanticLabel: 'Coverage'),
           label: "Coverage"),
       BottomNavigationBarItem(
-          icon: Icon(Icons.analytics_outlined, semanticLabel: 'Professional insights'),
-          activeIcon: Icon(Icons.analytics, semanticLabel: 'Professional insights'),
+          icon: Icon(Icons.analytics_outlined,
+              semanticLabel: 'Professional insights'),
+          activeIcon:
+              Icon(Icons.analytics, semanticLabel: 'Professional insights'),
           label: "Insights"),
     ];
   }

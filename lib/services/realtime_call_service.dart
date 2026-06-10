@@ -36,15 +36,14 @@ class RealtimeCallService {
     String callType = 'video',
   }) async {
     try {
-      await _client.from('call_sessions').insert({
-        'caller_id': callerId,
-        'caller_name': callerName,
-        'callee_id': calleeId,
-        'receiver_id': calleeId,
-        'booking_id': bookingId,
-        'channel_name': callId,
-        'call_type': callType,
-        'status': 'ringing',
+      await _client.rpc('manage_call_session', params: {
+        'p_action': 'initiate',
+        'p_channel_name': callId,
+        'p_caller_id': callerId,
+        'p_caller_name': callerName,
+        'p_callee_id': calleeId,
+        'p_booking_id': bookingId,
+        'p_call_type': callType,
       });
       debugPrint('RealtimeCall: initiated channel=$callId → $calleeId');
 
@@ -77,7 +76,11 @@ class RealtimeCallService {
 
   Future<void> cancelCall(String callId) async {
     try {
-      await _client.from('call_sessions').update({'status': 'cancelled'}).eq('channel_name', callId);
+      await _client.rpc('manage_call_session', params: {
+        'p_action': 'update_status',
+        'p_channel_name': callId,
+        'p_status': 'cancelled',
+      });
     } catch (_) {}
   }
 
@@ -130,19 +133,31 @@ class RealtimeCallService {
 
   Future<void> acceptCall(String callId) async {
     try {
-      await _client.from('call_sessions').update({'status': 'accepted'}).eq('channel_name', callId);
+      await _client.rpc('manage_call_session', params: {
+        'p_action': 'update_status',
+        'p_channel_name': callId,
+        'p_status': 'accepted',
+      });
     } catch (_) {}
   }
 
   Future<void> declineCall(String callId) async {
     try {
-      await _client.from('call_sessions').update({'status': 'declined'}).eq('channel_name', callId);
+      await _client.rpc('manage_call_session', params: {
+        'p_action': 'update_status',
+        'p_channel_name': callId,
+        'p_status': 'declined',
+      });
     } catch (_) {}
   }
 
   Future<void> endCall(String callId) async {
     try {
-      await _client.from('call_sessions').update({'status': 'ended'}).eq('channel_name', callId);
+      await _client.rpc('manage_call_session', params: {
+        'p_action': 'update_status',
+        'p_channel_name': callId,
+        'p_status': 'ended',
+      });
     } catch (_) {}
   }
 
@@ -152,6 +167,7 @@ class RealtimeCallService {
     if (channel != null) {
       try {
         channel.unsubscribe();
+        Supabase.instance.client.removeChannel(channel);
       } catch (_) {}
     }
   }

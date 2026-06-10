@@ -22,13 +22,14 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'config/env_config.dart';
 import 'navigation_wrapper.dart';
 import 'utils/key_provider.dart';
-import 'zego_service.dart';
 import 'login_page.dart';
 import 'registration_page.dart';
 import 'registration_completion_screen.dart';
 import 'auth_onboarding_helper.dart';
 import 'services/voice_service.dart';
 import 'services/account_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'config/app_router.dart';
 import 'services/realtime_call_service.dart'; // BUG-21: use ONLY services/ path — delete lib/realtime_call_service.dart
 import 'services/app_cache.dart';
 import 'services/remote_config_service.dart'; // 🔧 OTA feature flags & force-update
@@ -41,6 +42,7 @@ import 'verification_pending_screen.dart';
 import 'reset_password_screen.dart';
 import 'theme_notifier.dart';
 import 'web_video_call_page.dart';
+import 'services/payment_reconciliation_service.dart';
 
 final ValueNotifier<IncomingInvite?> incomingInvite =
     ValueNotifier<IncomingInvite?>(null);
@@ -273,7 +275,7 @@ Future<void> main() async {
 
     unawaited(_preloadCommonData());
 
-    runApp(const HealthApp());
+    runApp(const ProviderScope(child: HealthApp()));
   }, _recordFatalError);
 }
 
@@ -652,6 +654,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
           _lastAuthTrackedUserId = currentUserId;
           await AccountService.saveCurrentAccount();
           _setupRealtimeCallListener();
+          unawaited(PaymentReconciliationService.reconcileOnLaunch());
 
           if (!kIsWeb && currentUserId != null && currentUserId.isNotEmpty) {
             await _saveFcmToken(currentUserId);
@@ -1772,6 +1775,14 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
           return VerificationPendingScreen(
             role: _userRole ?? session.user.userMetadata?['role'] ?? 'professional',
             fullName: _resolvedFullName ?? session.user.userMetadata?['full_name'],
+          );
+        }
+
+        if (_userRole == 'patient') {
+          return MaterialApp.router(
+            routerConfig: goRouter,
+            debugShowCheckedModeBanner: false,
+            theme: Theme.of(context),
           );
         }
 

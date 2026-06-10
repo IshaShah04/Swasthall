@@ -43,20 +43,13 @@ class _PatientSettingsState extends State<PatientSettings> {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      final data = await _supabase
-          .from('profiles')
-          .select('full_name, phone_number, avatar_url, allow_research, allow_newsletters, blood_group, height_cm')
-          .eq('id', user.id)
-          .single();
+      final profileList = await _supabase.rpc('get_my_profile');
+      final data = profileList.first;
 
       List<Map<String, dynamic>> fetchedChildren = [];
       try {
-        final links = await _supabase.from('family_links').select('child_id').eq('parent_id', user.id);
-        final childIds = (links as List).map((l) => l['child_id']).toList();
-        if (childIds.isNotEmpty) {
-          final childrenData = await _supabase.from('profiles').select('id, full_name, avatar_url').filter('id', 'in', childIds);
-          fetchedChildren = List<Map<String, dynamic>>.from(childrenData);
-        }
+        final family = await _supabase.rpc('get_my_family');
+        fetchedChildren = List<Map<String, dynamic>>.from(family);
       } catch (_) {}
 
       if (mounted) {
@@ -95,11 +88,19 @@ class _PatientSettingsState extends State<PatientSettings> {
       return;
     }
 
+    const maxBytes = 5 * 1024 * 1024;
     final imageBytes = await image.readAsBytes();
-    final fileExt = image.path.split('.').last;
+    if (imageBytes.length > maxBytes) {
+      throw Exception('Image too large. Maximum size is 5MB.');
+    }
+    final fileExt = image.path.split('.').last.toLowerCase();
+    if (!['jpg','jpeg','png','webp','gif'].contains(fileExt)) {
+      throw Exception('Invalid file type. Only JPEG, PNG, WebP and GIF allowed.');
+    }
 
     // Must match SQL policy: {user_id}/filename.ext
-    final fileName = '${user.id}/avatar.$fileExt';
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fileName = '${user.id}/avatar_$timestamp.$fileExt';
 
     await _supabase.storage.from('avatars').uploadBinary(
           fileName,
@@ -134,15 +135,15 @@ class _PatientSettingsState extends State<PatientSettings> {
         if (mounted && !silent) setState(() => _loading = false);
         return;
       }
-      await _supabase.from('profiles').update({
-        'full_name': _nameController.text,
-        'phone_number': _phoneController.text,
-        'avatar_url': _avatarUrl,
-        'allow_research': _allowResearch,
-        'allow_newsletters': _allowNewsletters,
-        'blood_group': _selectedBloodGroup,
-        'height_cm': double.tryParse(_heightController.text.trim()),
-      }).eq('id', user.id);
+      await _supabase.rpc('update_patient_profile', params: {
+        'p_full_name': _nameController.text,
+        'p_phone_number': _phoneController.text,
+        'p_avatar_url': _avatarUrl,
+        'p_allow_research': _allowResearch,
+        'p_allow_newsletters': _allowNewsletters,
+        'p_blood_group': _selectedBloodGroup,
+        'p_height_cm': double.tryParse(_heightController.text.trim()),
+      });
 
       await AccountService.saveCurrentAccount();
 
@@ -168,11 +169,8 @@ class _PatientSettingsState extends State<PatientSettings> {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
-      await _supabase.from('deletion_requests').insert({
-        'user_id': user.id,
-        'status': 'pending',
-        'notes': type == 'download' ? 'Data access/download request' : 'Account deletion request',
-        'requested_at': DateTime.now().toIso8601String(),
+      await _supabase.rpc('request_account_deletion', params: {
+        'p_notes': type == 'download' ? 'Data access/download request' : 'Account deletion request',
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -191,13 +189,9 @@ class _PatientSettingsState extends State<PatientSettings> {
 
   Future<void> _addChildByEmail(String email) async {
     try {
-      final childProfile = await _supabase.from('profiles').select('id').eq('email', email.trim()).maybeSingle();
-      if (childProfile == null) {
-        _showError("Account not found for that email");
-        return;
-      }
-      final user = _supabase.auth.currentUser;
-      await _supabase.from('family_links').insert({'parent_id': user!.id, 'child_id': childProfile['id']});
+      await _supabase.rpc('link_family_member', params: {
+        'p_child_email': email.trim(),
+      });
       _loadUserData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Child account added successfully'), backgroundColor: Colors.green));

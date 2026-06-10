@@ -25,6 +25,26 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
   DateTime selectedDate = DateTime.now();
   TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay endTime = const TimeOfDay(hour: 18, minute: 0);
+  String? _hospitalId;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHospitalId();
+  }
+
+  Future<void> _fetchHospitalId() async {
+    try {
+      final hospitalIdResult = await _supabase.rpc('get_my_hospital_id');
+      if (mounted) {
+        setState(() {
+          _hospitalId = hospitalIdResult as String?;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching hospital ID: $e");
+    }
+  }
 
   Future<void> _pickAndUploadImage() async {
   final picker = ImagePicker();
@@ -38,10 +58,17 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
   setState(() => _isUploading = true);
 
   try {
+    const maxBytes = 5 * 1024 * 1024;
     final imageBytes = await image.readAsBytes();
+    if (imageBytes.length > maxBytes) {
+      throw Exception('Image too large. Maximum size is 5MB.');
+    }
+    final fileExt = image.path.split('.').last.toLowerCase();
+    if (!['jpg','jpeg','png','webp','gif'].contains(fileExt)) {
+      throw Exception('Invalid file type. Only JPEG, PNG, WebP and GIF allowed.');
+    }
     final String userId =
         widget.userData?['id'] ?? _supabase.auth.currentUser!.id;
-    final String fileExt = image.path.split('.').last;
 
     // Must match SQL policy: {user_id}/avatar.ext
     final String path = '$userId/avatar.$fileExt';
@@ -305,14 +332,14 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
     if (providerId == null) return;
 
     try {
-      await _supabase.from('availability_slots').insert({
-        'provider_id': providerId,
-        'date': DateFormat('yyyy-MM-dd').format(selectedDate),
-        'start_time':
-            "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}",
-        'end_time':
-            "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}",
-        'slot_type': 'physical',
+      await _supabase.rpc('manage_availability_slot', params: {
+        'p_action': 'insert',
+        'p_provider_id': providerId,
+        'p_hospital_id': _hospitalId,
+        'p_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+        'p_start_time': "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}",
+        'p_end_time': "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}",
+        'p_slot_type': 'physical',
       });
       if (mounted) {
         setState(() {});
@@ -415,7 +442,10 @@ class _PharmacistSettingState extends State<PharmacistSetting> {
           ));
 
   Future<void> _deleteSlot(dynamic id) async {
-    await _supabase.from('availability_slots').delete().eq('id', id);
+    await _supabase.rpc('manage_availability_slot', params: {
+      'p_action': 'delete_by_id',
+      'p_slot_id': id,
+    });
     if (mounted) setState(() {});
   }
 }

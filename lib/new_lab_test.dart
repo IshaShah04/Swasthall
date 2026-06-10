@@ -227,6 +227,14 @@ class _NewLabScreenState extends State<NewLabScreen> {
           final path = 'lab_images/$fileName';
 
           final bytes = item.webBytes ?? await item.file.readAsBytes();
+          const maxBytes = 10 * 1024 * 1024;
+          if (bytes.length > maxBytes) {
+            throw Exception('Image too large. Maximum size is 10MB.');
+          }
+          final ext = item.file.name.split('.').last.toLowerCase();
+          if (!['jpg','jpeg','png','webp','gif'].contains(ext)) {
+            throw Exception('Invalid file type. Only JPEG, PNG, WebP and GIF allowed.');
+          }
 
           await supabase.storage.from('lab-assets').uploadBinary(
                 path,
@@ -272,14 +280,35 @@ class _NewLabScreenState extends State<NewLabScreen> {
       };
 
       if (_isEditMode) {
-        await supabase
-            .from('lab_tests')
-            .update(dataMap)
-            .eq('id', widget.existingTest!['id']);
+        await supabase.rpc('upsert_lab_test', params: {
+          'p_id': widget.existingTest!['id'],
+          'p_hospital_id': dataMap['hospital_id'],
+          'p_name': dataMap['name'],
+          'p_location': dataMap['location'],
+          'p_price': dataMap['price'],
+          'p_do_instructions': dataMap['do_instructions'],
+          'p_dont_instructions': dataMap['dont_instructions'],
+          'p_do_instructions_ne': dataMap['do_instructions_ne'],
+          'p_dont_instructions_ne': dataMap['dont_instructions_ne'],
+          'p_do_instructions_hi': dataMap['do_instructions_hi'],
+          'p_dont_instructions_hi': dataMap['dont_instructions_hi'],
+          'p_images': dataMap['images'],
+        });
       } else {
-        dataMap['created_at'] = DateTime.now().toIso8601String();
-        dataMap['bookings'] = 0;
-        await supabase.from('lab_tests').insert(dataMap);
+        await supabase.rpc('upsert_lab_test', params: {
+          'p_id': dataMap['id'],
+          'p_hospital_id': dataMap['hospital_id'],
+          'p_name': dataMap['name'],
+          'p_location': dataMap['location'],
+          'p_price': dataMap['price'],
+          'p_do_instructions': dataMap['do_instructions'],
+          'p_dont_instructions': dataMap['dont_instructions'],
+          'p_do_instructions_ne': dataMap['do_instructions_ne'],
+          'p_dont_instructions_ne': dataMap['dont_instructions_ne'],
+          'p_do_instructions_hi': dataMap['do_instructions_hi'],
+          'p_dont_instructions_hi': dataMap['dont_instructions_hi'],
+          'p_images': dataMap['images'],
+        });
       }
 
       if (mounted) {

@@ -648,7 +648,7 @@ class _HospitalLabScreenState extends State<HospitalLabScreen> {
                           return FlSpot(e.key.toDouble(), bookingsNum.toDouble());
                         })
                         .toList(),
-                    isCurved: true,
+                    isCurved: false,
                     color: const Color(0xFF6366F1),
                     barWidth: 3,
                     belowBarData: BarAreaData(

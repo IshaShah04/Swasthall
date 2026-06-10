@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { createLogger, getRequestId, startTimer } from '../_shared/logger.ts';
 
 const GEMINI_API_KEY        = Deno.env.get("GEMINI_API_KEY") ?? "";
 const SUPABASE_URL          = Deno.env.get("SUPABASE_URL") ?? "";
@@ -44,6 +45,11 @@ function sanitise(s: string, maxLen: number): string {
 const RATE_LIMIT_CALLS_PER_MINUTE = 20;
 
 serve(async (req) => {
+  const requestId = getRequestId(req);
+  const logger = createLogger('ai-proxy', requestId);
+  const elapsed = startTimer();
+  logger.info('Request received', { method: req.method });
+
   const requestOrigin = req.headers.get("Origin");
   const headers = corsHeaders(requestOrigin);
 
@@ -167,6 +173,7 @@ serve(async (req) => {
 
       try {
         const parsed = JSON.parse(jsonMatch[0]);
+        logger.info('Request completed', { duration_ms: elapsed() });
         return new Response(JSON.stringify(parsed), {
           status: 200,
           headers: {
@@ -178,13 +185,15 @@ serve(async (req) => {
       } catch { lastError = `JSON.parse failed for ${model}`; continue; }
     }
 
-    console.error("All models failed:", lastError);
+    logger.error('Unhandled error', lastError);
+    logger.info('Request completed', { duration_ms: elapsed() });
     return new Response(JSON.stringify({ error: "AI unavailable.", detail: lastError }), {
       status: 502, headers: { ...headers, "Content-Type": "application/json" },
     });
 
   } catch (err) {
-    console.error("ai-proxy unhandled error:", err);
+    logger.error('Unhandled error', err);
+    logger.info('Request completed', { duration_ms: elapsed() });
     return new Response(JSON.stringify({ error: "Internal server error." }), {
       status: 500, headers: { ...corsHeaders(req.headers.get("Origin")), "Content-Type": "application/json" },
     });

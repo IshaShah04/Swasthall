@@ -13,6 +13,12 @@ class AppColors {
   static const Color brandAmber    = Color(0xFFF59E0B);
   static const Color brandOrange   = Color(0xFFF97316);
 
+  static const Color primaryIndigo = Color(0xFF5C6BC0);
+  static const Color secondaryIndigo = Color(0xFF7986CB);
+  static const Color backgroundLavender = Color(0xFFF0F2FF);
+  static const Color successGreen = Color(0xFF4CAF50);
+  static const Color errorRed = Color(0xFFF44336);
+
   // ── Backgrounds ──────────────────────────────────────────────────────────
   static Color scaffoldBg(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark

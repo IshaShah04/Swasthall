@@ -1,3 +1,4 @@
+// ignore_for_file: type=lint, unused_import, depend_on_referenced_packages, avoid_relative_lib_imports, avoid_print
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';

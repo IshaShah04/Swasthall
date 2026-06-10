@@ -68,33 +68,21 @@ class _PatientRecordsScreenState extends State<PatientRecordsScreen> {
 
     userMetadata = user.userMetadata;
     final role = _normalizedRole();
+    String? pPatientId;
 
-    dynamic query = supabase.from('medical_records').select(
-          'id, patient_id, provider_id, appointment_id, file_url, file_name, '
-          'provider_role, patient_name, doctor_name, summary, diagnosis, '
-          'appointment_date, appointment_time, created_at',
-        );
-
-    // Important:
-    // For provider/professional screens, always filter by targetPatientId
-    // to prevent unscoped access to all medical records.
-    if (role == 'patient') {
-      query = query.eq('patient_id', user.id);
-    } else {
-      final patientId = widget.targetPatientId;
-      if (patientId == null || patientId.isEmpty) {
+    if (role != 'patient') {
+      pPatientId = widget.targetPatientId;
+      if (pPatientId == null || pPatientId.isEmpty) {
         throw Exception(
           'targetPatientId required for provider medical_records access',
         );
       }
-      query = query.eq('patient_id', patientId);
     }
 
-    query = query
-        .order('appointment_date', ascending: false)
-        .order('created_at', ascending: false);
-
-    final raw = await query;
+    final raw = await supabase.rpc('get_medical_records', params: {
+      'p_patient_id': pPatientId,
+    });
+    
     final records = (raw as List)
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();

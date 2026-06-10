@@ -16,6 +16,7 @@ const SUCCESS_DEEPLINK = 'swasthall://esewa-success'
 const FAILURE_DEEPLINK = 'swasthall://esewa-failure'
 
 Deno.serve(async (req: Request) => {
+  try {
   // Allow browser preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
@@ -213,6 +214,11 @@ ${inputs}
   htmlHeaders.set('X-Content-Type-Options', 'nosniff')
   htmlHeaders.set('Cache-Control', 'no-store')
   return new Response(html, { status: 200, headers: htmlHeaders })
+  } catch (e) {
+    console.error('[esewa-checkout]', e);
+    return new Response(JSON.stringify({ error: 'Internal server error' }), 
+      { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
 })
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

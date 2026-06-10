@@ -1,9 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireString, requireUUID, handleValidationError } from '../_shared/validate.ts';
 
 serve(async (req) => {
   try {
-    const { action, booking_id } = await req.json();
+    let action: string;
+    let booking_id: string;
+    try {
+      const body = await req.json().catch(() => ({}));
+      action = requireString(body.action, 'action');
+      booking_id = requireUUID(body.booking_id, 'booking_id');
+    } catch (err) {
+      return handleValidationError(err);
+    }
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return new Response("Unauthorized", { status: 401 });
 
@@ -27,6 +36,7 @@ serve(async (req) => {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+    console.error('[widget-action]', e);
+    return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 });
   }
 });

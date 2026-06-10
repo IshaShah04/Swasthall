@@ -133,12 +133,8 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
       List<Map<String, dynamic>> fetchedChildren = [];
       if (user != null) {
         try {
-          final links = await Supabase.instance.client.from('family_links').select('child_id').eq('parent_id', user.id);
-          final childIds = (links as List).map((l) => l['child_id']).toList();
-          if (childIds.isNotEmpty) {
-            final childrenData = await Supabase.instance.client.from('profiles').select('id, full_name, avatar_url').filter('id', 'in', childIds);
-            fetchedChildren = List<Map<String, dynamic>>.from(childrenData);
-          }
+          final family = await Supabase.instance.client.rpc('get_my_family');
+          fetchedChildren = List<Map<String, dynamic>>.from(family);
         } catch (_) {}
       }
 

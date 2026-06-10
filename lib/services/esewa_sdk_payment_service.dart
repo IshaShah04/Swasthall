@@ -96,17 +96,15 @@ class EsewaSdkPaymentService {
     }
 
     try {
-      await Supabase.instance.client.from('payment_transactions').insert({
-        'user_id': currentUser.id,
-        'provider': 'esewa',
-        'order_type': orderType,
-        'order_id': orderId ?? productIdSeed,
-        'merchant_txn_id': productId,
-        'amount_paisa': (resolvedAmount * 100).round(),
-        'currency': 'NPR',
-        'status': 'initiated',
-        'verified': false,
-        'raw_initiate_payload': {
+      await Supabase.instance.client.rpc('record_payment_transaction', params: {
+        'p_provider': 'esewa',
+        'p_order_type': orderType,
+        'p_order_id': orderId ?? productIdSeed,
+        'p_merchant_txn_id': productId,
+        'p_amount_paisa': (resolvedAmount * 100).round(),
+        'p_currency': 'NPR',
+        'p_status': 'initiated',
+        'p_raw_initiate_payload': {
           'source': 'esewa_flutter_sdk',
           'product_name': productName,
           'product_id_seed': productIdSeed,

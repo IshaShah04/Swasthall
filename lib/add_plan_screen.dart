@@ -109,16 +109,15 @@ class _AddPlanScreenState extends State<AddPlanScreen> {
           .where((e) => e.isNotEmpty)
           .toList();
 
-      await supabase.from('insurance_plans').insert({
-        'name': _nameController.text,
-        'hospital_name': _hospitalController.text.trim(),
-        'description': _descController.text,
-        'benefits': benefitsList,
-        'price': priceValue,
-        'discount': discountValue,
-        'icon_url': uploadedUrl,
-        'type': _selectedType.name,
-        'created_at': DateTime.now().toIso8601String(),
+      await supabase.rpc('insert_insurance_plan', params: {
+        'p_name': _nameController.text,
+        'p_hospital_name': _hospitalController.text.trim(),
+        'p_description': _descController.text,
+        'p_benefits': benefitsList,
+        'p_price': priceValue,
+        'p_discount': discountValue,
+        'p_icon_url': uploadedUrl,
+        'p_type': _selectedType.name,
       });
 
       if (!mounted) return; 

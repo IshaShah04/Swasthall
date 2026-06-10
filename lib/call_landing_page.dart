@@ -140,23 +140,14 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
           .eq('date_period', today)
           .maybeSingle();
 
-      final payload = <String, dynamic>{
-        'doctor_id': doctorId,
-        'date_period': today,
-        'completed_count': completedCount,
-        'cancelled_count': (existing?['cancelled_count'] as num?)?.toInt() ?? 0,
-        'avg_rating': avgRating == 0 ? null : double.parse(avgRating.toStringAsFixed(2)),
-        'avg_duration': avgDuration == 0 ? null : double.parse(avgDuration.toStringAsFixed(2)),
-      };
-
-      if (existing != null && existing['id'] != null) {
-        await _supabase
-            .from('professional_analytics_data')
-            .update(payload)
-            .eq('id', existing['id']);
-      } else {
-        await _supabase.from('professional_analytics_data').insert(payload);
-      }
+      await _supabase.rpc('upsert_analytics_event', params: {
+        'p_doctor_id': doctorId,
+        'p_date_period': today,
+        'p_completed_count': completedCount,
+        'p_cancelled_count': (existing?['cancelled_count'] as num?)?.toInt() ?? 0,
+        'p_avg_rating': avgRating == 0 ? null : double.parse(avgRating.toStringAsFixed(2)),
+        'p_avg_duration': avgDuration == 0 ? null : double.parse(avgDuration.toStringAsFixed(2)),
+      });
     } catch (e) {
       debugPrint('Professional analytics sync error: $e');
     }
@@ -202,13 +193,12 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
         if (currentUser == null) {
           debugPrint('Rating save skipped: unauthenticated user');
         } else {
-          await _supabase.from('call_reviews').insert({
-            'booking_id': widget.bookingId,
-            'doctor_id': widget.professionalId,
-            'patient_id': currentUser.id,
-            'rating': rating,
-            'review_text': review.trim().isEmpty ? null : review.trim(),
-            'duration_seconds': durationSeconds,
+          await _supabase.rpc('insert_call_review', params: {
+            'p_booking_id': widget.bookingId,
+            'p_doctor_id': widget.professionalId,
+            'p_rating': rating,
+            'p_review_text': review.trim().isEmpty ? null : review.trim(),
+            'p_duration_seconds': durationSeconds,
           });
 
           if (doctorId.isNotEmpty) {
@@ -230,13 +220,12 @@ class _PatientVideoCallPageState extends State<PatientVideoCallPage>
         if (currentUser == null) {
           debugPrint('Rating skip save skipped: unauthenticated user');
         } else {
-          await _supabase.from('call_reviews').insert({
-            'booking_id': widget.bookingId,
-            'doctor_id': widget.professionalId,
-            'patient_id': currentUser.id,
-            'rating': null,
-            'review_text': null,
-            'duration_seconds': durationSeconds,
+          await _supabase.rpc('insert_call_review', params: {
+            'p_booking_id': widget.bookingId,
+            'p_doctor_id': widget.professionalId,
+            'p_rating': null,
+            'p_review_text': null,
+            'p_duration_seconds': durationSeconds,
           });
 
           if (doctorId.isNotEmpty) {

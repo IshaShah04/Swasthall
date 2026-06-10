@@ -307,12 +307,20 @@ class _BloodBankState extends State<BloodBank> {
                           };
 
                           if (existing != null && existing['id'] != null) {
-                            await supabase
-                                .from('blood_inventory')
-                                .update(payload)
-                                .eq('id', existing['id']);
+                            await supabase.rpc('update_blood_inventory', params: {
+                              'p_id': existing['id'],
+                              'p_hospital_name': payload['hospital_name'],
+                              'p_blood_group': payload['blood_group'],
+                              'p_quantity_ml': payload['quantity_ml'],
+                              'p_status': payload['status'],
+                            });
                           } else {
-                            await supabase.from('blood_inventory').insert(payload);
+                            await supabase.rpc('insert_blood_inventory', params: {
+                              'p_hospital_name': payload['hospital_name'],
+                              'p_blood_group': payload['blood_group'],
+                              'p_quantity_ml': payload['quantity_ml'],
+                              'p_status': payload['status'],
+                            });
                           }
 
                           if (sheetContext.mounted) {

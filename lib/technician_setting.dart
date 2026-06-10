@@ -21,12 +21,27 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
   Map<String, dynamic> _localUserData = {};
 
   Map<String, dynamic>? _currentSlot;
+  String? _hospitalId;
 
   @override
   void initState() {
     super.initState();
     _initializeData();
+    _fetchHospitalId();
     _fetchCurrentAvailability();
+  }
+
+  Future<void> _fetchHospitalId() async {
+    try {
+      final hospitalIdResult = await _supabase.rpc('get_my_hospital_id');
+      if (mounted) {
+        setState(() {
+          _hospitalId = hospitalIdResult as String?;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching hospital ID: $e");
+    }
   }
 
   void _initializeData() {
@@ -67,10 +82,17 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
     setState(() => _isUploading = true);
 
     try {
+      const maxBytes = 5 * 1024 * 1024;
       final imageBytes = await image.readAsBytes();
+      if (imageBytes.length > maxBytes) {
+        throw Exception('Image too large. Maximum size is 5MB.');
+      }
+      final String fileExt = image.path.split('.').last.toLowerCase();
+      if (!['jpg','jpeg','png','webp','gif'].contains(fileExt)) {
+        throw Exception('Invalid file type. Only JPEG, PNG, WebP and GIF allowed.');
+      }
       final String userId =
           _localUserData['id'] ?? _supabase.auth.currentUser!.id;
-      final String fileExt = image.path.split('.').last.toLowerCase();
 
       final String path = '$userId/avatar.$fileExt';
       String mimeSubtype = fileExt;
@@ -371,14 +393,16 @@ class _TechnicianSettingState extends State<TechnicianSetting> {
       final String endTime = adjustedEndDateTime.toUtc().toIso8601String();
       final String dateOnly = DateFormat('yyyy-MM-dd').format(now);
 
-      await _supabase.from('availability_slots').insert({
-        'provider_id': userId,
-        'date': dateOnly,
-        'start_time': startTime,
-        'end_time': endTime,
-        'slot_type': 'physical',
-        'hourly_cap': 4,
-        'current_bookings': 0,
+      await _supabase.rpc('manage_availability_slot', params: {
+        'p_action': 'insert',
+        'p_provider_id': userId,
+        'p_hospital_id': _hospitalId,
+        'p_date': dateOnly,
+        'p_start_time': startTime,
+        'p_end_time': endTime,
+        'p_slot_type': 'physical',
+        'p_hourly_cap': 4,
+        'p_current_bookings': 0,
       });
 
       if (!mounted) return;

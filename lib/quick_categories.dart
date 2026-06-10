@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+
+import 'features/study_hub/presentation/study_hub_screen.dart';
 import 'consultation_search.dart';
-import 'study_hub.dart';
 import 'lab_screen.dart';
 import 'blood_bank.dart';
 import 'drug_interaction_screen.dart';

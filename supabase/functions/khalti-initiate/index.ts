@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { checkRateLimit } from '../_shared/rateLimit.ts'
+import { createLogger, getRequestId, startTimer } from '../_shared/logger.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,6 +42,10 @@ function getAdmin() {
 }
 
 Deno.serve(async (req: Request) => {
+  const requestId = getRequestId(req);
+  const logger = createLogger('khalti-initiate', requestId);
+  const elapsed = startTimer();
+  logger.info('Request received', { method: req.method });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
@@ -140,9 +145,12 @@ Deno.serve(async (req: Request) => {
       })
 
     if (insertError) {
-      return json({ error: insertError.message }, 500)
+      logger.error('Unhandled error', insertError)
+      logger.info('Request completed', { duration_ms: elapsed() });
+      return json({ error: 'Internal server error' }, 500)
     }
 
+    logger.info('Request completed', { duration_ms: elapsed() });
     return json({
       payment_url: String(parsed.payment_url ?? ''),
       pidx: String(parsed.pidx ?? ''),
@@ -150,6 +158,8 @@ Deno.serve(async (req: Request) => {
       return_url: returnUrl,
     })
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500)
+    logger.error('Unhandled error', e)
+    logger.info('Request completed', { duration_ms: elapsed() });
+    return json({ error: 'Internal server error' }, 500)
   }
 })

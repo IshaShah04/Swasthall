@@ -111,8 +111,8 @@ Deno.serve(async (req: Request) => {
       error: verified ? null : 'Signature mismatch while verifying payment response.',
     })
   } catch (e) {
-    console.error('esewa-verify error:', e)
-    return json({ verified: false, error: String(e) }, 500)
+    console.error('[esewa-verify]', e)
+    return json({ verified: false, error: 'Internal server error' }, 500)
   }
 })
 
