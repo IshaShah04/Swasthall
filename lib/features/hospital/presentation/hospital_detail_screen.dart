@@ -111,32 +111,42 @@ class _HospitalDetailScreenState extends ConsumerState<HospitalDetailScreen> wit
         data: (hospital) {
           return Column(
             children: [
-              HospitalHeader(hospital: hospital),
-              Container(
-                color: Colors.white,
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: Colors.blue,
-                  unselectedLabelColor: Colors.grey,
-                  indicatorColor: Colors.blue,
-                  isScrollable: true,
-                  tabs: const [
-                    Tab(text: 'Doctors'),
-                    Tab(text: 'About Hospital'),
-                    Tab(text: 'Facilities'),
-                    Tab(text: 'Reviews'),
-                  ],
-                ),
-              ),
               Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    DoctorListTab(hospitalId: widget.id, targetDoctorId: _targetDoctorId),
-                    AboutTab(hospital: hospital),
-                    FacilitiesTab(hospital: hospital),
-                    ReviewsTab(hospitalId: widget.id),
-                  ],
+                child: NestedScrollView(
+                  headerSliverBuilder: (context, innerBoxIsScrolled) {
+                    return [
+                      SliverToBoxAdapter(
+                        child: HospitalHeader(hospital: hospital),
+                      ),
+                      SliverPersistentHeader(
+                        pinned: true,
+                        delegate: _TabBarDelegate(
+                          TabBar(
+                            controller: _tabController,
+                            labelColor: Colors.blue,
+                            unselectedLabelColor: Colors.grey,
+                            indicatorColor: Colors.blue,
+                            isScrollable: true,
+                            tabs: const [
+                              Tab(text: 'Doctors'),
+                              Tab(text: 'About Hospital'),
+                              Tab(text: 'Facilities'),
+                              Tab(text: 'Reviews'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ];
+                  },
+                  body: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      DoctorListTab(hospitalId: widget.id, targetDoctorId: _targetDoctorId),
+                      AboutTab(hospital: hospital),
+                      FacilitiesTab(hospital: hospital),
+                      ReviewsTab(hospitalId: widget.id),
+                    ],
+                  ),
                 ),
               ),
               _buildBottomUtilityBar(hospital['contact_number']),
@@ -210,5 +220,30 @@ class _HospitalDetailScreenState extends ConsumerState<HospitalDetailScreen> wit
         ),
       ),
     );
+  }
+}
+
+class _TabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar _tabBar;
+
+  _TabBarDelegate(this._tabBar);
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Colors.white,
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_TabBarDelegate oldDelegate) {
+    return _tabBar != oldDelegate._tabBar;
   }
 }

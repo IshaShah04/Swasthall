@@ -332,56 +332,48 @@ class _PatientHealthVaultScreenState extends ConsumerState<PatientHealthVaultScr
 
   Widget _buildTopBar() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 8),
       color: AppColors.cardBg(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('My Records', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary(context))),
-                  Text('All your health information in one place', style: TextStyle(fontSize: 14, color: AppColors.textMuted(context))),
-                ],
-              ),
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined),
-                onPressed: () => context.go('/notifications'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: _onSearchChanged,
-                  decoration: InputDecoration(
-                    hintText: 'Search documents...',
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: AppColors.surfaceBg(context),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                child: SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    decoration: InputDecoration(
+                      hintText: 'Search documents...',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      filled: true,
+                      fillColor: AppColors.surfaceBg(context),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 10),
               Container(
+                height: 40,
+                width: 40,
                 decoration: BoxDecoration(
                   color: AppColors.surfaceBg(context),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.filter_list),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.filter_list, size: 20),
                   onPressed: _openFilterSheet,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Text('All your health information in one place', style: TextStyle(fontSize: 14, color: AppColors.textMuted(context))),
         ],
       ),
     );
@@ -584,7 +576,7 @@ class _PatientHealthVaultScreenState extends ConsumerState<PatientHealthVaultScr
             decoration: BoxDecoration(color: AppColors.cardBg(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.withValues(alpha: 0.2))),
             child: IconButton(
               icon: const Icon(Icons.calendar_month_outlined),
-              onPressed: () => context.go('/records/calendar'),
+              onPressed: () => context.push('/records/calendar'),
             ),
           ),
         ],
@@ -593,15 +585,12 @@ class _PatientHealthVaultScreenState extends ConsumerState<PatientHealthVaultScr
   }
 
   Widget _buildCategoriesGrid() {
-    final countsAsync = ref.watch(recordCategoryCountsProvider);
-    
     final cells = [
-      {'label': 'Diagnosis', 'icon': Icons.medical_information, 'color': Colors.blue, 'category': 'diagnosis', 'routeKey': 'diagnosis'},
-      {'label': 'Prescriptions', 'icon': Icons.medication, 'color': Colors.orange, 'category': 'prescription', 'routeKey': 'prescription'},
-      {'label': 'Lab Reports', 'icon': Icons.science, 'color': Colors.purple, 'category': 'lab_report', 'routeKey': 'lab_report'},
-      {'label': 'Summary', 'icon': Icons.summarize, 'color': Colors.teal, 'category': 'summary', 'routeKey': 'summary'},
-      {'label': 'Others', 'icon': Icons.folder_open, 'color': Colors.grey, 'category': 'other', 'routeKey': 'other'},
-      {'label': 'Upload New', 'icon': Icons.add_circle_outline, 'color': Colors.indigo, 'onTap': _showVaultUploadSheet},
+      {'label': 'Diagnosis', 'icon': Icons.medical_information, 'color': Colors.blue, 'desc': 'View your diagnosis history and details', 'routeKey': 'diagnosis'},
+      {'label': 'Prescriptions', 'icon': Icons.medication, 'color': Colors.orange, 'desc': 'Access all your prescriptions', 'routeKey': 'prescription'},
+      {'label': 'Lab Reports', 'icon': Icons.science, 'color': Colors.purple, 'desc': 'View and download your lab results', 'routeKey': 'lab_report'},
+      {'label': 'Summary', 'icon': Icons.summarize, 'color': Colors.teal, 'desc': 'Health summary and trends', 'routeKey': 'summary'},
+      {'label': 'Others', 'icon': Icons.folder_open, 'color': Colors.grey, 'desc': 'Other medical records and documents', 'routeKey': 'other'},
     ];
 
     return GridView.count(
@@ -617,21 +606,12 @@ class _PatientHealthVaultScreenState extends ConsumerState<PatientHealthVaultScr
           label: cell['label'] as String,
           icon: cell['icon'] as IconData,
           color: cell['color'] as Color,
-          count: countsAsync.when(
-            data: (counts) {
-              if (cell['category'] != null) {
-                return counts[cell['category'] as String]?.toString() ?? '0';
-              }
-              return '';
-            },
-            loading: () => '...',
-            error: (_, __) => '!',
-          ),
+          desc: cell['desc'] as String,
           onTap: () {
             if (cell['onTap'] != null) {
               (cell['onTap'] as VoidCallback)();
             } else if (cell['routeKey'] != null) {
-              context.go('/records/category/${cell['routeKey']}');
+              context.push('/records/category/${cell['routeKey']}');
             }
           },
         );
@@ -644,14 +624,14 @@ class _CategoryCard extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
-  final String count;
+  final String desc;
   final VoidCallback onTap;
 
   const _CategoryCard({
     required this.label,
     required this.icon,
     required this.color,
-    required this.count,
+    required this.desc,
     required this.onTap,
   });
 
@@ -673,14 +653,14 @@ class _CategoryCard extends StatelessWidget {
             Icon(icon, color: color, size: 32),
             const SizedBox(height: 12),
             Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary(context))),
-            const Spacer(),
-            Row(
-              children: [
-                if (count.isNotEmpty)
-                  Text(count, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary(context))),
-                const Spacer(),
-                const Icon(Icons.chevron_right, color: Colors.grey),
-              ],
+            const SizedBox(height: 4),
+            Expanded(
+              child: Text(
+                desc,
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted(context)),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),

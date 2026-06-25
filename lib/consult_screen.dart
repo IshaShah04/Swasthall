@@ -358,40 +358,38 @@ class _ConsultScreenState extends ConsumerState<ConsultScreen> {
                 preferredSize: const Size.fromHeight(70),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (val) {
-                            ref.read(consultSearchQueryProvider.notifier).state = val;
-                          },
-                          decoration: InputDecoration(
-                            hintText: 'Search doctors, specialties...',
-                            hintStyle: TextStyle(color: AppColors.textMuted(context)),
-                            prefixIcon: Icon(Icons.search, color: AppColors.textMuted(context)),
-                            filled: true,
-                            fillColor: AppColors.cardBg(context),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) {
+                      ref.read(consultSearchQueryProvider.notifier).state = val;
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search doctors, specialties...',
+                      hintStyle: TextStyle(color: AppColors.textMuted(context)),
+                      prefixIcon: Icon(Icons.search, color: AppColors.textMuted(context)),
+                      suffixIcon: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.brandIndigo,
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.tune, color: Colors.white, size: 18),
+                            onPressed: _showFilterSheet,
+                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.zero,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.brandIndigo,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.tune, color: Colors.white),
-                          onPressed: _showFilterSheet,
-                        ),
+                      filled: true,
+                      fillColor: AppColors.cardBg(context),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
                       ),
-                    ],
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    ),
                   ),
                 ),
               ),
@@ -406,42 +404,71 @@ class _ConsultScreenState extends ConsumerState<ConsultScreen> {
                     // 3. QUICK ACCESS ROW
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildQuickAccessCard(
-                            context,
-                            'Book\nAppointment',
-                            Icons.calendar_month_rounded,
-                            const Color(0xFFEFF6FF), // Blue 50
-                            const Color(0xFF3B82F6), // Blue 500
-                            () {
-                              context.push('/search');
-                            },
-                          ),
-                          _buildQuickAccessCard(
-                            context,
-                            'Follow Up\nConsult',
-                            Icons.history_rounded,
-                            const Color(0xFFF0FDF4), // Green 50
-                            const Color(0xFF22C55E), // Green 500
-                            () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Select a doctor for follow-up')),
-                              );
-                            },
-                          ),
-                          _buildQuickAccessCard(
-                            context,
-                            'Health\nRecords',
-                            Icons.receipt_long_rounded,
-                            const Color(0xFFFAF5FF), // Purple 50
-                            const Color(0xFFA855F7), // Purple 500
-                            () {
-                              context.go('/records');
-                            },
-                          ),
-                        ],
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBg(context),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.border(context)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Quick Access',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary(context),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildQuickAccessItem(
+                                  context,
+                                  'Book\nAppointment',
+                                  Icons.calendar_month_rounded,
+                                  const Color(0xFFEFF6FF), // Blue 50
+                                  const Color(0xFF3B82F6), // Blue 500
+                                  () {
+                                    context.push('/search');
+                                  },
+                                ),
+                                _buildQuickAccessItem(
+                                  context,
+                                  'Follow Up\nConsult',
+                                  Icons.history_rounded,
+                                  const Color(0xFFF0FDF4), // Green 50
+                                  const Color(0xFF22C55E), // Green 500
+                                  () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Select a doctor for follow-up')),
+                                    );
+                                  },
+                                ),
+                                _buildQuickAccessItem(
+                                  context,
+                                  'Health\nRecords',
+                                  Icons.receipt_long_rounded,
+                                  const Color(0xFFFAF5FF), // Purple 50
+                                  const Color(0xFFA855F7), // Purple 500
+                                  () {
+                                    context.go('/records');
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
@@ -451,18 +478,32 @@ class _ConsultScreenState extends ConsumerState<ConsultScreen> {
                     if (allSpecialities.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'Popular Specialties',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary(context),
-                          ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Popular Specialties',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary(context),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context, 
+                                  MaterialPageRoute(builder: (context) => AllSpecialtiesScreen(specialties: allSpecialities))
+                                );
+                              },
+                              child: const Text('View all', style: TextStyle(color: Colors.blue)),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 16),
                       SizedBox(
-                        height: 40,
+                        height: 90,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -470,25 +511,43 @@ class _ConsultScreenState extends ConsumerState<ConsultScreen> {
                           itemBuilder: (context, index) {
                             final spec = allSpecialities[index];
                             final isSelected = selectedSpeciality == spec;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: FilterChip(
-                                label: Text(spec),
-                                avatar: Icon(
-                                  _getIconForSpecialty(spec),
-                                  size: 16,
-                                  color: isSelected ? Colors.white : AppColors.brandIndigo,
+                            return GestureDetector(
+                              onTap: () {
+                                ref.read(consultSelectedSpecialityProvider.notifier).state = isSelected ? null : spec;
+                              },
+                              child: Container(
+                                width: 110,
+                                margin: const EdgeInsets.only(right: 12),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? AppColors.brandIndigo : AppColors.cardBg(context),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected ? AppColors.brandIndigo : AppColors.border(context),
+                                  ),
                                 ),
-                                selected: isSelected,
-                                selectedColor: AppColors.brandIndigo,
-                                backgroundColor: AppColors.cardBg(context),
-                                labelStyle: TextStyle(
-                                  color: isSelected ? Colors.white : AppColors.textPrimary(context),
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      _getIconForSpecialty(spec),
+                                      size: 28,
+                                      color: isSelected ? Colors.white : AppColors.brandIndigo,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      spec,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isSelected ? Colors.white : AppColors.textPrimary(context),
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                onSelected: (selected) {
-                                  ref.read(consultSelectedSpecialityProvider.notifier).state = selected ? spec : null;
-                                },
                               ),
                             );
                           },
@@ -651,7 +710,7 @@ class _ConsultScreenState extends ConsumerState<ConsultScreen> {
     return healthTips[dayOfYear % healthTips.length];
   }
 
-  Widget _buildQuickAccessCard(
+  Widget _buildQuickAccessItem(
     BuildContext context,
     String title,
     IconData icon,
@@ -661,45 +720,74 @@ class _ConsultScreenState extends ConsumerState<ConsultScreen> {
   ) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.28,
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-        decoration: BoxDecoration(
-          color: AppColors.cardBg(context),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.border(context)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: bgColor,
+              shape: BoxShape.circle,
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: bgColor,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: iconColor, size: 24),
+            child: Icon(icon, color: iconColor, size: 24),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary(context),
+              height: 1.2,
             ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AllSpecialtiesScreen extends ConsumerWidget {
+  final List<String> specialties;
+  
+  const AllSpecialtiesScreen({super.key, required this.specialties});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceBg(context),
+      appBar: AppBar(
+        title: const Text('All Specialties', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.cardBg(context),
+        foregroundColor: AppColors.textPrimary(context),
+        elevation: 0,
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: specialties.length,
+        separatorBuilder: (context, index) => Divider(color: AppColors.border(context)),
+        itemBuilder: (context, index) {
+          final spec = specialties[index];
+          final isSelected = ref.watch(consultSelectedSpecialityProvider) == spec;
+          
+          return ListTile(
+            title: Text(
+              spec,
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary(context),
-                height: 1.2,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? AppColors.brandIndigo : AppColors.textPrimary(context),
               ),
             ),
-          ],
-        ),
+            trailing: isSelected 
+                ? Icon(Icons.check, color: AppColors.brandIndigo)
+                : Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textMuted(context)),
+            onTap: () {
+              ref.read(consultSelectedSpecialityProvider.notifier).state = isSelected ? null : spec;
+              Navigator.pop(context);
+            },
+          );
+        },
       ),
     );
   }

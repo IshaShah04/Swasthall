@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../providers/booking_providers.dart';
 
 class DoctorSummaryCard extends ConsumerWidget {
@@ -64,18 +63,6 @@ class DoctorSummaryCard extends ConsumerWidget {
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () {
-                              context.go('/doctor/$doctorId');
-                            },
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text('View Profile'),
                           ),
                         ],
                       ),

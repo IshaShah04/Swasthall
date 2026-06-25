@@ -12,7 +12,7 @@ class HospitalHeader extends ConsumerWidget {
   Future<void> _launchMap() async {
     final lat = hospital['latitude'];
     final lng = hospital['longitude'];
-    final location = hospital['location'] ?? hospital['name'];
+    final location = hospital['address'] ?? hospital['location'] ?? hospital['name'];
 
     if (lat != null && lng != null) {
       final url = Uri.parse('geo:$lat,$lng');
@@ -68,7 +68,7 @@ class HospitalHeader extends ConsumerWidget {
                           child: Text(
                             hospital['name'] ?? '',
                             style: const TextStyle(
-                              fontSize: 24,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -141,7 +141,7 @@ class HospitalHeader extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    hospital['location'] ?? 'Location not available',
+                    hospital['address'] ?? hospital['location'] ?? 'Location not available',
                     style: const TextStyle(color: Colors.black87),
                   ),
                 ),

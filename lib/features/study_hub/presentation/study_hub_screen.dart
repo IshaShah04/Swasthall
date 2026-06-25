@@ -52,11 +52,12 @@ class _StudyHubScreenState extends ConsumerState<StudyHubScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
+        bottom: false,
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -120,16 +121,15 @@ class _StudyHubScreenState extends ConsumerState<StudyHubScreen> {
         ),
         Row(
           children: [
-            DropdownButton<String>(
-              value: _locale,
-              underline: const SizedBox(),
-              items: const [
-                DropdownMenuItem(value: 'EN', child: Text('EN')),
-                DropdownMenuItem(value: 'NE', child: Text('NE')),
-              ],
-              onChanged: (val) {
-                if (val != null) _setLocale(val);
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.language_rounded, color: Colors.indigo, size: 24),
+              onSelected: (String lang) {
+                _setLocale(lang);
               },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                const PopupMenuItem<String>(value: 'EN', child: Text('English')),
+                const PopupMenuItem<String>(value: 'NE', child: Text('Nepali')),
+              ],
             ),
             const SizedBox(width: 8),
             IconButton(

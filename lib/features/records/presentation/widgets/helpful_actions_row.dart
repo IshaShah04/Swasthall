@@ -18,31 +18,41 @@ class HelpfulActionsRow extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildActionItem(
-              context: context,
-              icon: Icons.calendar_month,
-              label: "Book Appointment",
-              color: const Color(0xFF3B82F6), // Blue
-              bgColor: const Color(0xFFEFF6FF),
-            ),
-            _buildActionItem(
-              context: context,
-              icon: Icons.local_pharmacy,
-              label: "Order Medicine",
-              color: const Color(0xFF10B981), // Green
-              bgColor: const Color(0xFFECFDF5),
-            ),
-            _buildActionItem(
-              context: context,
-              icon: Icons.biotech,
-              label: "Book Lab Test",
-              color: const Color(0xFFF59E0B), // Amber
-              bgColor: const Color(0xFFFFFBEB),
-            ),
-          ],
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _buildActionItem(
+                  context: context,
+                  icon: Icons.calendar_month,
+                  label: "Book Appointment",
+                  color: const Color(0xFF3B82F6), // Blue
+                  bgColor: const Color(0xFFEFF6FF),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionItem(
+                  context: context,
+                  icon: Icons.local_pharmacy,
+                  label: "Order Medicine",
+                  color: const Color(0xFF10B981), // Green
+                  bgColor: const Color(0xFFECFDF5),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionItem(
+                  context: context,
+                  icon: Icons.biotech,
+                  label: "Book Lab Test",
+                  color: const Color(0xFFF59E0B), // Amber
+                  bgColor: const Color(0xFFFFFBEB),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -60,7 +70,6 @@ class HelpfulActionsRow extends StatelessWidget {
         // Navigation actions to be implemented
       },
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.28,
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
           color: AppColors.cardBg(context),
