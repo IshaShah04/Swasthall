@@ -36,7 +36,7 @@ class ScanPrescriptionBanner extends ConsumerWidget {
       onTap: uploadState.isLoading ? null : () => _pickAndUpload(context, ref),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
@@ -55,18 +55,18 @@ class ScanPrescriptionBanner extends ConsumerWidget {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: uploadState.isLoading
                   ? const SizedBox(
-                      width: 24,
-                      height: 24,
+                      width: 20,
+                      height: 20,
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                     )
-                  : const Icon(Icons.document_scanner, color: Colors.white, size: 28),
+                  : const Icon(Icons.document_scanner, color: Colors.white, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -78,15 +78,15 @@ class ScanPrescriptionBanner extends ConsumerWidget {
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 18,
+                      fontSize: 16,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "Upload your physical prescriptions to digitize them",
+                    "Upload physical prescriptions",
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 13,
+                      fontSize: 12,
                     ),
                   ),
                 ],

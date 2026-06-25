@@ -94,7 +94,6 @@ class _LabsScreenState extends ConsumerState<LabsScreen> {
             _buildTrustBanner(),
             _buildSectionHeader("Popular Tests"),
             const PopularTestsRow(),
-            _buildHomeCollectionCard(),
             // Using a Key to scroll to this section
             Container(key: _labsSectionKey),
             _buildSectionHeader("Verified Lab Partners"),
@@ -110,6 +109,7 @@ class _LabsScreenState extends ConsumerState<LabsScreen> {
     return AppBar(
       backgroundColor: AppColors.cardBg(context),
       elevation: 0,
+      centerTitle: false,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -155,6 +155,8 @@ class _LabsScreenState extends ConsumerState<LabsScreen> {
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 fillColor: AppColors.cardBg(context),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -166,7 +168,7 @@ class _LabsScreenState extends ConsumerState<LabsScreen> {
           InkWell(
             onTap: _showFilterSheet,
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: const Color(0xFF6366F1),
                 borderRadius: BorderRadius.circular(12),
@@ -245,69 +247,6 @@ class _LabsScreenState extends ConsumerState<LabsScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHomeCollectionCard() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Home Sample Collection",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  "Schedule a technician to collect samples from your home.",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => context.push('/labs/home-collection'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF6366F1),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text("Book Now"),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          const Icon(Icons.home_work, color: Colors.white54, size: 64),
         ],
       ),
     );

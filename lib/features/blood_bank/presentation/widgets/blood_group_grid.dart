@@ -5,6 +5,20 @@ import '../../providers/blood_bank_providers.dart';
 class BloodGroupGrid extends ConsumerWidget {
   const BloodGroupGrid({super.key});
 
+  Color _getGroupColor(String group) {
+    switch (group) {
+      case 'A+': return Colors.teal;
+      case 'A-': return Colors.teal.shade700;
+      case 'B+': return Colors.indigo;
+      case 'B-': return Colors.indigo.shade700;
+      case 'O+': return Colors.deepOrange;
+      case 'O-': return Colors.deepOrange.shade700;
+      case 'AB+': return Colors.purple;
+      case 'AB-': return Colors.purple.shade700;
+      default: return Colors.redAccent;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(bloodGroupSummaryProvider);
@@ -57,15 +71,15 @@ class BloodGroupGrid extends ConsumerWidget {
                       children: [
                         Text(
                           group,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _getGroupColor(group)),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           '$count Units',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isLow ? Colors.red : Colors.green,
+                            color: Colors.black87,
                           ),
                         ),
                       ],

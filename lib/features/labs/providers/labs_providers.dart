@@ -19,17 +19,32 @@ class VerifiedLabPartnersNotifier extends AsyncNotifier<List<Map<String, dynamic
     try {
       final response = await supabase
           .from('hospitals')
-          .select('id, name, location, avatar_url, rating, review_count, is_nabl_accredited, turnaround_hours, home_collection_available, lab_tests(id)')
+          .select('id, name, location, avatar_url, rating, review_count, is_nabl_accredited, turnaround_hours, home_collection_available')
           .order('rating', ascending: false)
           .limit(5);
 
-      return (response as List).map((row) {
-        final map = Map<String, dynamic>.from(row);
-        final tests = map['lab_tests'] as List?;
-        map['test_count'] = tests?.length ?? 0;
-        map.remove('lab_tests');
-        return map;
-      }).toList();
+      final hospitals = (response as List).map((r) => Map<String, dynamic>.from(r)).toList();
+      
+      if (hospitals.isEmpty) return hospitals;
+
+      final hospitalIds = hospitals.map((h) => h['id']).toList();
+      
+      final testsResponse = await supabase
+          .from('lab_tests')
+          .select('id, hospital_id')
+          .filter('hospital_id', 'in', hospitalIds);
+          
+      final Map<String, int> testCounts = {};
+      for (final test in (testsResponse as List)) {
+        final hId = test['hospital_id'].toString();
+        testCounts[hId] = (testCounts[hId] ?? 0) + 1;
+      }
+      
+      for (var hospital in hospitals) {
+        hospital['test_count'] = testCounts[hospital['id'].toString()] ?? 0;
+      }
+
+      return hospitals;
     } catch (e) {
       rethrow;
     }

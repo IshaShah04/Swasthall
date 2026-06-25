@@ -45,7 +45,12 @@ class BloodBankScreen extends StatelessWidget {
             // Find Blood Section Title & Search
             const Text(
               'Find Blood',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Search and request blood from nearby donors.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
             ),
             const SizedBox(height: 12),
             Row(

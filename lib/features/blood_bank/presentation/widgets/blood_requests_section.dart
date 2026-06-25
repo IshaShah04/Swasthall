@@ -142,10 +142,23 @@ class _BloodRequestsSectionState extends ConsumerState<BloodRequestsSection> {
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Request Blood',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Request Blood',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Need blood? Send a request and connect with donors.',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  ),
+                ],
+              ),
             ),
             TextButton(
               onPressed: () {
@@ -155,7 +168,7 @@ class _BloodRequestsSectionState extends ConsumerState<BloodRequestsSection> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         requestsAsync.when(
           data: (requests) {
             if (requests.isEmpty) {
@@ -193,11 +206,11 @@ class _BloodRequestsSectionState extends ConsumerState<BloodRequestsSection> {
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Row(
                         children: [
-                          Icon(Icons.bloodtype, size: 16, color: Colors.grey.shade600),
+                          Icon(Icons.bloodtype, size: 16, color: Colors.redAccent),
                           const SizedBox(width: 4),
                           Text('${req['units_needed']} Units'),
                           const SizedBox(width: 16),
-                          Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                          Icon(Icons.access_time, size: 16, color: Colors.blueAccent),
                           const SizedBox(width: 4),
                           Text(timeAgo),
                         ],

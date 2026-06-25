@@ -62,13 +62,12 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       backgroundColor: AppColors.scaffoldBg(context),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 12.0, right: 12.0),
-        child: FloatingActionButton.extended(
+        child: FloatingActionButton(
           heroTag: 'ai_fab',
           onPressed: () => context.push('/ai-assistant'),
           backgroundColor: AppColors.primaryIndigo,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          icon: const Icon(Icons.auto_awesome, color: Colors.white),
-          label: const Text('✦ AI Assistant', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          shape: const CircleBorder(),
+          child: const Icon(Icons.auto_awesome, color: Colors.white),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -137,12 +136,12 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/images/swasthall_logo.png', height: 24, errorBuilder: (_,__,___) => const Icon(Icons.local_hospital, color: AppColors.primaryIndigo)),
+            Image.asset('assets/images/swasthall_logo.png', height: 32, errorBuilder: (_,__,___) => const Icon(Icons.local_hospital, color: AppColors.primaryIndigo, size: 32)),
             const SizedBox(width: 6),
             const Text(
               'Swasthall',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primaryIndigo,
               ),
@@ -152,7 +151,17 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.language_rounded, color: AppColors.primaryIndigo, size: 24),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.language_rounded, color: AppColors.primaryIndigo, size: 24),
+              onSelected: (String lang) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Language changed to $lang')));
+              },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                const PopupMenuItem<String>(value: 'English', child: Text('English')),
+                const PopupMenuItem<String>(value: 'Nepali', child: Text('Nepali')),
+                const PopupMenuItem<String>(value: 'Hindi', child: Text('Hindi')),
+              ],
+            ),
             const SizedBox(width: 12),
             GestureDetector(
               onTap: () => context.push('/notifications'),
@@ -203,7 +212,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 text: TextSpan(
                   text: '${_getGreeting()}, ',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 16,
                     color: AppColors.textMuted(context),
                     fontWeight: FontWeight.normal,
                   ),
@@ -211,7 +220,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     TextSpan(
                       text: '$name 👋',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary(context),
                       ),
@@ -220,12 +229,12 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 ),
               );
             },
-            loading: () => const ShimmerPlaceholder(width: 200, height: 24),
+            loading: () => const ShimmerPlaceholder(width: 150, height: 20),
             error: (_, __) => RichText(
               text: TextSpan(
                 text: '${_getGreeting()}, ',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 16,
                   color: AppColors.textMuted(context),
                   fontWeight: FontWeight.normal,
                 ),
@@ -233,7 +242,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   TextSpan(
                     text: 'User 👋',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary(context),
                     ),

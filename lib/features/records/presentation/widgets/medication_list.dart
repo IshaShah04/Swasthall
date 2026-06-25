@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../theme_colors.dart';
 import '../../providers/records_providers.dart';
 
@@ -25,14 +27,28 @@ class MedicationList extends ConsumerWidget {
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Current Medication",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary(context),
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Current Medication",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary(context),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "Your active prescriptions",
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textMuted(context),
+                  ),
+                ),
+              ],
             ),
             TextButton(
               onPressed: () {},
@@ -46,16 +62,58 @@ class MedicationList extends ConsumerWidget {
             ),
           ],
         ),
+        const SizedBox(height: 12),
         recordsAsync.when(
           data: (records) {
             if (records.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(
-                  child: Text(
-                    "No medications found.",
-                    style: TextStyle(color: AppColors.textMuted(context)),
-                  ),
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBg(context),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border(context)),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.medication_outlined, size: 48, color: Colors.grey),
+                    const SizedBox(height: 12),
+                    Text(
+                      "No active medications",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppColors.textPrimary(context),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Scan your prescription to see your medicines, doses and reminders.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.textMuted(context),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final picker = ImagePicker();
+                        final pickedFile = await picker.pickImage(source: ImageSource.camera);
+                        if (pickedFile != null) {
+                          ref.read(uploadPrescriptionProvider.notifier).uploadPrescription(File(pickedFile.path));
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandIndigo,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.camera_alt, size: 20),
+                      label: const Text("Upload Now", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ),
               );
             }
