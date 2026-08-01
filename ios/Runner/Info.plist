@@ -79,7 +79,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.raunak.swasthall</string>
+			<string>com.ishashah04.swasthall</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>swasthall</string>

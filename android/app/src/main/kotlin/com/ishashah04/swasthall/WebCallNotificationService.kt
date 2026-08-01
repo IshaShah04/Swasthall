@@ -1,4 +1,4 @@
-package com.raunak.swasthall
+package com.ishashah04.swasthall
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -28,9 +28,9 @@ import androidx.core.app.NotificationManagerCompat
 class WebCallNotificationService : BroadcastReceiver() {
 
     companion object {
-        const val ACTION_SHOW_WEB_CALL    = "com.raunak.swasthall.SHOW_WEB_CALL"
-        const val ACTION_ACCEPT_WEB_CALL  = "com.raunak.swasthall.ACCEPT_WEB_CALL"
-        const val ACTION_DECLINE_WEB_CALL = "com.raunak.swasthall.DECLINE_WEB_CALL"
+        const val ACTION_SHOW_WEB_CALL    = "com.ishashah04.swasthall.SHOW_WEB_CALL"
+        const val ACTION_ACCEPT_WEB_CALL  = "com.ishashah04.swasthall.ACCEPT_WEB_CALL"
+        const val ACTION_DECLINE_WEB_CALL = "com.ishashah04.swasthall.DECLINE_WEB_CALL"
 
         const val EXTRA_CALLER_NAME = "callerName"
         const val EXTRA_CALL_ID     = "callId"
@@ -191,7 +191,7 @@ class WebCallNotificationService : BroadcastReceiver() {
             ACTION_DECLINE_WEB_CALL -> {
                 dismissNotification(context)
                 // Broadcast to Flutter if app is alive via ZEGO broadcast channel
-                val flutterIntent = Intent("com.raunak.swasthall.WEB_CALL_DECLINED").apply {
+                val flutterIntent = Intent("com.ishashah04.swasthall.WEB_CALL_DECLINED").apply {
                     putExtra(EXTRA_CALL_ID, intent.getStringExtra(EXTRA_CALL_ID))
                 }
                 context.sendBroadcast(flutterIntent)

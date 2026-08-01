@@ -8,7 +8,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class QueueWidgetService {
-  static const _channel = MethodChannel('com.raunak.swasthall/widget');
+  static const _channel = MethodChannel('com.ishashah04.swasthall/widget');
 
   static const _kUserId = 'widget_user_id';
   static const _kNurseUserId = 'widget_nurse_user_id';

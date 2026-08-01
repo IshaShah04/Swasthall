@@ -99,8 +99,8 @@ Deno.serve(async (req: Request) => {
       product_code: sessionRow.product_code,
     })
   } catch (e) {
-    console.error('[esewa-browser-session]', e)
-    return json({ error: 'Internal server error' }, 500)
+    console.error('esewa-browser-session unexpected error:', e)
+    return json({ error: String(e) }, 500)
   }
 })
 

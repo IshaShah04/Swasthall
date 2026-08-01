@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.raunak.swasthall"
+    namespace = "com.ishashah04.swasthall"
     compileSdk = 36
 
     ndkVersion = "28.2.13676358"
@@ -35,7 +35,7 @@ android {
     }
 
     defaultConfig {
-        applicationId  = "com.raunak.swasthall"
+        applicationId  = "com.ishashah04.swasthall"
         minSdk         = 24
         targetSdk      = 36
         versionCode    = 1

@@ -1,4 +1,4 @@
-package com.raunak.swasthall
+package com.ishashah04.swasthall
 
 import android.content.Intent
 import android.os.Bundle
@@ -9,8 +9,8 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     companion object {
-        const val CHANNEL      = "com.raunak.swasthall/widget"
-        const val CALL_CHANNEL = "com.raunak.swasthall/web_call"
+        const val CHANNEL      = "com.ishashah04.swasthall/widget"
+        const val CALL_CHANNEL = "com.ishashah04.swasthall/web_call"
     }
 
     // ── Widget state ──────────────────────────────────────────────────────────

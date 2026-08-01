@@ -12,8 +12,7 @@ struct Provider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
-        // Fetch data from Flutter via HomeWidget
-        let sharedDefaults = UserDefaults(suiteName: "group.raunak.healthapp") // MUST MATCH APP GROUP ID
+        let sharedDefaults = UserDefaults(suiteName: "group.com.ishashah04.swasthall") // MUST MATCH APP GROUP ID
         let queueNumber = sharedDefaults?.integer(forKey: "queue_number") ?? 0
         
         let entry = SimpleEntry(date: Date(), queueNumber: queueNumber)

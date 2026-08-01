@@ -31,21 +31,11 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    const parsedBody = await req.json();
-    
-    // Validate required fields before processing
-    if (
-      typeof parsedBody !== "object" ||
-      typeof parsedBody.data !== "string" ||
-      parsedBody.data.trim() === ""
-    ) {
-      return new Response(
-        JSON.stringify({ error: "Invalid request payload" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+    const body = await req.json() as { data?: string }
+    const base64Data = body.data?.trim() ?? ''
+    if (!base64Data) {
+      return json({ verified: false, error: 'No data provided' }, 400)
     }
-
-    const base64Data = parsedBody.data.trim();
 
     let parsed: Record<string, string>
     try {
@@ -111,8 +101,8 @@ Deno.serve(async (req: Request) => {
       error: verified ? null : 'Signature mismatch while verifying payment response.',
     })
   } catch (e) {
-    console.error('[esewa-verify]', e)
-    return json({ verified: false, error: 'Internal server error' }, 500)
+    console.error('esewa-verify error:', e)
+    return json({ verified: false, error: String(e) }, 500)
   }
 })
 

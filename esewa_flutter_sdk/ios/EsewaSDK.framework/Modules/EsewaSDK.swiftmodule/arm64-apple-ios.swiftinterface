@@ -27,43 +27,43 @@ public enum ValidationType {
   public var keyboardType: UIKit.UIKeyboardType {
     get
   }
-  public static func == (a: EsewaSDK.ValidationType, b: EsewaSDK.ValidationType) -> Swift.Bool
+  public static func == (a: ValidationType, b: ValidationType) -> Swift.Bool
   public func hash(into hasher: inout Swift.Hasher)
   public var hashValue: Swift.Int {
     get
   }
 }
 @objc @_inheritsConvenienceInitializers open class TextFieldValidator : ObjectiveC.NSObject {
-  public typealias Validation = (field: EsewaSDK.FormTextField, validationType: EsewaSDK.ValidationType)
-  public var validationList: [EsewaSDK.TextFieldValidator.Validation]
+  public typealias Validation = (field: FormTextField, validationType: ValidationType)
+  public var validationList: [TextFieldValidator.Validation]
   public var isValidationSuccess: Swift.Bool
-  public func add(field: EsewaSDK.FormTextField, validationType: EsewaSDK.ValidationType, characterLimit: Swift.Int)
+  public func add(field: FormTextField, validationType: ValidationType, characterLimit: Swift.Int)
   public func validateAll()
   public func resetAllValidation()
-  public func validateTextField(field: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validateMpin(textField: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validateRegex(textField: EsewaSDK.FormTextField, regex: Swift.String, errorMessage: Swift.String) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validateEsewaId(textfield: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validateFullName(textField: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validateText(textField: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validateMobileNumber(textField: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validateEmail(textField: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validatePassword(textField: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validateLandline(textField: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
-  public func validateIfInputIsMandatory(textField: EsewaSDK.FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateTextField(field: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateMpin(textField: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateRegex(textField: FormTextField, regex: Swift.String, errorMessage: Swift.String) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateEsewaId(textfield: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateFullName(textField: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateText(textField: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateMobileNumber(textField: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateEmail(textField: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validatePassword(textField: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateLandline(textField: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
+  public func validateIfInputIsMandatory(textField: FormTextField) -> (isValid: Swift.Bool, message: Swift.String)
   @objc override dynamic public init()
   @objc deinit
 }
-extension EsewaSDK.TextFieldValidator : UIKit.UITextFieldDelegate {
+extension TextFieldValidator : UIKit.UITextFieldDelegate {
   @_Concurrency.MainActor @preconcurrency @objc dynamic open func textFieldDidBeginEditing(_ textField: UIKit.UITextField)
   @_Concurrency.MainActor @preconcurrency @objc dynamic open func textFieldDidEndEditing(_ textField: UIKit.UITextField)
   @_Concurrency.MainActor @preconcurrency @objc dynamic open func textField(_ textField: UIKit.UITextField, shouldChangeCharactersIn range: Foundation.NSRange, replacementString string: Swift.String) -> Swift.Bool
   @_Concurrency.MainActor @preconcurrency @objc dynamic open func textFieldShouldReturn(_ textField: UIKit.UITextField) -> Swift.Bool
-  @objc dynamic open func textFieldDidEdit(_ textField: EsewaSDK.FormTextField)
+  @objc dynamic open func textFieldDidEdit(_ textField: FormTextField)
 }
-@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency open class FormTokenValidator : EsewaSDK.TextFieldValidator {
+@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency open class FormTokenValidator : TextFieldValidator {
   @_Concurrency.MainActor @preconcurrency public var errorLabel: UIKit.UILabel?
-  @objc override dynamic open func textFieldDidEdit(_ textField: EsewaSDK.FormTextField)
+  @objc override dynamic open func textFieldDidEdit(_ textField: FormTextField)
   @_Concurrency.MainActor @preconcurrency @objc override dynamic open func textField(_ textField: UIKit.UITextField, shouldChangeCharactersIn range: Foundation.NSRange, replacementString string: Swift.String) -> Swift.Bool
   @objc override dynamic public init()
   @objc deinit
@@ -125,7 +125,7 @@ extension UIKit.UIView {
   @objc deinit
 }
 @objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency open class FormTextField : UIKit.UITextField {
-  @_Concurrency.MainActor @preconcurrency public var validationType: EsewaSDK.ValidationType
+  @_Concurrency.MainActor @preconcurrency public var validationType: ValidationType
   @_Concurrency.MainActor @preconcurrency public var characterLimit: Swift.Int
   @_Concurrency.MainActor @preconcurrency public var isRequired: Swift.Bool
   @_Concurrency.MainActor @preconcurrency public var isErrorPresent: Swift.Bool
@@ -141,7 +141,7 @@ extension UIKit.UIView {
   @_Concurrency.MainActor @preconcurrency @objc required dynamic public init?(coder: Foundation.NSCoder)
   @objc deinit
 }
-@objc @_inheritsConvenienceInitializers @_hasMissingDesignatedInitializers @_Concurrency.MainActor @preconcurrency open class BoxTextField : EsewaSDK.FormTextField {
+@objc @_inheritsConvenienceInitializers @_hasMissingDesignatedInitializers @_Concurrency.MainActor @preconcurrency open class BoxTextField : FormTextField {
   @_Concurrency.MainActor @preconcurrency final public let bottomInset: CoreFoundation.CGFloat
   @_Concurrency.MainActor @preconcurrency public var leftPadding: CoreFoundation.CGFloat
   @_Concurrency.MainActor @preconcurrency public var rightPadding: CoreFoundation.CGFloat
@@ -217,12 +217,12 @@ extension UIKit.UIDevice {
   @objc func onEsewaSDKPaymentError(errorDescription: Swift.String)
 }
 @objc public class EsewaSDK : ObjectiveC.NSObject {
-  public static var environment: EsewaSDK.EsewaSDKEnvironment
-  public init(inViewController viewController: UIKit.UIViewController, environment: EsewaSDK.EsewaSDKEnvironment, delegate: any EsewaSDK.EsewaSDKPaymentDelegate)
+  public static var environment: EsewaSDKEnvironment
+  public init(inViewController viewController: UIKit.UIViewController, environment: EsewaSDKEnvironment, delegate: any EsewaSDKPaymentDelegate)
   public func initiatePayment(merchantId: Swift.String, merchantSecret: Swift.String, productName: Swift.String, productAmount: Swift.String, productId: Swift.String, callbackUrl: Swift.String, paymentProperties: [Swift.String : Any]?)
   @objc deinit
 }
-@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency public class RequestViewController : EsewaSDK.RootViewController {
+@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency public class RequestViewController : RootViewController {
   @objc @IBOutlet @_Concurrency.MainActor @preconcurrency weak public var indicator: UIKit.UIActivityIndicatorView!
   @_Concurrency.MainActor @preconcurrency @objc override dynamic public func viewDidLoad()
   @_Concurrency.MainActor @preconcurrency @objc override dynamic public init(nibName nibNameOrNil: Swift.String?, bundle nibBundleOrNil: Foundation.Bundle?)
@@ -239,7 +239,7 @@ extension UIKit.UIDevice {
   @_Concurrency.MainActor @preconcurrency @objc required dynamic public init?(coder: Foundation.NSCoder)
   @objc deinit
 }
-@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency open class HeaderCurveView : EsewaSDK.FormElementView {
+@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency open class HeaderCurveView : FormElementView {
   @objc @IBInspectable @_Concurrency.MainActor @preconcurrency public var desiredCurve: CoreFoundation.CGFloat
   @_Concurrency.MainActor @preconcurrency @objc override dynamic open func layoutSubviews()
   @_Concurrency.MainActor @preconcurrency public func addBottomRoundedEdge(desiredCurve: CoreFoundation.CGFloat)
@@ -247,7 +247,7 @@ extension UIKit.UIDevice {
   @_Concurrency.MainActor @preconcurrency @objc required dynamic public init?(coder: Foundation.NSCoder)
   @objc deinit
 }
-@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency public class SdkPaymentViewController : EsewaSDK.RootViewController {
+@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency public class SdkPaymentViewController : RootViewController {
   @_Concurrency.MainActor @preconcurrency public var transactionDetails: [Swift.String : Any]
   @_Concurrency.MainActor @preconcurrency public var statementDetails: [Swift.String : Any]
   @_Concurrency.MainActor @preconcurrency public var isLoginFromMpin: Swift.Bool
@@ -265,27 +265,27 @@ public enum ReachabilityError : Swift.Error {
 }
 public let ReachabilityChangedNotification: Foundation.NSNotification.Name
 public class Reachability {
-  public typealias NetworkReachable = (EsewaSDK.Reachability) -> ()
-  public typealias NetworkUnreachable = (EsewaSDK.Reachability) -> ()
+  public typealias NetworkReachable = (Reachability) -> ()
+  public typealias NetworkUnreachable = (Reachability) -> ()
   public enum NetworkStatus : Swift.CustomStringConvertible {
     case notReachable, reachableViaWiFi, reachableViaWWAN
     public var description: Swift.String {
       get
     }
-    public static func == (a: EsewaSDK.Reachability.NetworkStatus, b: EsewaSDK.Reachability.NetworkStatus) -> Swift.Bool
+    public static func == (a: Reachability.NetworkStatus, b: Reachability.NetworkStatus) -> Swift.Bool
     public func hash(into hasher: inout Swift.Hasher)
     public var hashValue: Swift.Int {
       get
     }
   }
-  public var whenReachable: EsewaSDK.Reachability.NetworkReachable?
-  public var whenUnreachable: EsewaSDK.Reachability.NetworkUnreachable?
+  public var whenReachable: Reachability.NetworkReachable?
+  public var whenUnreachable: Reachability.NetworkUnreachable?
   public var reachableOnWWAN: Swift.Bool
   public var notificationCenter: Foundation.NotificationCenter
   public var currentReachabilityString: Swift.String {
     get
   }
-  public var currentReachabilityStatus: EsewaSDK.Reachability.NetworkStatus {
+  public var currentReachabilityStatus: Reachability.NetworkStatus {
     get
   }
   required public init(reachabilityRef: SystemConfiguration.SCNetworkReachability)
@@ -293,7 +293,7 @@ public class Reachability {
   convenience public init?()
   @objc deinit
 }
-extension EsewaSDK.Reachability {
+extension Reachability {
   public func startNotifier() throws
   public func stopNotifier()
   public var isReachable: Swift.Bool {
@@ -314,14 +314,14 @@ extension UIKit.UIDevice {
     get
   }
 }
-extension EsewaSDK.ValidationType : Swift.Equatable {}
-extension EsewaSDK.ValidationType : Swift.Hashable {}
-extension EsewaSDK.FormTokenValidator : Swift.Sendable {}
-extension EsewaSDK.EsewaSDKEnvironment : Swift.Equatable {}
-extension EsewaSDK.EsewaSDKEnvironment : Swift.Hashable {}
-extension EsewaSDK.EsewaSDKEnvironment : Swift.RawRepresentable {}
+extension ValidationType : Swift.Equatable {}
+extension ValidationType : Swift.Hashable {}
+extension FormTokenValidator : Swift.Sendable {}
+extension EsewaSDKEnvironment : Swift.Equatable {}
+extension EsewaSDKEnvironment : Swift.Hashable {}
+extension EsewaSDKEnvironment : Swift.RawRepresentable {}
 extension UIKit.UIDevice.DeviceType : Swift.Equatable {}
 extension UIKit.UIDevice.DeviceType : Swift.Hashable {}
 extension UIKit.UIDevice.DeviceType : Swift.RawRepresentable {}
-extension EsewaSDK.Reachability.NetworkStatus : Swift.Equatable {}
-extension EsewaSDK.Reachability.NetworkStatus : Swift.Hashable {}
+extension Reachability.NetworkStatus : Swift.Equatable {}
+extension Reachability.NetworkStatus : Swift.Hashable {}

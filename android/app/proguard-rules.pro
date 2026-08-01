@@ -46,8 +46,8 @@
 # Home Widget + App Widgets
 # ─────────────────────────────────────────────────────────────────────────────
 -keep class es.antonborri.home_widget.** { *; }
--keep class com.raunak.swasthall.PatientWidgetProvider { *; }
--keep class com.raunak.swasthall.NurseWidgetProvider { *; }
+-keep class com.ishashah04.swasthall.PatientWidgetProvider { *; }
+-keep class com.ishashah04.swasthall.NurseWidgetProvider { *; }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Flutter embedding (prevents R8 from stripping Flutter's native entrypoints)

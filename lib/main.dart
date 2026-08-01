@@ -163,7 +163,7 @@ Future<void> callbackDispatcher(Uri? uri) async {
   if (kIsWeb) return;
   if (uri?.scheme != 'homeWidget') return;
 
-  await HomeWidget.setAppGroupId('group.com.raunak.swasthall');
+  await HomeWidget.setAppGroupId('group.com.ishashah04.swasthall');
 
   final String? bookingId = uri?.queryParameters['id'];
   final String action = uri?.host ?? '';
@@ -263,9 +263,13 @@ Future<void> main() async {
     await loadSavedTheme();
 
     if (!kIsWeb) {
-      await Firebase.initializeApp();
-      _configureCrashlytics();
-      _registerFcmBackgroundHandlerOnce();
+      try {
+        await Firebase.initializeApp();
+        _configureCrashlytics();
+        _registerFcmBackgroundHandlerOnce();
+      } catch (e) {
+        debugPrint('Firebase initialization failed: $e');
+      }
     }
 
     await Supabase.initialize(
@@ -617,7 +621,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!kIsWeb) {
-        await HomeWidget.setAppGroupId('group.com.raunak.swasthall');
+        await HomeWidget.setAppGroupId('group.com.ishashah04.swasthall');
         if (!_homeWidgetCallbackRegistered) {
           HomeWidget.registerInteractivityCallback(callbackDispatcher);
           _homeWidgetCallbackRegistered = true;

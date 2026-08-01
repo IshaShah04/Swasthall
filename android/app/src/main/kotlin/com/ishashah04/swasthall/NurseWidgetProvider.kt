@@ -1,4 +1,4 @@
-package com.raunak.swasthall
+package com.ishashah04.swasthall
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -25,9 +25,9 @@ class NurseWidgetProvider : AppWidgetProvider() {
         const val KEY_PATIENT_NAME  = "flutter.widget_nurse_patient_name"
         const val KEY_TASK_TYPE     = "flutter.widget_nurse_task_type"
 
-        const val ACTION_OPEN_TASKS   = "com.raunak.swasthall.WIDGET_OPEN_NURSE_TASKS"
-        const val ACTION_TASK_DONE    = "com.raunak.swasthall.WIDGET_NURSE_TASK_DONE"
-        const val ACTION_TASK_SKIP    = "com.raunak.swasthall.WIDGET_NURSE_TASK_SKIP"
+        const val ACTION_OPEN_TASKS   = "com.ishashah04.swasthall.WIDGET_OPEN_NURSE_TASKS"
+        const val ACTION_TASK_DONE    = "com.ishashah04.swasthall.WIDGET_NURSE_TASK_DONE"
+        const val ACTION_TASK_SKIP    = "com.ishashah04.swasthall.WIDGET_NURSE_TASK_SKIP"
 
         const val EXTRA_WIDGET_ROUTE  = "widgetRoute"
         const val EXTRA_USER_ID       = "userId"
