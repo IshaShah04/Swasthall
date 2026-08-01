@@ -5,7 +5,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "
 const PUBLIC_SITE_API_SALT = Deno.env.get("PUBLIC_SITE_API_SALT") ?? "change-this-salt-now";
 const APK_URL =
   Deno.env.get("APK_URL") ??
-  "https://github.com/RaunakShah29/swasthall-pay/releases/download/v1.0.0/Swasthall-v1.0.0-pilot.apk";
+  "https://github.com/IshaShah04/swasthall-pay/releases/download/v1.0.0/Swasthall-v1.0.0-pilot.apk";
 const AUTO_APPROVE_FEEDBACK = Deno.env.get("AUTO_APPROVE_FEEDBACK") === "true";
 
 const allowedOrigins = new Set([

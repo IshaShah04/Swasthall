@@ -1,4 +1,4 @@
-package com.raunak.swasthall
+package com.ishashah04.swasthall
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -18,7 +18,7 @@ class PatientWidgetProvider : AppWidgetProvider() {
         const val KEY_QUEUE_TOTAL      = "flutter.widget_queue_total"
         const val KEY_QUEUE_PROGRESS   = "flutter.widget_queue_progress"
 
-        const val ACTION_OPEN_QUEUE  = "com.raunak.swasthall.WIDGET_OPEN_QUEUE"
+        const val ACTION_OPEN_QUEUE  = "com.ishashah04.swasthall.WIDGET_OPEN_QUEUE"
         const val EXTRA_WIDGET_ROUTE   = "widgetRoute"
         const val EXTRA_USER_ID        = "userId"
         const val EXTRA_APPOINTMENT_ID = "appointmentId"

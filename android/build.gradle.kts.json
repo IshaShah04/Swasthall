@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "425076055934",
+    "project_id": "health-department-45318",
+    "storage_bucket": "health-department-45318.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:425076055934:android:01890e977db9a50ae91d2f",
+        "android_client_info": {
+          "package_name": "com.ishashah04.swasthall"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCpbVbmzJ6xdhk2uoX6X8KxNdrvc80oas"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

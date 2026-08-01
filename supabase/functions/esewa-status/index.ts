@@ -126,14 +126,14 @@ Deno.serve(async (req: Request) => {
       ref_id: refId,
     })
   } catch (e) {
-    console.error('[esewa-status]', e)
+    console.error('esewa-status error:', e)
     return json({
       verified: false,
       status: 'UNKNOWN',
       transaction_uuid: '',
       transaction_code: '',
       total_amount: '0',
-      error: 'Internal server error',
+      error: String(e),
     }, 500)
   }
 })

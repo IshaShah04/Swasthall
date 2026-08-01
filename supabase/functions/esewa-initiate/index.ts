@@ -1,6 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { checkRateLimit } from '../_shared/rateLimit.ts'
-import { createLogger, getRequestId, startTimer } from '../_shared/logger.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,10 +7,6 @@ const corsHeaders = {
 }
 
 Deno.serve(async (req: Request) => {
-  const requestId = getRequestId(req);
-  const logger = createLogger('esewa-initiate', requestId);
-  const elapsed = startTimer();
-  logger.info('Request received', { method: req.method });
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -142,8 +137,7 @@ Deno.serve(async (req: Request) => {
       .single()
 
     if (insertError || !sessionRow) {
-      logger.error('esewa_checkout_sessions insert error', insertError)
-      logger.info('Request completed', { duration_ms: elapsed() });
+      console.error('esewa_checkout_sessions insert error:', insertError)
       return json({ error: 'Could not create payment session. Please try again.' }, 500)
     }
 
@@ -164,8 +158,7 @@ Deno.serve(async (req: Request) => {
       })
 
     if (paymentInsertError) {
-      logger.error('payment_transactions insert error', paymentInsertError)
-      logger.info('Request completed', { duration_ms: elapsed() });
+      console.error('payment_transactions insert error:', paymentInsertError)
       return json({ error: 'Could not create payment transaction. Please try again.' }, 500)
     }
 
@@ -178,16 +171,14 @@ Deno.serve(async (req: Request) => {
     const checkoutUrl =
       `${browserBase}/api/esewa-start?sessionUrl=${encodeURIComponent(sessionApiUrl)}`
 
-    logger.info('Request completed', { duration_ms: elapsed() });
     return json({
       checkout_url: checkoutUrl,
       transaction_uuid: transactionUuid,
       total_amount: totalAmountStr,
     })
   } catch (e) {
-    logger.error('Unhandled error', e)
-    logger.info('Request completed', { duration_ms: elapsed() });
-    return json({ error: 'Internal server error' }, 500)
+    console.error('esewa-initiate error:', e)
+    return json({ error: String(e) }, 500)
   }
 })
 

@@ -1,11 +1,11 @@
-package com.raunak.swasthall
+package com.ishashah04.swasthall
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.content.IntentCompat
-import com.raunak.swasthall.BuildConfig
+import com.ishashah04.swasthall.BuildConfig
 
 class ZegoFcmBroadcastReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

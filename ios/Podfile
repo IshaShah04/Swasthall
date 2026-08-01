@@ -24,6 +24,8 @@ require File.expand_path(
 
 flutter_ios_podfile_setup
 
+project 'Runner.xcodeproj'
+
 target 'Runner' do
   platform :ios, '16.0'
   use_frameworks!

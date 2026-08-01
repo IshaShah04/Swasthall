@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { handleValidationError } from '../_shared/validate.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,13 +63,6 @@ Deno.serve(async (req: Request) => {
       url.searchParams.get('txnRefId'),
     )
 
-    if (!merchantTxnId) {
-      return new Response(
-        JSON.stringify({ ok: false, error: 'Missing merchant_txn_id' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
     console.log('esewa-sdk-callback hit', {
       method: req.method,
       url: req.url,
@@ -114,7 +106,7 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8' },
     })
   } catch (e) {
-    console.error('[esewa-sdk-callback]', e)
-    return json({ ok: false, error: 'Internal server error' }, 500)
+    console.error('esewa-sdk-callback error:', e)
+    return json({ ok: false, error: String(e) }, 500)
   }
 })

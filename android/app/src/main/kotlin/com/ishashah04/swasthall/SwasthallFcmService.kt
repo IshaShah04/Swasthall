@@ -1,4 +1,4 @@
-package com.raunak.swasthall
+package com.ishashah04.swasthall
 
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
