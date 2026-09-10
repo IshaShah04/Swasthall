@@ -95,21 +95,6 @@ flowchart TD
 ### 7. Android Glance Home Screen Widget
 * **Connection-Pooled Dispatcher**: Rather than direct client database connections that cause connection exhaustion at scale, home screen queue widgets invoke a pooled serverless dispatcher (`widget-action`).
 
----
-
-## 🛡️ Security & Data Governance
-
-| Security Layer | Implementation Details |
-|---|---|
-| **Data in Transit** | Enforced TLS 1.3 for all REST and WebSocket connections. |
-| **Data at Rest** | PostgreSQL disk encryption + Application-layer AES-256-GCM for medical records. |
-| **Access Control (RBAC)** | Strict PostgreSQL **Row Level Security (RLS)** across all tables; every RPC validates `auth.uid()`. |
-| **Secrets Management** | Compile-time injection via `--dart-define-from-file=env.json`. No secrets packaged in `flutter_assets`. |
-| **API Gateways** | Zero client exposure for private keys; merchant secrets and AI keys reside strictly in Deno Edge runtimes. |
-| **Binary Protection** | Production Android builds compiled with `--obfuscate` and `--split-debug-info` to prevent reverse engineering. |
-| **Repository Hygiene** | Hardened `.gitignore`, zero committed keystores, and GitHub Push Protection enabled. |
-
----
 
 ##Supported Roles & Access Matrix
 
