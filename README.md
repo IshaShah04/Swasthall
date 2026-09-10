@@ -145,13 +145,6 @@ Swasthall/
 ```
 
 --
-
-### Prerequisites
-* **Flutter SDK**: `>= 3.22.0`
-* **Dart SDK**: `>= 3.4.0`
-* **Java**: OpenJDK 17
-* **Supabase CLI** (for local migrations and edge function development)
-
 ### 1. Clone the Repository
 ```bash
 git clone https://github.com/IshaShah04/Swasthall.git
