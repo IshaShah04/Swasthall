@@ -1,7 +1,7 @@
 # SwasthAll
 
 > **A Family-Centric Digital Healthcare Super-App & Telemedicine Platform**  
-> Built with Flutter, Supabase (PostgreSQL + Deno Edge Functions), WebRTC, and Localized Payment Gateways.
+> Built with Flutter,  Supabase (PostgreSQL + Deno Edge Functions) , WebRTC,  and Localized Payment Gateways.
 
 [![Flutter Build & Release](https://github.com/IshaShah04/Swasthall/actions/workflows/flutter-release.yml/badge.svg)](https://github.com/IshaShah04/Swasthall/actions/workflows/flutter-release.yml)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
@@ -11,7 +11,7 @@
 
 ---
 
-## 📌 Executive Overview
+## Overview
 
 Healthcare in emerging markets often forces patients and families to juggle disjointed systems: physical appointment lines, paper prescriptions, fragmented diagnostic reports, and manual payment workflows.
 
@@ -19,7 +19,7 @@ Healthcare in emerging markets often forces patients and families to juggle disj
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 SwasthAll is architected as a distributed, privacy-first system separating public client applications from sensitive execution environments:
 
@@ -62,7 +62,7 @@ flowchart TD
 
 ---
 
-## ⚡ Key Engineered Modules
+## Key Modules
 
 ### 1. Multi-Hospital & Doctor Consultation Scheduling
 * **Atomic Double-Booking Prevention**: Database-level reservation RPC (`payment_booking_rpcs.sql`) enforces transactional row-locking to eliminate race conditions during concurrent appointment bookings.
@@ -111,7 +111,7 @@ flowchart TD
 
 ---
 
-## 👥 Supported Roles & Access Matrix
+##Supported Roles & Access Matrix
 
 The system implements a granular Role-Based Access Control (RBAC) model:
 
@@ -130,7 +130,7 @@ The system implements a granular Role-Based Access Control (RBAC) model:
 
 ---
 
-## 📁 Repository Structure
+##Repository Structure
 
 ```text
 Swasthall/
@@ -159,9 +159,7 @@ Swasthall/
     └── widgets/                # Reusable UI design system components
 ```
 
----
-
-## 🚀 Getting Started
+--
 
 ### Prerequisites
 * **Flutter SDK**: `>= 3.22.0`
@@ -226,7 +224,7 @@ The project utilizes GitHub Actions ([`.github/workflows/flutter-release.yml`](.
 
 ---
 
-## 👩‍💻 Author & Engineering Context
+## Author
 
 **Isha Shah**  
 *Full-Stack Mobile & Healthcare Systems Developer*  
