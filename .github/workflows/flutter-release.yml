@@ -12,7 +12,6 @@ jobs:
   build_android:
     name: Build Android APK & AAB
     runs-on: ubuntu-latest
-    continue-on-error: true
 
     steps:
       - name: Checkout repository
@@ -40,10 +39,10 @@ jobs:
           echo "::add-mask::${{ secrets.SUPABASE_URL }}"
           echo "::add-mask::${{ secrets.SUPABASE_ANON_KEY }}"
           echo "::add-mask::${{ secrets.ZEGO_APP_ID }}"
-          echo "::add-mask::${{ secrets.ZEGO_APP_SIGN }}"
-          echo "::add-mask::${{ secrets.ESEWA_SDK_SECRET_ID }}"
           echo "::add-mask::${{ secrets.FCM_SERVER_KEY }}"
           echo "::add-mask::${{ secrets.GOOGLE_SERVICES_JSON }}"
+          echo "::add-mask::${{ secrets.STORE_PASSWORD }}"
+          echo "::add-mask::${{ secrets.KEY_PASSWORD }}"
 
       - name: Generate env.json
         run: |
@@ -52,13 +51,10 @@ jobs:
             "SUPABASE_URL": "${{ secrets.SUPABASE_URL }}",
             "SUPABASE_ANON_KEY": "${{ secrets.SUPABASE_ANON_KEY }}",
             "ZEGO_APP_ID": "${{ secrets.ZEGO_APP_ID }}",
-            "ZEGO_APP_SIGN": "${{ secrets.ZEGO_APP_SIGN }}",
             "ESEWA_SDK_CLIENT_ID": "${{ secrets.ESEWA_SDK_CLIENT_ID }}",
-            "ESEWA_SDK_SECRET_ID": "${{ secrets.ESEWA_SDK_SECRET_ID }}",
-            "ESEWA_SDK_ENVIRONMENT": "test",
-            "FDA_API_KEY": "${{ secrets.FDA_API_KEY }}",
-            "GEMINI_API_KEY": "${{ secrets.GEMINI_API_KEY }}",
-            "GOOGLE_VISION_API_KEY": "${{ secrets.GOOGLE_VISION_API_KEY }}"
+            "ESEWA_SDK_ENVIRONMENT": "${{ secrets.ESEWA_SDK_ENVIRONMENT || 'test' }}",
+            "KHALTI_PUBLIC_KEY": "${{ secrets.KHALTI_PUBLIC_KEY }}",
+            "KHALTI_ENVIRONMENT": "${{ secrets.KHALTI_ENVIRONMENT || 'test' }}"
           }
           EOF
 
@@ -77,10 +73,10 @@ jobs:
           EOF
 
       - name: Build Release APK
-        run: flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
+        run: flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols --dart-define-from-file=env.json
 
       - name: Build Release AAB
-        run: flutter build appbundle --release --obfuscate --split-debug-info=build/app/outputs/symbols
+        run: flutter build appbundle --release --obfuscate --split-debug-info=build/app/outputs/symbols --dart-define-from-file=env.json
 
       - name: Upload Release Artifacts
         uses: softprops/action-gh-release@v2
@@ -116,18 +112,15 @@ jobs:
             "SUPABASE_URL": "${{ secrets.SUPABASE_URL }}",
             "SUPABASE_ANON_KEY": "${{ secrets.SUPABASE_ANON_KEY }}",
             "ZEGO_APP_ID": "${{ secrets.ZEGO_APP_ID }}",
-            "ZEGO_APP_SIGN": "${{ secrets.ZEGO_APP_SIGN }}",
             "ESEWA_SDK_CLIENT_ID": "${{ secrets.ESEWA_SDK_CLIENT_ID }}",
-            "ESEWA_SDK_SECRET_ID": "${{ secrets.ESEWA_SDK_SECRET_ID }}",
-            "ESEWA_SDK_ENVIRONMENT": "test",
-            "FDA_API_KEY": "${{ secrets.FDA_API_KEY }}",
-            "GEMINI_API_KEY": "${{ secrets.GEMINI_API_KEY }}",
-            "GOOGLE_VISION_API_KEY": "${{ secrets.GOOGLE_VISION_API_KEY }}"
+            "ESEWA_SDK_ENVIRONMENT": "${{ secrets.ESEWA_SDK_ENVIRONMENT || 'test' }}",
+            "KHALTI_PUBLIC_KEY": "${{ secrets.KHALTI_PUBLIC_KEY }}",
+            "KHALTI_ENVIRONMENT": "${{ secrets.KHALTI_ENVIRONMENT || 'test' }}"
           }
           EOF
 
       - name: Build Web
-        run: flutter build web --release --base-href "/Swasthall/"
+        run: flutter build web --release --base-href "/Swasthall/" --dart-define-from-file=env.json
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
