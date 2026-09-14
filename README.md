@@ -1,4 +1,4 @@
-<img width="630" height="317" alt="image" src="https://github.com/user-attachments/assets/65553ffe-55b4-4556-9ef2-08652bd0ad61" /># SwasthAll
+# SwasthAll
 
 > **A Family-Centric Digital Healthcare Super-App & Telemedicine Platform**  
 > Built with Flutter,  Supabase (PostgreSQL + Deno Edge Functions) , WebRTC,  and Localized Payment Gateways.
