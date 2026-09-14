@@ -1,4 +1,4 @@
-# SwasthAll
+<img width="630" height="317" alt="image" src="https://github.com/user-attachments/assets/65553ffe-55b4-4556-9ef2-08652bd0ad61" /># SwasthAll
 
 > **A Family-Centric Digital Healthcare Super-App & Telemedicine Platform**  
 > Built with Flutter,  Supabase (PostgreSQL + Deno Edge Functions) , WebRTC,  and Localized Payment Gateways.
@@ -21,46 +21,48 @@ Healthcare in emerging markets often forces patients and families to juggle disj
 
 ## System Architecture
 
-SwasthAll is architected as a distributed, privacy-first system separating public client applications from sensitive execution environments:
+## Architecture
 
-```mermaid
-flowchart TD
-    subgraph Clients ["Client Presentation Layer (Flutter Multi-Platform)"]
-        A1["Android App (Release APK / AAB)"]
-        A2["Web Dashboard (GitHub Pages)"]
-        A3["Android Home Widget (Glance Worker)"]
-    end
-
-    subgraph EdgeLayer ["Serverless Edge Tier (Supabase Edge Functions / Deno)"]
-        E1["zego-token<br/><i>Ephemeral WebRTC Token Minting</i>"]
-        E2["esewa-verify / khalti-verify<br/><i>HMAC-SHA256 Payment Verification</i>"]
-        E3["gemini-prescription-proxy<br/><i>AI Prescription Parsing & OCR</i>"]
-        E4["drug-interactions-ai<br/><i>Clinical Drug Interaction Screening</i>"]
-        E5["widget-action<br/><i>Pooled Home Widget Dispatcher</i>"]
-    end
-
-    subgraph DataLayer ["Core Backend & Persistence (Supabase / PostgreSQL 15)"]
-        D1["PostgreSQL Database<br/><i>Row Level Security (RLS) Enforced</i>"]
-        D2["19+ Stored Procedures / RPCs<br/><i>Atomic Booking, RBAC, Reconciliation</i>"]
-        D3["Realtime Engine<br/><i>WebSockets for Queue & Call Signaling</i>"]
-        D4["Secure Storage Buckets<br/><i>Prescriptions & Lab Reports (Signed URLs)</i>"]
-    end
-
-    subgraph ExternalServices ["External Infrastructure"]
-        S1["ZegoCloud WebRTC Gateway"]
-        S2["eSewa & Khalti Payment Gateways"]
-        S3["Google Gemini 1.5 & Vision AI"]
-        S4["Firebase Cloud Messaging (FCM) & Crashlytics"]
-    end
-
-    Clients -->|"HTTPS / WSS"| DataLayer
-    Clients -->|"Token / Payment Invocations"| EdgeLayer
-    EdgeLayer -->|"Secure Service Role"| DataLayer
-    EdgeLayer -->|"Backend-to-Backend"| ExternalServices
-    Clients -.->|"Direct P2P Video/Audio"| S1
+```text
+┌──────────────────────── FLUTTER CLIENT (Android / Web) ────────────────────────┐
+│  main.dart → ProviderScope → MaterialApp → SwasthallSplashScreen → AuthGate    │
+│                                                                                │
+│  AuthGate = StreamBuilder<AuthState> over supabase.auth.onAuthStateChange      │
+│     ├─ session == null                    → LoginPage                          │
+│     ├─ role not yet fetched               → CircularProgressIndicator          │
+│     ├─ !registrationComplete              → RegistrationCompletionScreen       │
+│     ├─ requiresProfessionalVerification   → VerificationPendingScreen          │
+│     ├─ role == 'patient'                  → MaterialApp.router(goRouter)       │
+│     └─ every other role                   → NavigationWrapper(userRole)        │
+└────────────────────────────────────────────────────────────────────────────────┘
+        │                              │                         │
+        │ supabase-flutter SDK         │ functions.invoke()      │ Zego SDK
+        │ (PostgREST + Realtime WS)    │ (HTTPS + user JWT)      │ (direct media)
+        ▼                              ▼                         ▼
+┌──────────────────────┐   ┌──────────────────────────┐   ┌──────────────────┐
+│ SUPABASE POSTGRES 15 │   │ DENO EDGE FUNCTIONS (24) │   │ ZEGOCLOUD        │
+│  • tables + RLS      │   │  zego-token              │   │  WebRTC media    │
+│  • ~20 RPCs          │◄──┤  esewa-initiate/verify   │   │  + ZIM signaling │
+│    (SECURITY DEFINER)│   │  esewa-checkout/status   │   └──────────────────┘
+│  • Realtime channels │   │  esewa-sdk-callback      │
+│  • Storage buckets   │   │  esewa-verify-sdk        │   ┌──────────────────┐
+│    - public:         │   │  khalti-initiate/verify  │──►│ eSewa / Khalti   │
+│      avatars         │   │  notify-incoming-call    │   └──────────────────┘
+│      lab-images      │   │  notify-new-login        │   ┌──────────────────┐
+│    - private:        │   │  professional-review-... │──►│ FCM HTTP v1      │
+│      medical_vault   │   │  gemini-prescription-... │   └──────────────────┘
+│      insurance_vault │   │  drug-interactions-ai    │   ┌──────────────────┐
+│      lab-assets      │   │  vision-proxy / ai-proxy │──►│ Google Gemini    │
+│      licenses        │   │  get-encryption-salt     │   └──────────────────┘
+│      receipts        │   │  widget-action           │
+│      provider-docs   │   │  public-site             │   service-role key
+│  • pg_cron           │   │                          │   lives ONLY here
+└──────────────────────┘   └──────────────────────────┘
 ```
 
----
+
+
+
 
 ## Key Modules
 
@@ -189,18 +191,6 @@ flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/sym
 # Build Release App Bundle (AAB for Google Play)
 flutter build appbundle --release --obfuscate --split-debug-info=build/app/outputs/symbols --dart-define-from-file=env.json
 ```
-
----
-
-## ⚙️ Automated CI/CD Pipeline
-
-The project utilizes GitHub Actions ([`.github/workflows/flutter-release.yml`](.github/workflows/flutter-release.yml)) for continuous integration:
-1. **Lint & Analysis**: Runs `flutter analyze --no-fatal-infos` across the codebase.
-2. **Dynamic Config Injection**: Injects repository secrets into an ephemeral build runner via `--dart-define-from-file=env.json`.
-3. **Android Release**: Compiles obfuscated release APKs and App Bundles using headless Android keystore decoding.
-4. **Web CD**: Builds and automatically deploys the web dashboard to GitHub Pages.
-
----
 
 ## Author
 
